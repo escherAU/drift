@@ -6,839 +6,839 @@ TAP version 13
 # Subtest: T10 TTY arm: a TTY enters normally (alt screen + hidden cursor, raw mode)
 ok 1 - T10 TTY arm: a TTY enters normally (alt screen + hidden cursor, raw mode)
   ---
-  duration_ms: 6.7289
+  duration_ms: 4.18
   type: 'test'
   ...
 # Subtest: T10 non-TTY arm: message, exit 0, and no escape sequences at all
 ok 2 - T10 non-TTY arm: message, exit 0, and no escape sequences at all
   ---
-  duration_ms: 3.1321
+  duration_ms: 1.6263
   type: 'test'
   ...
 # Subtest: T4 q restores the terminal and exits 0
 ok 3 - T4 q restores the terminal and exits 0
   ---
-  duration_ms: 7.0237
+  duration_ms: 4.5596
   type: 'test'
   ...
 # Subtest: T4 Q (upper case) also quits
 ok 4 - T4 Q (upper case) also quits
   ---
-  duration_ms: 1.5239
+  duration_ms: 1.0448
   type: 'test'
   ...
 # Subtest: stdin closing (end of input) restores the terminal and exits 0
 ok 5 - stdin closing (end of input) restores the terminal and exits 0
   ---
-  duration_ms: 1.5666
+  duration_ms: 1.0495
   type: 'test'
   ...
 # Subtest: T5 byte 0x03 (Ctrl+C in raw mode) restores and exits
 ok 6 - T5 byte 0x03 (Ctrl+C in raw mode) restores and exits
   ---
-  duration_ms: 2.3668
+  duration_ms: 1.9558
   type: 'test'
   ...
 # Subtest: T6 SIGINT and SIGTERM restore (both arms)
 ok 7 - T6 SIGINT and SIGTERM restore (both arms)
   ---
-  duration_ms: 4.8376
+  duration_ms: 3.578
   type: 'test'
   ...
 # Subtest: T7 a scene that throws is caught, the terminal restored, exit code non-zero, error reported
 ok 8 - T7 a scene that throws is caught, the terminal restored, exit code non-zero, error reported
   ---
-  duration_ms: 2.4617
+  duration_ms: 1.6584
   type: 'test'
   ...
 # Subtest: T8 uncaughtException and unhandledRejection restore, exit 1, and report
 ok 9 - T8 uncaughtException and unhandledRejection restore, exit 1, and report
   ---
-  duration_ms: 5.6351
+  duration_ms: 3.6428
   type: 'test'
   ...
 # Subtest: T8 an unhandledRejection with a non-Error reason is still handled
 ok 10 - T8 an unhandledRejection with a non-Error reason is still handled
   ---
-  duration_ms: 3.1195
+  duration_ms: 1.7459
   type: 'test'
   ...
 # Subtest: T9 no handlers leak after leaving; a second signal does nothing
 ok 11 - T9 no handlers leak after leaving; a second signal does nothing
   ---
-  duration_ms: 2.5441
+  duration_ms: 0.9825
   type: 'test'
   ...
 # Subtest: R5 exactly one stdout.write per changed frame, none for an unchanged frame
 ok 12 - R5 exactly one stdout.write per changed frame, none for an unchanged frame
   ---
-  duration_ms: 7.9345
+  duration_ms: 5.5406
   type: 'test'
   ...
 # Subtest: T11 live resize updates dimensions and forces a full repaint
 ok 13 - T11 live resize updates dimensions and forces a full repaint
   ---
-  duration_ms: 8.1432
+  duration_ms: 6.3904
   type: 'test'
   ...
 # Subtest: T12 space asks for the next scene; unknown keys are ignored
 ok 14 - T12 space asks for the next scene; unknown keys are ignored
   ---
-  duration_ms: 46.5239
+  duration_ms: 30.533
   type: 'test'
   ...
 # Subtest: T12 +/- change speed, clamp at both ends
 ok 15 - T12 +/- change speed, clamp at both ends
   ---
-  duration_ms: 1.3709
+  duration_ms: 1.0357
   type: 'test'
   ...
 # Subtest: T12 speed scales how fast scene time advances
 ok 16 - T12 speed scales how fast scene time advances
   ---
-  duration_ms: 3.6512
+  duration_ms: 1.7595
   type: 'test'
   ...
 # Subtest: T12 p pauses (time and writes freeze) and unpausing resumes without a jump
 ok 17 - T12 p pauses (time and writes freeze) and unpausing resumes without a jump
   ---
-  duration_ms: 2.5639
+  duration_ms: 1.6105
   type: 'test'
   ...
 # Subtest: T12 c cycles colours in order, wraps, repaints, and persists the choice
 ok 18 - T12 c cycles colours in order, wraps, repaints, and persists the choice
   ---
-  duration_ms: 18.3749
+  duration_ms: 11.2616
   type: 'test'
   ...
 # Subtest: colour is restored from config on start, bad config falls back to claude
 ok 19 - colour is restored from config on start, bad config falls back to claude
   ---
-  duration_ms: 7.9081
+  duration_ms: 4.0351
   type: 'test'
   ...
 # Subtest: F6 (app level) an unwritable config path never crashes the app
 ok 20 - F6 (app level) an unwritable config path never crashes the app
   ---
-  duration_ms: 5.7368
+  duration_ms: 2.6134
   type: 'test'
   ...
 # Subtest: colour mode follows the injected env: truecolor vs 256 (both arms)
 ok 21 - colour mode follows the injected env: truecolor vs 256 (both arms)
   ---
-  duration_ms: 6.4086
+  duration_ms: 3.4416
   type: 'test'
   ...
 # Subtest: scheduler is driven by the app: scene changes after sceneSeconds then fades
 ok 22 - scheduler is driven by the app: scene changes after sceneSeconds then fades
   ---
-  duration_ms: 23.9641
+  duration_ms: 13.9262
   type: 'test'
   ...
 # Subtest: parseOptions reads flags and DRIFT_* env
 ok 23 - parseOptions reads flags and DRIFT_* env
   ---
-  duration_ms: 1.2595
+  duration_ms: 0.4873
   type: 'test'
   ...
 # Subtest: synchronized output: every frame is ONE write wrapped in ESC[?2026h ... ESC[?2026l
 ok 24 - synchronized output: every frame is ONE write wrapped in ESC[?2026h ... ESC[?2026l
   ---
-  duration_ms: 4.1343
+  duration_ms: 1.9531
   type: 'test'
   ...
 # Subtest: synchronized output: an unchanged (paused, undirty) frame writes nothing at all
 ok 25 - synchronized output: an unchanged (paused, undirty) frame writes nothing at all
   ---
-  duration_ms: 1.9991
+  duration_ms: 0.9151
   type: 'test'
   ...
 # Subtest: X1 progress 0 gives exactly A, progress 1 exactly B (both arms)
 ok 26 - X1 progress 0 gives exactly A, progress 1 exactly B (both arms)
   ---
-  duration_ms: 2.2401
+  duration_ms: 1.437
   type: 'test'
   ...
 # Subtest: X2 mid-fade intensity lies between A and B for every cell
 ok 27 - X2 mid-fade intensity lies between A and B for every cell
   ---
-  duration_ms: 0.6319
+  duration_ms: 0.4082
   type: 'test'
   ...
 # Subtest: X3 a 5 s fade at 18 fps is monotonic and no cell jumps more than 6 per frame
 ok 28 - X3 a 5 s fade at 18 fps is monotonic and no cell jumps more than 6 per frame
   ---
-  duration_ms: 7.597
+  duration_ms: 3.8509
   type: 'test'
   ...
 # Subtest: smoothstep is 0/1 at the ends and clamps
 ok 29 - smoothstep is 0/1 at the ends and clamps
   ---
-  duration_ms: 0.2144
+  duration_ms: 0.1013
   type: 'test'
   ...
 # Subtest: X4 scheduler switches after the configured duration, then fades, then lands on the next scene
 ok 30 - X4 scheduler switches after the configured duration, then fades, then lands on the next scene
   ---
-  duration_ms: 0.4591
+  duration_ms: 0.1828
   type: 'test'
   ...
 # Subtest: X4 space (skip) forces the next scene; wraps after the 5th
 ok 31 - X4 space (skip) forces the next scene; wraps after the 5th
   ---
-  duration_ms: 0.2616
+  duration_ms: 0.1101
   type: 'test'
   ...
 # Subtest: X4 skip during a fade is queued, not lost and not a jump
 ok 32 - X4 skip during a fade is queued, not lost and not a jump
   ---
-  duration_ms: 0.3242
+  duration_ms: 0.4614
   type: 'test'
   ...
 # Subtest: scheduler with infinite duration never leaves a scene (used by measure)
 ok 33 - scheduler with infinite duration never leaves a scene (used by measure)
   ---
-  duration_ms: 0.3246
+  duration_ms: 0.1341
   type: 'test'
   ...
 # Subtest: composer: not fading gives the scene glyph set (ramp chars), fading blends fields
 ok 34 - composer: not fading gives the scene glyph set (ramp chars), fading blends fields
   ---
-  duration_ms: 7.0284
+  duration_ms: 7.459
   type: 'test'
   ...
 # Subtest: composer: squiggle frames use braille glyphs for line cells
 ok 35 - composer: squiggle frames use braille glyphs for line cells
   ---
-  duration_ms: 4.2732
+  duration_ms: 2.8802
   type: 'test'
   ...
 # Subtest: composer: resize reallocates and stays correct
 ok 36 - composer: resize reallocates and stays correct
   ---
-  duration_ms: 1.989
+  duration_ms: 1.3445
   type: 'test'
   ...
 # Subtest: X5 staggered blend: exactly A at p=0, exactly B at p=1, between A and B in between, deterministic offsets
 ok 37 - X5 staggered blend: exactly A at p=0, exactly B at p=1, between A and B in between, deterministic offsets
   ---
-  duration_ms: 5.1315
+  duration_ms: 5.3307
   type: 'test'
   ...
 # Subtest: F1 round-trip save/load
 ok 38 - F1 round-trip save/load
   ---
-  duration_ms: 10.3468
+  duration_ms: 6.0378
   type: 'test'
   ...
 # Subtest: F2 corrupt JSON gives defaults and does not throw
 ok 39 - F2 corrupt JSON gives defaults and does not throw
   ---
-  duration_ms: 16.427
+  duration_ms: 10.8715
   type: 'test'
   ...
 # Subtest: F3 missing file and missing directory give defaults; save creates the directory
 ok 40 - F3 missing file and missing directory give defaults; save creates the directory
   ---
-  duration_ms: 7.7826
+  duration_ms: 5.482
   type: 'test'
   ...
 # Subtest: F4 unknown or invalid colour name falls back to the default (and a valid one is kept)
 ok 41 - F4 unknown or invalid colour name falls back to the default (and a valid one is kept)
   ---
-  duration_ms: 9.4942
+  duration_ms: 6.0249
   type: 'test'
   ...
 # Subtest: F5 only writes inside the injected path (directory listing before/after)
 ok 42 - F5 only writes inside the injected path (directory listing before/after)
   ---
-  duration_ms: 10.1183
+  duration_ms: 5.9646
   type: 'test'
   ...
 # Subtest: F6 write failure (target dir is a file; path is a directory) does not throw
 ok 43 - F6 write failure (target dir is a file; path is a directory) does not throw
   ---
-  duration_ms: 4.8571
+  duration_ms: 5.4489
   type: 'test'
   ...
 # Subtest: default path is %APPDATA%\\drift\\config.json when APPDATA is set
 ok 44 - default path is %APPDATA%\\drift\\config.json when APPDATA is set
   ---
-  duration_ms: 0.866
+  duration_ms: 0.3385
   type: 'test'
   ...
 # Subtest: C1 ramp endpoints are space and full block, glyph index never decreases
 ok 45 - C1 ramp endpoints are space and full block, glyph index never decreases
   ---
-  duration_ms: 2.447
+  duration_ms: 1.8139
   type: 'test'
   ...
 # Subtest: C2 a value jittering +-1 around a band boundary does not toggle every frame
 ok 46 - C2 a value jittering +-1 around a band boundary does not toggle every frame
   ---
-  duration_ms: 0.7231
+  duration_ms: 0.306
   type: 'test'
   ...
 # Subtest: C2 a real crossing does change the band (both directions)
 ok 47 - C2 a real crossing does change the band (both directions)
   ---
-  duration_ms: 0.7911
+  duration_ms: 0.2143
   type: 'test'
   ...
 # Subtest: C2 first update is stateless (no bias from the initial state)
 ok 48 - C2 first update is stateless (no bias from the initial state)
   ---
-  duration_ms: 1.3377
+  duration_ms: 0.5596
   type: 'test'
   ...
 # Subtest: C3 default preset is Claude orange \#D97757 and parses
 ok 49 - C3 default preset is Claude orange \#D97757 and parses
   ---
-  duration_ms: 0.6093
+  duration_ms: 0.4924
   type: 'test'
   ...
 # Subtest: C3 every preset yields truecolor SGR with its exact RGB at full intensity
 ok 50 - C3 every preset yields truecolor SGR with its exact RGB at full intensity
   ---
-  duration_ms: 0.6194
+  duration_ms: 0.5364
   type: 'test'
   ...
 # Subtest: C3 shading is monotonic in brightness with intensity, and not black at level 0
 ok 51 - C3 shading is monotonic in brightness with intensity, and not black at level 0
   ---
-  duration_ms: 0.6852
+  duration_ms: 0.5372
   type: 'test'
   ...
 # Subtest: C4 256-colour mapping gives valid 16..255 indices and brightens with level
 ok 52 - C4 256-colour mapping gives valid 16..255 indices and brightens with level
   ---
-  duration_ms: 2.6155
+  duration_ms: 1.959
   type: 'test'
   ...
 # Subtest: C4 colour mode comes from injected env (both arms)
 ok 53 - C4 colour mode comes from injected env (both arms)
   ---
-  duration_ms: 0.6196
+  duration_ms: 0.4868
   type: 'test'
   ...
 # Subtest: C5 two-colour blend: phase 0 is A, half is the midpoint, 1 is B
 ok 54 - C5 two-colour blend: phase 0 is A, half is the midpoint, 1 is B
   ---
-  duration_ms: 0.6499
+  duration_ms: 0.3442
   type: 'test'
   ...
 # Subtest: C5 blend loops smoothly: loopT is 0 at start and period, midpoint at half, no jump at the wrap
 ok 55 - C5 blend loops smoothly: loopT is 0 at start and period, midpoint at half, no jump at the wrap
   ---
-  duration_ms: 0.3221
+  duration_ms: 0.1645
   type: 'test'
   ...
 # Subtest: C6 c cycles through all presets in order and wraps
 ok 56 - C6 c cycles through all presets in order and wraps
   ---
-  duration_ms: 0.1723
+  duration_ms: 0.1182
   type: 'test'
   ...
 # Subtest: makePalette builds one SGR string per level and a key that changes with the colour
 ok 57 - makePalette builds one SGR string per level and a key that changes with the colour
   ---
-  duration_ms: 0.1844
+  duration_ms: 0.1314
   type: 'test'
   ...
 # Subtest: real process (a): q on stdin restores the terminal, exit 0
 ok 58 - real process (a): q on stdin restores the terminal, exit 0
   ---
-  duration_ms: 180.4095
+  duration_ms: 120.5302
   type: 'test'
   ...
 # (a) q head: "\\u001b[?1049h\\u001b[?25l\\u001b[?2026h\\u001b[2J\\u001b[2;54H\\u001b[38;2;124;68;5"
 # (a) q tail: "\\u001b[38;2;113;62;45m⣀⣠⠤⠒⠋\\u001b[?2026l\\u001b[?25h\\u001b[?1049l\\u001b[0m"
-# (a) q exit code 0, pid 29328 gone=true, bytes 1450
+# (a) q exit code 0, pid 84080 gone=true, bytes 1450
 # Subtest: real process (b): byte 0x03 on stdin restores the terminal
 ok 59 - real process (b): byte 0x03 on stdin restores the terminal
   ---
-  duration_ms: 143.9144
+  duration_ms: 91.7278
   type: 'test'
   ...
 # (b) 0x03 head: "\\u001b[?1049h\\u001b[?25l\\u001b[?2026h\\u001b[2J\\u001b[2;54H\\u001b[38;2;124;68;5"
 # (b) 0x03 tail: "\\u001b[38;2;113;62;45m⣀⣠⠤⠒⠋\\u001b[?2026l\\u001b[?25h\\u001b[?1049l\\u001b[0m"
-# (b) 0x03 exit code 130, pid 103340 gone=true, bytes 1450
+# (b) 0x03 exit code 130, pid 34008 gone=true, bytes 1450
 # Subtest: real process (c): a thrown error restores the terminal and exits non-zero
 ok 60 - real process (c): a thrown error restores the terminal and exits non-zero
   ---
-  duration_ms: 527.4669
+  duration_ms: 490.1102
   type: 'test'
   ...
 # (c) throw head: "\\u001b[?1049h\\u001b[?25l\\u001b[?2026h\\u001b[2J\\u001b[2;54H\\u001b[38;2;124;68;5"
-# (c) throw tail: ";2;90;49;36m⡀\\u001b[16;42H⠒\\u001b[?2026l\\u001b[?25h\\u001b[?1049l\\u001b[0m"
-# (c) throw exit code 1, pid 31808 gone=true, bytes 4911
+# (c) throw tail: "7;48H\\u001b[38;2;78;43;31m⠈\\u001b[?2026l\\u001b[?25h\\u001b[?1049l\\u001b[0m"
+# (c) throw exit code 1, pid 60536 gone=true, bytes 4793
 # Subtest: real process (d) negative control: no force flag + piped stdin = no alt screen, exit 0, message
 ok 61 - real process (d) negative control: no force flag + piped stdin = no alt screen, exit 0, message
   ---
-  duration_ms: 114.9658
+  duration_ms: 81.9759
   type: 'test'
   ...
 # (d) stdout: "drift needs an interactive terminal (stdin and stdout must be a TTY). Run it from Windows Terminal or a console window.\\n"
 # Subtest: real process: the force flag is inert unless set to 1
 ok 62 - real process: the force flag is inert unless set to 1
   ---
-  duration_ms: 99.4155
+  duration_ms: 88.2076
   type: 'test'
   ...
 # Subtest: R1 an identical frame renders as the empty string
 ok 63 - R1 an identical frame renders as the empty string
   ---
-  duration_ms: 1.3651
+  duration_ms: 1.726
   type: 'test'
   ...
 # Subtest: R2 one changed cell costs one cursor address + glyph (< 60 bytes)
 ok 64 - R2 one changed cell costs one cursor address + glyph (< 60 bytes)
   ---
-  duration_ms: 0.5516
+  duration_ms: 0.6016
   type: 'test'
   ...
 # Subtest: R2b the renderer body carries no sync wrapper (the app adds it)
 ok 65 - R2b the renderer body carries no sync wrapper (the app adds it)
   ---
-  duration_ms: 0.1662
+  duration_ms: 0.2074
   type: 'test'
   ...
 # Subtest: R3 a resize forces a full repaint (clear + every lit cell)
 ok 66 - R3 a resize forces a full repaint (clear + every lit cell)
   ---
-  duration_ms: 0.2234
+  duration_ms: 0.2781
   type: 'test'
   ...
 # Subtest: R4 changing only one cell colour re-emits only that cell
 ok 67 - R4 changing only one cell colour re-emits only that cell
   ---
-  duration_ms: 0.2769
+  duration_ms: 0.3082
   type: 'test'
   ...
 # Subtest: R4 a palette change repaints lit cells but not blank ones
 ok 68 - R4 a palette change repaints lit cells but not blank ones
   ---
-  duration_ms: 0.3073
+  duration_ms: 0.2228
   type: 'test'
   ...
 # Subtest: a cell becoming blank is emitted as a space; a colour change under a space is ignored
 ok 69 - a cell becoming blank is emitted as a space; a colour change under a space is ignored
   ---
-  duration_ms: 0.3297
+  duration_ms: 0.2529
   type: 'test'
   ...
 # Subtest: adjacent changed cells share one cursor move and one colour code
 ok 70 - adjacent changed cells share one cursor move and one colour code
   ---
-  duration_ms: 0.2802
+  duration_ms: 0.27
   type: 'test'
   ...
 # Subtest: R6 never writes beyond the last column/row; the bottom-right cell is never drawn
 ok 71 - R6 never writes beyond the last column/row; the bottom-right cell is never drawn
   ---
-  duration_ms: 0.6239
+  duration_ms: 0.4313
   type: 'test'
   ...
 # Subtest: frameToText / frameToAnsi give rows of glyph characters
 ok 72 - frameToText / frameToAnsi give rows of glyph characters
   ---
-  duration_ms: 1.7881
+  duration_ms: 0.3655
   type: 'test'
   ...
 # Subtest: there are exactly the five scenes, in order
 ok 73 - there are exactly the five scenes, in order
   ---
-  duration_ms: 2.5014
+  duration_ms: 1.7404
   type: 'test'
   ...
 # Subtest: squiggle: S1 determinism (same inputs twice -> identical)
 ok 74 - squiggle: S1 determinism (same inputs twice -> identical)
   ---
-  duration_ms: 11.8664
+  duration_ms: 8.1907
   type: 'test'
   ...
 # Subtest: squiggle: S2/S3 dims are w*h and values live in 0..255
 ok 75 - squiggle: S2/S3 dims are w*h and values live in 0..255
   ---
-  duration_ms: 2.246
+  duration_ms: 1.5344
   type: 'test'
   ...
 # Subtest: squiggle: S4 no NaN/Infinity at t=0 and t=1e6 (output is real, not zero-filled)
 ok 76 - squiggle: S4 no NaN/Infinity at t=0 and t=1e6 (output is real, not zero-filled)
   ---
-  duration_ms: 1.6212
+  duration_ms: 1.231
   type: 'test'
   ...
 # Subtest: squiggle: S5 tiny and zero sizes do not throw and have correct dims
 ok 77 - squiggle: S5 tiny and zero sizes do not throw and have correct dims
   ---
-  duration_ms: 0.9177
+  duration_ms: 0.4701
   type: 'test'
   ...
 # Subtest: squiggle: S6 slowness: no cell changes by more than 8 per 1/18 s
 ok 78 - squiggle: S6 slowness: no cell changes by more than 8 per 1/18 s
   ---
-  duration_ms: 53.6911
+  duration_ms: 29.6312
   type: 'test'
   ...
 # Subtest: squiggle: S6 negative control: the same scene sped up 50x breaks the bound
 ok 79 - squiggle: S6 negative control: the same scene sped up 50x breaks the bound
   ---
-  duration_ms: 26.4695
+  duration_ms: 16.3941
   type: 'test'
   ...
 # Subtest: squiggle: S7 stateless: t=10, t=2, t=10 gives identical t=10 frames
 ok 80 - squiggle: S7 stateless: t=10, t=2, t=10 gives identical t=10 frames
   ---
-  duration_ms: 0.8781
+  duration_ms: 0.5429
   type: 'test'
   ...
 # Subtest: squiggle: S7 reuses a supplied output buffer without changing the result
 ok 81 - squiggle: S7 reuses a supplied output buffer without changing the result
   ---
-  duration_ms: 1.1838
+  duration_ms: 1.0584
   type: 'test'
   ...
 # Subtest: squiggle: S8 changes over time
 ok 82 - squiggle: S8 changes over time
   ---
-  duration_ms: 1.6519
+  duration_ms: 1.4043
   type: 'test'
   ...
 # Subtest: sunburst: S1 determinism (same inputs twice -> identical)
 ok 83 - sunburst: S1 determinism (same inputs twice -> identical)
   ---
-  duration_ms: 9.1283
+  duration_ms: 6.0408
   type: 'test'
   ...
 # Subtest: sunburst: S2/S3 dims are w*h and values live in 0..255
 ok 84 - sunburst: S2/S3 dims are w*h and values live in 0..255
   ---
-  duration_ms: 1.7282
+  duration_ms: 1.0002
   type: 'test'
   ...
 # Subtest: sunburst: S4 no NaN/Infinity at t=0 and t=1e6 (output is real, not zero-filled)
 ok 85 - sunburst: S4 no NaN/Infinity at t=0 and t=1e6 (output is real, not zero-filled)
   ---
-  duration_ms: 4.9528
+  duration_ms: 4.3323
   type: 'test'
   ...
 # Subtest: sunburst: S5 tiny and zero sizes do not throw and have correct dims
 ok 86 - sunburst: S5 tiny and zero sizes do not throw and have correct dims
   ---
-  duration_ms: 0.1392
+  duration_ms: 0.1033
   type: 'test'
   ...
 # Subtest: sunburst: S6 slowness: no cell changes by more than 7 per 1/18 s
 ok 87 - sunburst: S6 slowness: no cell changes by more than 7 per 1/18 s
   ---
-  duration_ms: 53.7542
+  duration_ms: 32.1184
   type: 'test'
   ...
 # Subtest: sunburst: S6 negative control: the same scene sped up 50x breaks the bound
 ok 88 - sunburst: S6 negative control: the same scene sped up 50x breaks the bound
   ---
-  duration_ms: 24.1239
+  duration_ms: 15.4608
   type: 'test'
   ...
 # Subtest: sunburst: S7 stateless: t=10, t=2, t=10 gives identical t=10 frames
 ok 89 - sunburst: S7 stateless: t=10, t=2, t=10 gives identical t=10 frames
   ---
-  duration_ms: 0.4551
+  duration_ms: 0.2987
   type: 'test'
   ...
 # Subtest: sunburst: S7 reuses a supplied output buffer without changing the result
 ok 90 - sunburst: S7 reuses a supplied output buffer without changing the result
   ---
-  duration_ms: 0.18
+  duration_ms: 0.1224
   type: 'test'
   ...
 # Subtest: sunburst: S8 changes over time
 ok 91 - sunburst: S8 changes over time
   ---
-  duration_ms: 0.3076
+  duration_ms: 0.1918
   type: 'test'
   ...
 # Subtest: plasma: S1 determinism (same inputs twice -> identical)
 ok 92 - plasma: S1 determinism (same inputs twice -> identical)
   ---
-  duration_ms: 4.9167
+  duration_ms: 2.9161
   type: 'test'
   ...
 # Subtest: plasma: S2/S3 dims are w*h and values live in 0..255
 ok 93 - plasma: S2/S3 dims are w*h and values live in 0..255
   ---
-  duration_ms: 3.1824
+  duration_ms: 1.2486
   type: 'test'
   ...
 # Subtest: plasma: S4 no NaN/Infinity at t=0 and t=1e6 (output is real, not zero-filled)
 ok 94 - plasma: S4 no NaN/Infinity at t=0 and t=1e6 (output is real, not zero-filled)
   ---
-  duration_ms: 2.93
+  duration_ms: 1.7971
   type: 'test'
   ...
 # Subtest: plasma: S5 tiny and zero sizes do not throw and have correct dims
 ok 95 - plasma: S5 tiny and zero sizes do not throw and have correct dims
   ---
-  duration_ms: 0.1723
+  duration_ms: 0.1134
   type: 'test'
   ...
 # Subtest: plasma: S6 slowness: no cell changes by more than 3 per 1/18 s
 ok 96 - plasma: S6 slowness: no cell changes by more than 3 per 1/18 s
   ---
-  duration_ms: 18.6915
+  duration_ms: 10.9969
   type: 'test'
   ...
 # Subtest: plasma: S6 negative control: the same scene sped up 50x breaks the bound
 ok 97 - plasma: S6 negative control: the same scene sped up 50x breaks the bound
   ---
-  duration_ms: 5.3616
+  duration_ms: 3.521
   type: 'test'
   ...
 # Subtest: plasma: S7 stateless: t=10, t=2, t=10 gives identical t=10 frames
 ok 98 - plasma: S7 stateless: t=10, t=2, t=10 gives identical t=10 frames
   ---
-  duration_ms: 0.8636
+  duration_ms: 1.4693
   type: 'test'
   ...
 # Subtest: plasma: S7 reuses a supplied output buffer without changing the result
 ok 99 - plasma: S7 reuses a supplied output buffer without changing the result
   ---
-  duration_ms: 0.6379
+  duration_ms: 0.6094
   type: 'test'
   ...
 # Subtest: plasma: S8 changes over time
 ok 100 - plasma: S8 changes over time
   ---
-  duration_ms: 0.9588
+  duration_ms: 1.5783
   type: 'test'
   ...
 # Subtest: ripples: S1 determinism (same inputs twice -> identical)
 ok 101 - ripples: S1 determinism (same inputs twice -> identical)
   ---
-  duration_ms: 5.5858
+  duration_ms: 3.1333
   type: 'test'
   ...
 # Subtest: ripples: S2/S3 dims are w*h and values live in 0..255
 ok 102 - ripples: S2/S3 dims are w*h and values live in 0..255
   ---
-  duration_ms: 1.0382
+  duration_ms: 0.6624
   type: 'test'
   ...
 # Subtest: ripples: S4 no NaN/Infinity at t=0 and t=1e6 (output is real, not zero-filled)
 ok 103 - ripples: S4 no NaN/Infinity at t=0 and t=1e6 (output is real, not zero-filled)
   ---
-  duration_ms: 2.4301
+  duration_ms: 1.7071
   type: 'test'
   ...
 # Subtest: ripples: S5 tiny and zero sizes do not throw and have correct dims
 ok 104 - ripples: S5 tiny and zero sizes do not throw and have correct dims
   ---
-  duration_ms: 0.3416
+  duration_ms: 0.0913
   type: 'test'
   ...
 # Subtest: ripples: S6 slowness: no cell changes by more than 9 per 1/18 s
 ok 105 - ripples: S6 slowness: no cell changes by more than 9 per 1/18 s
   ---
-  duration_ms: 23.5154
+  duration_ms: 14.8516
   type: 'test'
   ...
 # Subtest: ripples: S6 negative control: the same scene sped up 50x breaks the bound
 ok 106 - ripples: S6 negative control: the same scene sped up 50x breaks the bound
   ---
-  duration_ms: 10.5066
+  duration_ms: 6.4509
   type: 'test'
   ...
 # Subtest: ripples: S7 stateless: t=10, t=2, t=10 gives identical t=10 frames
 ok 107 - ripples: S7 stateless: t=10, t=2, t=10 gives identical t=10 frames
   ---
-  duration_ms: 3.2393
+  duration_ms: 1.7146
   type: 'test'
   ...
 # Subtest: ripples: S7 reuses a supplied output buffer without changing the result
 ok 108 - ripples: S7 reuses a supplied output buffer without changing the result
   ---
-  duration_ms: 0.8941
+  duration_ms: 0.7251
   type: 'test'
   ...
 # Subtest: ripples: S8 changes over time
 ok 109 - ripples: S8 changes over time
   ---
-  duration_ms: 1.7788
+  duration_ms: 1.0308
   type: 'test'
   ...
 # Subtest: rain: S1 determinism (same inputs twice -> identical)
 ok 110 - rain: S1 determinism (same inputs twice -> identical)
   ---
-  duration_ms: 1.1716
+  duration_ms: 0.9082
   type: 'test'
   ...
 # Subtest: rain: S2/S3 dims are w*h and values live in 0..255
 ok 111 - rain: S2/S3 dims are w*h and values live in 0..255
   ---
-  duration_ms: 0.1839
+  duration_ms: 0.1086
   type: 'test'
   ...
 # Subtest: rain: S4 no NaN/Infinity at t=0 and t=1e6 (output is real, not zero-filled)
 ok 112 - rain: S4 no NaN/Infinity at t=0 and t=1e6 (output is real, not zero-filled)
   ---
-  duration_ms: 0.5071
+  duration_ms: 0.2235
   type: 'test'
   ...
 # Subtest: rain: S5 tiny and zero sizes do not throw and have correct dims
 ok 113 - rain: S5 tiny and zero sizes do not throw and have correct dims
   ---
-  duration_ms: 0.0656
+  duration_ms: 0.0363
   type: 'test'
   ...
 # Subtest: rain: S6 slowness: no cell changes by more than 10 per 1/18 s
 ok 114 - rain: S6 slowness: no cell changes by more than 10 per 1/18 s
   ---
-  duration_ms: 13.4486
+  duration_ms: 7.8627
   type: 'test'
   ...
 # Subtest: rain: S6 negative control: the same scene sped up 50x breaks the bound
 ok 115 - rain: S6 negative control: the same scene sped up 50x breaks the bound
   ---
-  duration_ms: 2.4196
+  duration_ms: 2.0419
   type: 'test'
   ...
 # Subtest: rain: S7 stateless: t=10, t=2, t=10 gives identical t=10 frames
 ok 116 - rain: S7 stateless: t=10, t=2, t=10 gives identical t=10 frames
   ---
-  duration_ms: 0.2148
+  duration_ms: 0.1691
   type: 'test'
   ...
 # Subtest: rain: S7 reuses a supplied output buffer without changing the result
 ok 117 - rain: S7 reuses a supplied output buffer without changing the result
   ---
-  duration_ms: 0.1366
+  duration_ms: 0.4493
   type: 'test'
   ...
 # Subtest: rain: S8 changes over time
 ok 118 - rain: S8 changes over time
   ---
-  duration_ms: 0.0715
+  duration_ms: 0.0693
   type: 'test'
   ...
 # Subtest: S7 seeded scenes: same seed -> same, different seed -> different (ripples, rain)
 ok 119 - S7 seeded scenes: same seed -> same, different seed -> different (ripples, rain)
   ---
-  duration_ms: 0.8034
+  duration_ms: 0.5599
   type: 'test'
   ...
 # Subtest: S8 the five scenes are pairwise distinct
 ok 120 - S8 the five scenes are pairwise distinct
   ---
-  duration_ms: 0.6121
+  duration_ms: 0.49
   type: 'test'
   ...
 # Subtest: squiggle supplies braille masks through params.glyphs; others leave them zero
 ok 121 - squiggle supplies braille masks through params.glyphs; others leave them zero
   ---
-  duration_ms: 3.3199
+  duration_ms: 2.3697
   type: 'test'
   ...
 # Subtest: T1 enter emits alt-screen and hide-cursor and sets raw mode
 ok 122 - T1 enter emits alt-screen and hide-cursor and sets raw mode
   ---
-  duration_ms: 2.6771
+  duration_ms: 1.6457
   type: 'test'
   ...
 # Subtest: T2 leave emits exactly show-cursor, leave-alt-screen, SGR reset in that order; raw off; stdin paused+unref
 ok 123 - T2 leave emits exactly show-cursor, leave-alt-screen, SGR reset in that order; raw off; stdin paused+unref
   ---
-  duration_ms: 0.9184
+  duration_ms: 1.0877
   type: 'test'
   ...
 # Subtest: T3 leave is idempotent and leave without enter emits nothing
 ok 124 - T3 leave is idempotent and leave without enter emits nothing
   ---
-  duration_ms: 0.2566
+  duration_ms: 0.4749
   type: 'test'
   ...
 # Subtest: terminal wires and unwires key + resize listeners; keys arrive as strings
 ok 125 - terminal wires and unwires key + resize listeners; keys arrive as strings
   ---
-  duration_ms: 0.3396
+  duration_ms: 0.3244
   type: 'test'
   ...
 # Subtest: size falls back to defaults when the stream has no dimensions
 ok 126 - size falls back to defaults when the stream has no dimensions
   ---
-  duration_ms: 0.2549
+  duration_ms: 0.1844
   type: 'test'
   ...
 # Subtest: T6/T8/T9 guards route signals and fatal errors, and are removed afterwards
 ok 127 - T6/T8/T9 guards route signals and fatal errors, and are removed afterwards
   ---
-  duration_ms: 0.3426
+  duration_ms: 0.2614
   type: 'test'
   ...
 # Subtest: K1 capture writes .txt (chars only) and .ansi for 5 scenes + crossfade at both sizes
 ok 128 - K1 capture writes .txt (chars only) and .ansi for 5 scenes + crossfade at both sizes
   ---
-  duration_ms: 208.3653
+  duration_ms: 121.9041
   type: 'test'
   ...
 # Subtest: K1 capture is deterministic (second run is byte-identical) and the crossfade ends on scene B
 ok 129 - K1 capture is deterministic (second run is byte-identical) and the crossfade ends on scene B
   ---
-  duration_ms: 219.0786
+  duration_ms: 144.8235
   type: 'test'
   ...
 # Subtest: K2 measure smoke: the real app loop runs 2.5 s at 80x24 against a counting fake TTY
 ok 130 - K2 measure smoke: the real app loop runs 2.5 s at 80x24 against a counting fake TTY
   ---
-  duration_ms: 2505.7894
+  duration_ms: 2515.7066
   type: 'test'
   ...
 # Subtest: calm: squiggle stays under its calmness ceiling (and a 50x-fast control exceeds it)
 ok 131 - calm: squiggle stays under its calmness ceiling (and a 50x-fast control exceeds it)
   ---
-  duration_ms: 244.2698
+  duration_ms: 179.717
   type: 'test'
   ...
 # Subtest: calm: sunburst stays under its calmness ceiling (and a 50x-fast control exceeds it)
 ok 132 - calm: sunburst stays under its calmness ceiling (and a 50x-fast control exceeds it)
   ---
-  duration_ms: 241.3724
+  duration_ms: 184.3475
   type: 'test'
   ...
 # Subtest: calm: plasma stays under its calmness ceiling (and a 50x-fast control exceeds it)
 ok 133 - calm: plasma stays under its calmness ceiling (and a 50x-fast control exceeds it)
   ---
-  duration_ms: 111.9679
+  duration_ms: 90.5695
   type: 'test'
   ...
 # Subtest: calm: ripples stays under its calmness ceiling (and a 50x-fast control exceeds it)
 ok 134 - calm: ripples stays under its calmness ceiling (and a 50x-fast control exceeds it)
   ---
-  duration_ms: 139.0459
+  duration_ms: 123.3084
   type: 'test'
   ...
 # Subtest: calm: rain stays under its calmness ceiling (and a 50x-fast control exceeds it)
 ok 135 - calm: rain stays under its calmness ceiling (and a 50x-fast control exceeds it)
   ---
-  duration_ms: 96.3522
+  duration_ms: 91.494
   type: 'test'
   ...
 # Subtest: shipped default fade is 15 s and the tools use that same constant
 ok 136 - shipped default fade is 15 s and the tools use that same constant
   ---
-  duration_ms: 0.3426
+  duration_ms: 0.3218
   type: 'test'
   ...
-# Subtest: calm fade: every adjacent pair stays under 7% of cells per frame at 120x40 (1 s fade control exceeds it)
-ok 137 - calm fade: every adjacent pair stays under 7% of cells per frame at 120x40 (1 s fade control exceeds it)
+# Subtest: calm fade: all five pairs, seeds 1-3 x starts 8/40/100 s, stay under 7.5% of cells per frame at 120x40; 1 s control is busier on every pair
+ok 137 - calm fade: all five pairs, seeds 1-3 x starts 8/40/100 s, stay under 7.5% of cells per frame at 120x40; 1 s control is busier on every pair
   ---
-  duration_ms: 484.0129
+  duration_ms: 2211.1663
   type: 'test'
   ...
-# Subtest: calm fade: every adjacent pair stays under 7% of cells per frame at 240x67 (1 s fade control exceeds it)
-ok 138 - calm fade: every adjacent pair stays under 7% of cells per frame at 240x67 (1 s fade control exceeds it)
+# Subtest: calm fade: all five pairs, seeds 1-3 x starts 8/40/100 s, stay under 7.5% of cells per frame at 240x67; 1 s control is busier on every pair
+ok 138 - calm fade: all five pairs, seeds 1-3 x starts 8/40/100 s, stay under 7.5% of cells per frame at 240x67; 1 s control is busier on every pair
   ---
-  duration_ms: 1840.6286
+  duration_ms: 5902.5187
   type: 'test'
   ...
 1..138
@@ -849,4 +849,4 @@ ok 138 - calm fade: every adjacent pair stays under 7% of cells per frame at 240
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 6383.9231
+# duration_ms 11782.3321

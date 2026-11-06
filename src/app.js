@@ -11,7 +11,9 @@ import { presetRGB, nextPreset, presetIndex, makePalette, detectColorMode, DEFAU
 export const SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
 const DEFAULT_SPEED_INDEX = 3;
 // The cross-fade is long on purpose: at 5 s the busiest pairs changed 11-16% of
-// the screen per frame; at 15 s it stays under 7% (see tools/calm.mjs).
+// the screen per frame; at 15 s the worst frame in the test sweep (seeds 1-3 x start
+// times 8/40/100 s x the five adjacent pairs x 120x40 and 240x67) changes at most about
+// 7.1% of cells, and the mean is about 1-3% (see tools/calm.mjs, tests/tools.test.js).
 export const DEFAULT_FADE_SECONDS = 15;
 const DEFAULTS = { fps: 18, sceneSeconds: 180, fadeSeconds: DEFAULT_FADE_SECONDS, seed: 1 };
 

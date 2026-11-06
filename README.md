@@ -111,6 +111,12 @@ node tools/measure.mjs --seconds 60 --cols 240 --rows 67 [--scene mix|squiggle|s
 `captures/*.ansi` are git-ignored (large); regenerate with the capture command and
 view with `type captures\sunburst-120x40.ansi` in a truecolor terminal.
 
+Fade calmness is measured, not assumed. Across a sweep of seeds 1-3, start times
+8/40/100 s, all five adjacent scene pairs and both sizes (120x40, 240x67), the
+15 second fade changes at most about 7.1% of cells in any one frame (worst case
+plasma > ripples at 120x40); the mean is about 1-3%. `tests/tools.test.js` fails
+above 7.5%, and checks that a 1 second fade is clearly busier on every pair.
+
 `measure.mjs` runs the real app loop (same compose, hysteresis, diff renderer, string
 build and fps timer) against a fake TTY whose `write` only counts bytes, and samples
 process CPU and RSS each second. It includes scene maths, cross-fade, diff, string
