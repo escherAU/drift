@@ -40,7 +40,7 @@ test('playlists: calm is the v1 five; every other mode has a scene; ids unique a
   for (const m of MODES) assert.ok(PLAYLISTS[m].length >= 1, m);
   const ids = allSceneIds();
   assert.equal(new Set(ids).size, ids.length, `duplicate scene id in ${ids}`);
-  assert.deepEqual(NON_CALM.map((x) => x.scene.id).sort(), ['blocktype', 'bounce', 'cloth', 'fireworks', 'glitch', 'glyphrain', 'life', 'maze', 'pendulum', 'sand', 'swarm', 'tunnel', 'vortex', 'waves', 'wire']);
+  assert.deepEqual(NON_CALM.map((x) => x.scene.id).sort(), ['artist', 'blocktype', 'bounce', 'cloth', 'fireworks', 'glitch', 'glyphrain', 'life', 'maze', 'pendulum', 'sand', 'swarm', 'tunnel', 'vortex', 'waves', 'wire']);
   assert.equal(NON_CALM.find((x) => x.scene.id === 'life').mode, 'contrast');
 });
 

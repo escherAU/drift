@@ -22,8 +22,8 @@ function frameOf(sim, s, w, h) {
   return { g: Array.from(g), c: Array.from(c) };
 }
 
-test('experimental playlist alternates styles: bounce, sand, waves, pendulum, cloth (artist joins after, in S4)', () => {
-  assert.deepEqual(PLAYLISTS.experimental.map((s) => s.id), ['bounce', 'sand', 'waves', 'pendulum', 'cloth']);
+test('experimental playlist alternates styles: bounce, sand, waves, pendulum, cloth, then the artist (S4)', () => {
+  assert.deepEqual(PLAYLISTS.experimental.map((s) => s.id), ['bounce', 'sand', 'waves', 'pendulum', 'cloth', 'artist']);
 });
 
 // ---- sand
