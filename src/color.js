@@ -99,3 +99,45 @@ export function makePalette(rgb, mode) {
   for (let l = 0; l < LEVELS; l++) sgr[l] = sgrFor(rgb, l, mode);
   return { key: `${mode}:${rgb[0]},${rgb[1]},${rgb[2]}`, sgr };
 }
+
+// ---- DRIFT-2 palettes for the non-calm modes (calm's makePalette above is untouched)
+
+// Chaos: 8 hues x 4 brightness. Cell colour index = hue * 4 + brightness (0 dim .. 3 full).
+export const CHAOS_PALETTES = [
+  { id: 'neon', name: 'Neon', hues: ['ff2bd6', '00f0ff', '39ff14', 'ffee00', 'ff6a00', '8a2bff', 'ff2d55', '2bff9a'] },
+  { id: 'candy', name: 'Candy', hues: ['ff8fc7', 'ffb36b', 'fff08a', 'a8f0a0', '8fe3ff', 'b9a0ff', 'ff9a9a', 'e6b3ff'] },
+  { id: 'ocean', name: 'Ocean', hues: ['0077b6', '00b4d8', '48cae4', '90e0ef', '2ec4b6', '5fa8d3', '7fd6c2', 'caf0f8'] },
+  { id: 'fire', name: 'Fire', hues: ['ff3b00', 'ff6a00', 'ff9100', 'ffb800', 'ffd900', 'e32636', 'b3001b', 'ff5a36'] },
+];
+export const DEFAULT_CHAOS_PALETTE = 'neon';
+export const CHAOS_HUES = 8, CHAOS_SHADES = 4;
+const CHAOS_BRIGHT = [0.38, 0.58, 0.8, 1];
+// UI entries after the 32 colours: help text, dimmed text, headings
+export const CHAOS_UI = { text: 32, dim: 33, head: 34 };
+
+export function chaosIndex(id) { return CHAOS_PALETTES.findIndex((p) => p.id === id); }
+export function nextChaosPalette(id) { return CHAOS_PALETTES[(chaosIndex(id) + 1) % CHAOS_PALETTES.length].id; }
+
+const fg = (rgb, mode) => (mode === 'truecolor' ? `\x1b[38;2;${rgb[0]};${rgb[1]};${rgb[2]}m` : `\x1b[38;5;${rgbTo256(rgb)}m`);
+
+export function makeMultiPalette(id, mode) {
+  const def = CHAOS_PALETTES[chaosIndex(id)] || CHAOS_PALETTES[0];
+  const sgr = [];
+  for (const hex of def.hues) {
+    const rgb = parseHex(hex);
+    for (const f of CHAOS_BRIGHT) sgr.push(fg(rgb.map((v) => Math.round(v * f)), mode));
+  }
+  sgr.push(fg([240, 240, 240], mode), fg([130, 130, 130], mode), fg(parseHex(def.hues[1]), mode));
+  return { key: `multi:${mode}:${def.id}`, sgr, ui: CHAOS_UI };
+}
+
+// High contrast: strictly two-tone. One entry carries foreground AND background, so every
+// cell, spaces included, is painted black-on-white or white-on-black.
+export function makeTwoTone(invert, mode) {
+  const f = invert ? [0, 0, 0] : [255, 255, 255];
+  const b = invert ? [255, 255, 255] : [0, 0, 0];
+  const sgr = mode === 'truecolor'
+    ? `\x1b[38;2;${f[0]};${f[1]};${f[2]}m\x1b[48;2;${b[0]};${b[1]};${b[2]}m`
+    : `\x1b[38;5;${invert ? 16 : 231}m\x1b[48;5;${invert ? 231 : 16}m`;
+  return { key: `twotone:${mode}:${invert ? 'inv' : 'norm'}`, sgr: [sgr], bg: true, base: sgr, ui: { text: 0, dim: 0, head: 0 } };
+}
