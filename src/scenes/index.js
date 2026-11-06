@@ -6,6 +6,10 @@ import rain from './rain.js';
 import glyphrain from './glyphrain.js';
 import life from './life.js';
 import bounce from './bounce.js';
+import swarm from './swarm.js';
+import glitch from './glitch.js';
+import fireworks from './fireworks.js';
+import vortex from './vortex.js';
 import { MODES } from '../modes.js';
 
 // Order is the play order; the scheduler wraps after the last.
@@ -16,7 +20,7 @@ export const SCENE_IDS = SCENES.map((s) => s.id);
 // other three; the shared non-calm test suite picks them up from here automatically.
 export const PLAYLISTS = {
   calm: SCENES,
-  chaos: [glyphrain],
+  chaos: [glyphrain, swarm, glitch, fireworks, vortex],
   contrast: [life],
   experimental: [bounce],
 };
