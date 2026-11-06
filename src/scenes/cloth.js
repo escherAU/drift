@@ -12,7 +12,7 @@ import { rnd, seedState, strokeGlyph } from './simrng.js';
 
 const DT = 1 / 30;
 const D = 4; // rest length of a structural link (4 columns, 2 rows)
-const ITER = 8;
+const ITER = 5;
 const GRAVITY = 70;
 const DRAG = 0.992;
 export const VMAX = 3;
@@ -89,7 +89,7 @@ function step(s) {
     for (let l = 0; l < la.length; l++) {
       const a = la[l], c = lb[l];
       const dx = x[c] - x[a], dy = y[c] - y[a];
-      const d = Math.hypot(dx, dy);
+      const d = Math.sqrt(dx * dx + dy * dy);
       if (d === 0) continue;
       const diff = (d - rest[l]) / d;
       const pa = pin[a], pc = pin[c];
@@ -114,10 +114,20 @@ function step(s) {
   for (let k = 0; k < n; k++) {
     if (pin[k]) { x[k] = px[k]; y[k] = py[k]; continue; }
     let dx = x[k] - px[k], dy = y[k] - py[k];
-    const sp = Math.hypot(dx, dy);
+    const sp = Math.sqrt(dx * dx + dy * dy);
     if (sp > VMAX) { dx *= VMAX / sp; dy *= VMAX / sp; }
-    x[k] = Math.min(hiX, Math.max(0, px[k] + dx));
-    y[k] = Math.min(hiY, Math.max(0, py[k] + dy));
+    let nx = Math.min(hiX, Math.max(0, px[k] + dx)), ny = Math.min(hiY, Math.max(0, py[k] + dy));
+    // the ball has the last word: a node it shoves may travel further than VMAX in one step, in
+    // which case its previous position is moved up so that its speed stays within the limit
+    const bx = nx - b.x, by = ny - b.y, bd2 = bx * bx + by * by;
+    if (bd2 < br * br) {
+      const bd = Math.sqrt(bd2);
+      if (bd > 1e-9) { nx = b.x + (bx / bd) * br; ny = b.y + (by / bd) * br; } else { nx = b.x; ny = b.y - br; }
+      nx = Math.min(hiX, Math.max(0, nx)); ny = Math.min(hiY, Math.max(0, ny));
+      const ex = nx - px[k], ey = ny - py[k], es = Math.sqrt(ex * ex + ey * ey);
+      if (es > VMAX) { px[k] = nx - (ex * VMAX) / es; py[k] = ny - (ey * VMAX) / es; }
+    }
+    x[k] = nx; y[k] = ny;
   }
 }
 
@@ -139,7 +149,7 @@ function draw(s, params) {
   for (let l = 0; l < nStruct; l++) {
     const a = la[l], b = lb[l];
     const dx = x[b] - x[a], dy = y[b] - y[a];
-    const ratio = Math.hypot(dx, dy) / rest[l];
+    const ratio = Math.sqrt(dx * dx + dy * dy) / rest[l];
     const lvl = 5 + Math.max(0, Math.min(10, Math.floor((ratio - 1) * 40)));
     const ch = strokeGlyph(dx, dy);
     put(s, g, c, x[a] + dx / 3, y[a] + dy / 3, ch, lvl, false);
@@ -147,7 +157,7 @@ function draw(s, params) {
   }
   for (let k = 0; k < s.n; k++) {
     if (pin[k]) { put(s, g, c, x[k], y[k], 0x2564, 15, true); continue; }
-    const sp = Math.hypot(x[k] - px[k], y[k] - py[k]);
+    const sp = Math.sqrt((x[k] - px[k]) * (x[k] - px[k]) + (y[k] - py[k]) * (y[k] - py[k]));
     put(s, g, c, x[k], y[k], 0x253c, 6 + Math.min(9, Math.floor(sp * 6)), true);
   }
   const bl = s.ball;
