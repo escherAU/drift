@@ -131,3 +131,88 @@ for (const [cols, rows] of SIZES) {
     }
   });
 }
+
+// ---- DRIFT-2: captures of the non-calm modes (the calm K1 tests above are unchanged)
+import { runCaptureModes, MODE_CAPTURE_NAMES } from '../tools/capture.mjs';
+import { measureTargets } from '../tools/measure.mjs';
+import { KEYMAP, rowFor } from '../src/keymap.js';
+import { isAllowedGlyph } from '../src/glyphs.js';
+import { PLAYLISTS } from '../src/scenes/index.js';
+import { MODES } from '../src/modes.js';
+
+test('K3 mode captures: <mode>-<scene>-1/-2, help-<mode>, dissolve-<mode>, plain text at 120x40; calm files are not touched', () => {
+  const dir = tmp();
+  const files = runCaptureModes({ outDir: dir });
+  const want = [];
+  for (const mode of MODES) {
+    want.push(`help-${mode}.txt`);
+    if (mode === 'calm') continue;
+    want.push(`dissolve-${mode}.txt`);
+    for (const s of PLAYLISTS[mode]) want.push(`${mode}-${s.id}-1.txt`, `${mode}-${s.id}-2.txt`);
+  }
+  assert.deepEqual(MODE_CAPTURE_NAMES.slice().sort(), want.slice().sort());
+  assert.deepEqual(fs.readdirSync(dir).sort(), want.slice().sort());
+  assert.equal(files.length, want.length);
+  for (const f of want) {
+    const t = fs.readFileSync(path.join(dir, f), 'utf8');
+    assert.ok(!t.includes('\x1b'), `${f}: plain text`);
+    const body = t.split(/=== [^\n]*\n/).slice(1);
+    const frames = f.startsWith('dissolve-') ? 5 : 1;
+    assert.equal(body.length, frames, f);
+    for (const b of body) {
+      const lines = b.replace(/\n$/, '').split('\n');
+      assert.equal(lines.length, 40, f);
+      for (const l of lines) {
+        assert.equal(l.length, 120, f);
+        for (const ch of l) assert.ok(isAllowedGlyph(ch.codePointAt(0)), `${f} U+${ch.codePointAt(0).toString(16)}`);
+      }
+    }
+  }
+  for (const mode of MODES.filter((m) => m !== 'calm')) {
+    for (const s of PLAYLISTS[mode]) {
+      const a = fs.readFileSync(path.join(dir, `${mode}-${s.id}-1.txt`), 'utf8');
+      const b = fs.readFileSync(path.join(dir, `${mode}-${s.id}-2.txt`), 'utf8');
+      assert.notEqual(a, b, `${mode}-${s.id}: the two frames are at different times`);
+    }
+    const d = fs.readFileSync(path.join(dir, `dissolve-${mode}.txt`), 'utf8').split(/=== [^\n]*\n/).slice(1);
+    assert.notEqual(d[0], d[4], `dissolve-${mode}: first and last frames differ`);
+    assert.notEqual(d[2], d[0]); assert.notEqual(d[2], d[4]);
+  }
+  for (const mode of MODES) {
+    const h = fs.readFileSync(path.join(dir, `help-${mode}.txt`), 'utf8');
+    for (const e of KEYMAP) assert.equal(h.split(rowFor(e, mode).text).length - 1, 1, `help-${mode}: ${e.id}`);
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('K3 mode captures are deterministic (second run is byte-identical)', () => {
+  const d1 = tmp(), d2 = tmp();
+  runCaptureModes({ outDir: d1 });
+  runCaptureModes({ outDir: d2 });
+  for (const f of fs.readdirSync(d1)) assert.equal(fs.readFileSync(path.join(d1, f), 'utf8'), fs.readFileSync(path.join(d2, f), 'utf8'), f);
+  fs.rmSync(d1, { recursive: true, force: true });
+  fs.rmSync(d2, { recursive: true, force: true });
+});
+
+test('K5 measure: targets cover every scene of every mode (and mix), each with its mode', () => {
+  const t = measureTargets();
+  const ids = t.map((x) => x.scene);
+  for (const m of MODES) for (const s of PLAYLISTS[m]) assert.ok(t.some((x) => x.scene === s.id && x.mode === m), `${m}/${s.id}`);
+  assert.ok(ids.includes('mix'));
+});
+
+test('K5 measure: a non-calm scene runs in its own mode and reports bytes per second', async () => {
+  for (const [scene, mode] of [['glyphrain', 'chaos'], ['life', 'contrast'], ['bounce', 'experimental']]) {
+    const r = await runMeasure({ seconds: 1.5, cols: 80, rows: 24, scene, quiet: true });
+    assert.equal(r.mode, mode);
+    assert.ok(r.frames > 5, `${scene} frames ${r.frames}`);
+    assert.ok(r.summary.bytesPerSec > 0 && Number.isFinite(r.summary.bytesPerSec));
+  }
+  const m = await runMeasure({ seconds: 1.5, cols: 80, rows: 24, scene: 'mix', mode: 'chaos', quiet: true });
+  assert.equal(m.mode, 'chaos', 'a start mode can be given');
+});
+
+test('K5 measure: the header still says what it does not measure', () => {
+  const src = fs.readFileSync(new URL('../tools/measure.mjs', import.meta.url), 'utf8');
+  assert.match(src, /Excludes:[\s\S]*NOT measured/);
+});

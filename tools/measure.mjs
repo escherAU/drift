@@ -7,17 +7,28 @@
 // Excludes: the real console / Windows Terminal parsing and drawing the bytes
 //           (that cost lives in another process and is NOT measured here).
 //
-//   node tools/measure.mjs --seconds 60 --cols 240 --rows 67 [--scene mix|squiggle|...|all] [--fps 18]
+// Also reported: bytes per second written (the terminal-side cost scales with it).
+// Modes: a scene name starts in that scene's own mode (glyphrain = chaos, life = high
+// contrast, bounce = experimental); `--mode M` sets the start mode for `mix`; `--scene all`
+// runs every scene of every mode, then the calm mix, one fresh node process each.
+//
+//   node tools/measure.mjs --seconds 60 --cols 240 --rows 67 [--scene mix|<scene id>|all] [--mode calm|chaos|contrast|experimental] [--fps 18]
 import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createApp } from '../src/app.js';
-import { SCENE_IDS } from '../src/scenes/index.js';
+import { PLAYLISTS, findScene } from '../src/scenes/index.js';
+import { MODES } from '../src/modes.js';
 import { ENTER, LEAVE } from '../src/term.js';
 
-export function runMeasure({ seconds = 60, cols = 240, rows = 67, scene = 'mix', fps = 18, sampleMs = 1000, mixSceneSeconds = 10, mixFadeSeconds = 4, quiet = false } = {}) {
+// Every scene of every mode (with its mode), then the calm mix.
+export function measureTargets() {
+  return [...MODES.flatMap((m) => PLAYLISTS[m].map((sc) => ({ scene: sc.id, mode: m }))), { scene: 'mix', mode: 'calm' }];
+}
+
+export function runMeasure({ seconds = 60, cols = 240, rows = 67, scene = 'mix', mode = 'calm', fps = 18, sampleMs = 1000, mixSceneSeconds = 10, mixFadeSeconds = 4, quiet = false } = {}) {
   return new Promise((resolve) => {
     const stdin = new EventEmitter();
     Object.assign(stdin, { isTTY: true, setRawMode() { return stdin; }, resume() { return stdin; }, pause() { return stdin; }, unref() {}, ref() {}, setEncoding() { return stdin; } });
@@ -36,11 +47,13 @@ export function runMeasure({ seconds = 60, cols = 240, rows = 67, scene = 'mix',
     const proc = new EventEmitter();
     const sink = { write(_s, cb) { if (cb) cb(); return true; } };
     const mix = scene === 'mix';
-    const startScene = mix ? 0 : Math.max(0, SCENE_IDS.indexOf(scene));
+    const found = mix ? null : findScene(scene);
+    const startMode = found ? found.mode : (MODES.includes(mode) ? mode : 'calm');
+    const startScene = found ? found.index : 0;
     const app = createApp({
       stdin, stdout, stderr: sink, proc, env: { COLORTERM: 'truecolor' },
       configPath: path.join(os.tmpdir(), 'drift-measure-none', 'config.json'),
-      fps, seed: 1, startScene,
+      fps, seed: 1, startScene, startMode,
       sceneSeconds: mix ? mixSceneSeconds : 1e9,
       fadeSeconds: mixFadeSeconds,
     });
@@ -71,7 +84,7 @@ export function runMeasure({ seconds = 60, cols = 240, rows = 67, scene = 'mix',
       const cpuCoreMean = (tc.user + tc.system) / 1e6 / wallSec;
       const steady = samples.slice(1);
       resolve({
-        ...stats, samples, wallSec,
+        ...stats, samples, wallSec, mode: startMode,
         summary: {
           cores, cpuCoreMean, cpuMachineMean: cpuCoreMean / cores,
           cpuCoreSteady: mean((steady.length ? steady : samples).map((s) => s.cpuCore)),
@@ -90,19 +103,19 @@ async function cli() {
   const argv = process.argv.slice(2);
   const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
   const seconds = Number(arg('--seconds', 60)), cols = Number(arg('--cols', 240)), rows = Number(arg('--rows', 67));
-  const fps = Number(arg('--fps', 18)), scene = arg('--scene', 'mix');
+  const fps = Number(arg('--fps', 18)), scene = arg('--scene', 'mix'), mode = arg('--mode', 'calm');
   if (scene === 'all') {
     // one fresh node process per scene so RSS and JIT state do not bleed together
     const here = fileURLToPath(import.meta.url);
-    for (const s of [...SCENE_IDS, 'mix']) {
-      spawnSync(process.execPath, [here, '--seconds', String(seconds), '--cols', String(cols), '--rows', String(rows), '--fps', String(fps), '--scene', s], { stdio: 'inherit' });
+    for (const tgt of measureTargets()) {
+      spawnSync(process.execPath, [here, '--seconds', String(seconds), '--cols', String(cols), '--rows', String(rows), '--fps', String(fps), '--scene', tgt.scene, '--mode', tgt.mode], { stdio: 'inherit' });
     }
     return;
   }
-  console.log(`measure: scene=${scene} size=${cols}x${rows} fps=${fps} for ${seconds}s (real app loop, fake TTY that counts bytes)`);
-  const r = await runMeasure({ seconds, cols, rows, scene, fps });
+  console.log(`measure: scene=${scene} mode=${mode} size=${cols}x${rows} fps=${fps} for ${seconds}s (real app loop, fake TTY that counts bytes)`);
+  const r = await runMeasure({ seconds, cols, rows, scene, mode, fps });
   const s = r.summary;
-  console.log(`RESULT scene=${scene} size=${cols}x${rows} frames=${r.frames} (${s.framesPerSec.toFixed(1)}/s) bytes=${r.bytes} (${(s.bytesPerSec / 1024).toFixed(1)} KB/s)`);
+  console.log(`RESULT scene=${scene} mode=${r.mode} size=${cols}x${rows} frames=${r.frames} (${s.framesPerSec.toFixed(1)}/s) bytes=${r.bytes} bytes/s=${s.bytesPerSec.toFixed(0)} (${(s.bytesPerSec / 1024).toFixed(1)} KB/s)`);
   console.log(`RESULT cpu_core_mean=${(s.cpuCoreMean * 100).toFixed(2)}% steady=${(s.cpuCoreSteady * 100).toFixed(2)}% max=${(s.cpuCoreMax * 100).toFixed(2)}% machine(${s.cores} logical)=${(s.cpuMachineMean * 100).toFixed(3)}% rss_mean=${s.rssMeanMB.toFixed(1)}MB rss_peak=${s.rssPeakMB.toFixed(1)}MB`);
   process.exit(0);
 }

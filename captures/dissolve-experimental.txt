@@ -1,0 +1,205 @@
+=== p=0 120x40 bounce -> glyphrain (2 s dissolve)
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+    ◐◐○                 ○◑◑                                                                                             
+    ◐●○                 ○●◑                              ◐◐○                                                            
+                                                       ◐◐●●●○○                             ○○●●◑◑◑  ◐◐○○                
+                                                       ◐◐●●●○○                             ○●●●●◑◑ ◐●●●○○               
+                                                        ◐◐◐○○                               ○○◑◑◑   ◐◐○                 
+                                                                                                                        
+                                                                                                                    ◐○○ 
+                                                                                                                   ◐●●●○
+                                                                                                                   ◐◐○○ 
+                                       ○○◑                                              ○○○◑◑                           
+                                      ○●●●◑                                            ○○●●●●◑           ◐◐◐○○○         
+   ◐●●○                               ○○○◑◑              ◐○                            ○○●●●◑◑          ◐◐●●●●○○        
+    ◐○                                       ○○◑◑       ◐●●○                             ○○◑             ◐◐●●○○         
+                                            ○○●●●◑                                                              ◐●●○    
+                                              ○◑◑                                                                       
+                                                                                                                        
+=== p=0.25 120x40 bounce -> glyphrain (2 s dissolve)
+               =                                    ±                       )                   E                       
+                                                                                                @                       
+               <   V                                                 w                     [    U                       
+                                                                   ○ M      w                       γ    x              
+                                                                     0                              ξ                   
+                                                                     [                              φ                   
+                                                                     Y  c   E                                           
+                              ○        κ                                2   M              [        M                  κ
+                                                                                     ζ                                 h
+                                       >             Q                          s  ±        ×                          ζ
+                               |         >                                           S                       J          
+                              ν        σ                  %                                 @                         a 
+         θ                                c                                                    [                       N
+                                                                  V                  φ                                  
+                                                               π                                       I                
+                 °                     ( i                     AY                                                     # 
+                                       η         ?                                  ●]                 ω               α
+                                                     i                                                                  
+                                C            π               γ    <                  (   S     O                h       
+                                          1   h                   J                 b                          #        
+                                              X              ■                                                  @       
+          r                                                  μ D          ○         <                                   
+    6                                                           θ                        e                            ○ 
+                                                     ?       p                                                          
+    ◐ ○                 ○◑◑               π>2  κ ×                                               t                      
+   j◐●○                 ○●◑     β           + }           ◐○                                                            
+  ∂ρu                  | =          ◆         e        ◐◐● ●○○                             ○ ●●◑◑◑   ◐○○                
+    f                                                  ◐◐●●●○○                             ○ ●●●◑◑ ◐  ●○      S      i  
+   K                                √                    ◐◐○○                                ○◑◑◑     ○                 
+  / ?               &     θ         ●      y                                                  2                      {  
+    π                  ζ     ^                x        8              t                          &                   ○  
+ ∞ W                     E8                ≥                                                                       0●● ○
+  μ                          ◆      1                                 )                      (                   Uψ◐◐○○ 
+   °                    }              ○○◑             ÷              A                 ○○○ ◑ ]             ς           
+ °                                    ○●    = S        l              x                ○○ ●●●◑φ          ◐ ◐○○○  u °    
+   ◐●≠○                 ι             ○ ○◑◑              ◐○                            ○○●●●◑a          ◐◐● ●● ○        
+ χ  ◐○≠                                      ○  ◑ u     ◐ ●○     M                         ◑              ◐●ι ○   z     
+     ◆                                      ○○ ●●◑         g     G                            ▲                 ◐●●○    
+ O    3                           κ            ◑◑ ξ                                                              T      
+                                                                 τ                                                2X    
+=== p=0.5 120x40 bounce -> glyphrain (2 s dissolve)
+               =                        ≠           ±                    ο  )           λ       E   A    θ              
+                   =                                                        {     V     9       @       ≈               
+               <   V                               B                 w                     [    U                       
+               G                                    (              ○ M   ∂  w                       γ   dx              
+                                                   lκ                0          ~                   ξ                   
+                                                          κ          [   L             ≈        n   φ        2          
+                                                                     Y  c   E                            L              
+                              ○        κ 8                π             2   M   ●       /  [J       M    T             κ
+                              D        *                             ξ  }            ζ ∞                 =             h
+                                       > ]           Q    0 P                   s  ±        ×                          ζ
+                 y            L|         >                ∞                     5    S      ψ                J         φ
+         #                    ν        σ ∑           M    % ]                               @                         a 
+         θ                     f          c               σ                                    [                      rN
+         y                     *                                ( V                  φ                                P 
+                               ∂O         √          ?         π○                  $ 3                 I               ◆
+                 °                     ( iχ          \         AY                                                     # 
+                                       η         ?   n      !  =θ                   ●]                 ω               α
+          ÷                                          i         H  e                  d                 <                
+                       β        C            π               γ    <       n          (   S     O                h      I
+          !                               1  zh                   J                 b                          #        
+                                I            }X  9   F       ■ 8                    A          φ                @       
+          r                                      η   n       μ D          ○         <    L     P                      > 
+    6     g                                    ]                θ                   N    e                     χ      ○ 
+                    θ        ×               T S     ?       p            1                                    v        
+    ◐                   ○ρ◑               π>2  κ ×           j                                   t                      
+   j◐●                   ●π  J  β           + }■          ◐○ ÷                                ×                @        
+  ∂ρu                  | =          ◆         eb 5       ●   ≈T                            ○ ●●◑◑◑   ◐○○      7         
+    f               A  W 8                             ◐ ●● ○κ                             ○ bM● $    ●       S      i  
+   K              U σ    ω          √      ≤  ■            ○  ψ                              ○◑◑◑     ○              g  
+  / ?             A &     θ         ●      y                                                  2             7 γ   D  {  
+    π             = 1  ζβ    ^             u  x        8              t                       Q  &                L  ○  
+ ∞ W0u              ∫  E E8                ≥  ζ                       u!                      t  γ            ω    0●f ○
+  μ ÷S                   C   ◆      1                                 )                      (              8    Uψ◐◐r○ 
+   °  k                 } s             ○   Y          ÷              A                 ○○○   ]             ς     α     
+ ° a δd           6      m            ○●   ≈= S        l              x                ○○ ● ●Aφ       j    ◐○○   u≥°    
+   ◐●≠○                 ι             ○  ◑◑            U ◐○           ι                ○ ●●●◑a        ∂ ◐ ● ~●    [     
+ χ  {z≠                 zr        y φ        ○  ◑ u    π◐ ●      M            7                           ◐ ι    Ez  (  
+     ◆                   √          υ       B   ●◑     J   g     G            4              j▲             β   ◐13○    
+ O    3                 E  \      κ )          ◑◑ ξ                    !                     }        ν          Tτ     
+     υ                     }                           ι         τ     /                                          2X    
+=== p=0.75 120x40 bounce -> glyphrain (2 s dissolve)
+              a=   >                    ≠           ±              7    ×ο  )           λ       E   A    θ              
+               [   =                               Pξ                T      {     V     9       @       ≈n              
+               <   V                               Bν              + w  K       q       ξ  [    U                       
+               G   *                                (              ○ M   ∂  w   υ ●     9  ^        γ   dx              
+                                                   lκ                0      τ   ~ v    EV  y        ξ   f               
+               ^                                          κ          [  √L  /     χ    ≈κ       n   φ   ■±   2          
+               √              V                           r          Y  c   E   ι       σ           q   7L              
+         l                    ○        κ 8                π          Y  2   M   ●      R/  [J       M   UT   7         κ
+         ×                    D        * t                  z        ξ  }   +        ζ ∞   y∫       χ   p=             h
+         °                    α        > ]           Q    0 P           Q       s  ±   γ    ×            i             ζ
+         o       y            L|         >                ∞     ξ               5    S      ψ       ψ        J         φ
+         #       !            ν∑       σ ∑           M    % ]                   H  [ n      @  d    1                 a\
+         θ       φ             f       e σc          O    σ     ≤ √                  ν         [             °        rN
+         y                     *          ?          0      ω   ( V                ■ φ      4                         P3
+         ξ       k             ∂O      ≥ L√          ?         π○ φ                $ 3         ×       I               ◆
+                 °             θ       ( iχ          \      ^p AY Q                oμ       υ  ρ       @        &     #Z
+                                       η  a      ?   n      !  =θ                  ~●]      4          ω        y     bα
+         {÷                     %      4     L   v   i         HL e                ∑%d      A  1       <        s     Z 
+          σ            β        C         ο  π               γ Rb <       n          (   S     O                h     ≥I
+          !            ο        t         1  zh      ≈       I    J                 b    ∫             l       #      ( 
+          Z                     I      b  5  }X  9   F       ■ 8φ                   A    1     φ                @     4 
+          r            μ        S            tdi η   n       μ D          ○         <    L     P       N       /      > 
+    6     g                               c  y+] d   D       $  θ         V         N    e             %       χ      ○ 
+                    θ  U     ×  v            T S     ?       p  >         1                            7       v        
+    ◐               ν  w ρ◑     ÷         π>2 Yκ ×           j                                   t    Y        J        
+   j|●              E  | ●π  J  β          ρ+ }■          ◐○ ÷b                               ×  \            #@        
+  ∂ρu               @  | =   <  α   ◆         eb 5       ●   ≈T                            ○ Aα ◑◑    ○       7         
+  ○ f               A  W 8÷  B             {   l       ◐ ●   κ                               bM● $    M       S      i  
+  τK              U σ    ωg         √      ≤  ■            ○  ψ                              N◑◑◑s    ○              g  
+  / ?             A &  √σ θ  λ      ●      y                                                  2  κ    υ     7 γ   D  {  
+   Bπ             = 1  ζβ    ^      j      u  x        8              t                      iQ  &          p $   L  D  
+ ∞ωW0u            ξ ∫  EyE8                ≥  ζ        g              u!                      t  γ    B       ω    0 f ○
+ ■μ ÷S            # n   TCα  ◆      1      B  ψ        8              )τ                     (   ι          8    Uψλ◐r○ 
+  P° ψk           V     } s  ×      U      %Y a        ÷              A                   ○   ]             ς    ?α%    
+ ° a●δd           6     YmN       F   ○●   ≈= S        l              xL               ○○   ●Aφ       j    ◐○○   u≥°    
+   ◐K≠τ                 ι[        θ   ○     4          U ◐            ι@      (           ●●◑ao       ∂   ● ~    M[     
+ χ  {z≠                 zr        y φ        ○    u    π  ●      M     λ      7               j       %   ◐ ι    Ez  (  
+ ∑   ◆O                  √          υ       B   ●      J   g     G            4              j▲       c     β    13○ c  
+ O    3                 Ec \      κ )          ◑  ξ        ≈     P     !      E              }        ν          Tτ     
+ &   υς               m ^  }      ○ ν                  ι   >     τ     /                                   q      2X    
+=== p=1 120x40 bounce -> glyphrain (2 s dissolve)
+              a=   >                    ≠          °±              7 T  ×ο !)  a  @     λ  }    E   A   +θ          l   
+               [   =                    ×          Pξ              ▲ T  °D ο{     V     9  ±    @   β   ≈n          λ   
+               <   V                               Bν              + w  Kl  ≈   q ≈     ξ  [    U   R   xγ              
+               G   *                               Z(              ○ M  n∂  w   υ ●     9  ^    %   γ   dx              
+               S                                   lκ              f 0  υT  τ   ~ v    EV  y    η   ξ   f√              
+               ^              i                     ±     κ          [  √L  /   l χ    ≈κ  [    n   φ   ■±   2          
+               √              V                           r          Y  ct  E   ι      ζσ  φ        q   7L   r         h
+         l                    ○        κ 8                π u        Y  2z  M   ●      R/  [J       M   UT   7         κ
+         ×                    D        * t           /    % z        ξ  }   +   η    ζ ∞G  y∫       χ   p=   {         h
+         °                    α        > ]           Q    0 P   S       Q       s  ± E γ    ×       8    i   ▲         ζ
+         o       y            L|       h >           E    ∞ ÷   ξ               5  6 S      ψ       ψ    u   J         φ
+         #       !            ν∑       σ ∑Y          M    % ]   ν               H  [ n      @  d    1  W     r        a\
+         θ       φ            kf       e σc          O    σ <   ≤ √             }  5 ν      $  [       σ     °  F     rN
+         y       p             *       ≠ Q?          0    e ω  ρ( V                ■ φ      4  σ       ρ        ~     P3
+         ξ       k             ∂O      ≥ L√          ?      υ  π○ φ                $ 3      κ  ×       I        /     9◆
+         ×       °             θμ      ( iχ          \      ^p AY Q                oμ!      υ  ρ       @        &     #Z
+         B                      λ      η  a      ?   n      !q =θ y                ~●]   C  4  π       ω        y     bα
+         {÷                     %      4  τ  L   v   i      @R HL e                ∑%d   t  A  1       <        s     ZR
+          σ            β        C      5  ο  π   #   θ       γ Rb <       n         ∑(   S     O       °        h     ≥I
+          !            ο        t      d  1  zh  ◆   ≈       I 3^ J       +         b    ∫     U       l       #α     ( 
+          Z            0        I      b  5  }Xy 9   F       ■ 8φ N       ≈         A    1     φ       χ       γ@     4 
+          r            μ        S         ≥  tdi η   n       μ Di         ○         <    L     P       N       /      > 
+    6     g            N        }         c  y+] d   D       $  θ         V         N    e             %       χ      ○ 
+    K               θ  U     ×  v         k  T<S f   ?       p  >         1                            7       v        
+   J5               ν  w ρG  a  ÷         π>2 Yκ ×           jσ                                  t    Y        J        
+  @j|               E  | ÷π  J  β          ρ+ }■ !           ÷b                               ×  \    η       #@        
+  ∂ρu               @  | =β  <  α   ◆      ρo eb 5           ≈T                              Aα  μ    β       7         
+  ○√f             ○ A  W 8÷  B      #      {B Xl             κs                              bM  $    M       S      i  
+  τK6             U σ  U ωg  x      √      ≤$ ■               ψ                              Nt  s    α       >      g  
+  /≈?             A &  √σ)θ  λ      ●      yε ν               1                              θ2  κ    υ     7 γ   D  {  
+ &pBπ             = 1  ζβH∫  ^      j      u× x        8      ψ       t                      iQ  &    N     p $   L  D  
+ ∞ωW0u            ξ ∫  EyE8  i      k      ≥ζ ζ        g              u!                     At  γ    B     β ω  ζ<0 f  
+ ■μω÷S            # n   TCα  ◆      1      Bτ ψ        8              )τ                     (T  ι    y     8    Uψλ r  
+ DP°mψk           V     }1s  ×      U      %Y a        ÷              Aα                     ?]  g    C     ς    ?α% ψ  
+ ° a●δd           6     YmN       F ≥      ≈= S        l         ^    xL      ÷              Aφ  ~    j     a    u≥° °  
+ 1  K≠τ                 ι[        θ θ       4     β    U         Q    ι@      (              ao       ∂     ~    M[μ @  
+ χ  {z≠                 zr        y φ       I     u    π         M     λ      7              %j       %     ι    Ezκ (  
+ ∑   ◆O                 γ√        s υ       B     χ    J   g     G     Q      4              j▲       c     β    13) c  
+ O   L3                 Ec \      κ )             ξ    s   ≈     P     !      E              }        ν          TτK    
+ &   υς               m ^  }      ○ ν             R    ι   >     τ     /      N       x      ρ             q     [2X    

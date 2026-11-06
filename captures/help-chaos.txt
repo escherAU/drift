@@ -1,0 +1,41 @@
+=== help 120x40 chaos
+   ^R ? ο             θ         r c f     x   ±              ≠ζ        φ              ν       ε5 ξ    ν#   θ   W  Q×    
+    d = 6             @             ω     ÷   ≈                        τ              ρ       4  ≥ i  l&   x   ▲ Cw≥    
+    ± k 9                f                6   y            J           α              B       }  2 ◆  V4   )   θ Q≥±    
+      O W               \!                (   D            n     ε     T         Z    )       \  R +  Y    f     ∂83    
+      \ ≠               Xν                    w            C     @     l         ∞    ζ       n  h ι  b    <     gf3    
+ z    β α               /ο            ┌─────────────────────────────────────────┐≥e   *       <    s       ο     ∞<}A   
+ I   ο  0   Q           w≠            │                                         │@+   ]       P    Y       ∂     λψβa   
+ v   Z  θ   )           ■U            │  DRIFT  keys                            │)≤   9       8    m       0     ≤5∞<   
+ e   q  ∂   8           τ9            │  mode: chaos    scene: glyphrain        │z×   ○       ≈    A             (Wα]   
+ η   j  5   6           κ<            │                                         │i≈           n                  ∞ηQo   
+ ●   1  n   w  V        JI            │  Modes                                  │N×           j                  ?Fwζ   
+ B   ς      g al        aW            │  m             next mode                │             ε                  ∂( ]   
+ W   +      d QQ        yς         q  │  1             calm mode                │             Q                  ≠≤ R   
+ τ   c      τ Pz        1■ 8       θ  │  2             chaos mode               │                                ≈9 J   
+ o   r     q( ye        4α j       U  │  3             high contrast mode       │                                4  λ   
+ C   G     uρ }●μ        x q       μ f│  4             experimental mode        │                                   γ   
+ ∑   2     Jq ψLς    l   ρ R       A ∞│                                         │                                   z   
+ ρ   h     q7 UPM    R     o       T λ│  Scenes                                 │                                   μ  3
+ ς   B     συ υDt    b     h       ( °│  space         next scene in this mode  │          O    0        M          =  4
+           )D Y∫W    6     h   6   ≤ 0│                                         │          ∫    ο        O          {  5
+           A  ωζz    =        Gu   v F│  Colour                                 │          D    α <      η             t
+           ς  ]yκ    Z        ι[   $ b│  c             next colour              │          x    > 7      H             v
+              e|$    η        x∑   R Q│  i             invert black and white   │       4  n    η λ      !             6
+              A#~             SA     d│                                         │       0  ○n   # [      ±             !
+       ρ       ∞R             ≠(     J│  Speed                                  │       =  Aθ   @ {      ξ             ∞
+       χ     τ  z             ιb     0│  +             faster                   │       2  gH   $ = Y    μ             9
+       %     ∑  ≈             N      ]│  -             slower                   │       ■  ςς   θ G J    ■             l
+       p     ■  T             ε       │                                         │       F  H+   # D ×    q             ς
+       2     !  ξ                /    │  Other                                  │    V  η  Ld   ι ≤ ω    κ             J
+       6     π                   γ    │  p             pause or resume          │    ο  =  ε■     8 Q   φ@             κ
+       2     θ                   λ    │  h             show or hide this help   │    η @q  \ρ       ρ   ε               
+       n     7                   @    │  Esc           close this help          │    j X≤   ∑       f   δ               
+       Q     Z                   κ    │  q or Ctrl+C   quit                     │    / J    °       ≠   F               
+       θ     v                   X    │                                         │    E *    #       1   n               
+       ▲     4                   ψ    └─────────────────────────────────────────┘    ° α            +   Q L             
+             ±      ο                  t ≠ ∞         A      z       ≈     ω          √ ≠            M   f χ             
+                 Q  }                  ◆ y σ     4   g      r       ω     ○          k              ▲   θ ι             
+                 p  B     W            l o 9     y   0      u       γ     χ          s              )   t ς             
+         r       b  Y     r            / x 9     k   ~      φ  π    T     °          ≤              k   ◆ *             
+         W       w  o     C            φ v √     t   i      √  ∞    9                     h             ● E  5       C  

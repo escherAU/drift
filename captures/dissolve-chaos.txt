@@ -1,0 +1,205 @@
+=== p=0 120x40 glyphrain -> life (2 s dissolve)
+              a=   >                    ≠          °±              7 T  ×ο !)  a  @     λ  }    E   A   +θ          l   
+               [   =                    ×          Pξ              ▲ T  °D ο{     V     9  ±    @   β   ≈n          λ   
+               <   V                               Bν              + w  Kl  ≈   q ≈     ξ  [    U   R   xγ              
+               G   *                               Z(              ○ M  n∂  w   υ ●     9  ^    %   γ   dx              
+               S                                   lκ              f 0  υT  τ   ~ v    EV  y    η   ξ   f√              
+               ^              i                     ±     κ          [  √L  /   l χ    ≈κ  [    n   φ   ■±   2          
+               √              V                           r          Y  ct  E   ι      ζσ  φ        q   7L   r         h
+         l                    ○        κ 8                π u        Y  2z  M   ●      R/  [J       M   UT   7         κ
+         ×                    D        * t           /    % z        ξ  }   +   η    ζ ∞G  y∫       χ   p=   {         h
+         °                    α        > ]           Q    0 P   S       Q       s  ± E γ    ×       8    i   ▲         ζ
+         o       y            L|       h >           E    ∞ ÷   ξ               5  6 S      ψ       ψ    u   J         φ
+         #       !            ν∑       σ ∑Y          M    % ]   ν               H  [ n      @  d    1  W     r        a\
+         θ       φ            kf       e σc          O    σ <   ≤ √             }  5 ν      $  [       σ     °  F     rN
+         y       p             *       ≠ Q?          0    e ω  ρ( V                ■ φ      4  σ       ρ        ~     P3
+         ξ       k             ∂O      ≥ L√          ?      υ  π○ φ                $ 3      κ  ×       I        /     9◆
+         ×       °             θμ      ( iχ          \      ^p AY Q                oμ!      υ  ρ       @        &     #Z
+         B                      λ      η  a      ?   n      !q =θ y                ~●]   C  4  π       ω        y     bα
+         {÷                     %      4  τ  L   v   i      @R HL e                ∑%d   t  A  1       <        s     ZR
+          σ            β        C      5  ο  π   #   θ       γ Rb <       n         ∑(   S     O       °        h     ≥I
+          !            ο        t      d  1  zh  ◆   ≈       I 3^ J       +         b    ∫     U       l       #α     ( 
+          Z            0        I      b  5  }Xy 9   F       ■ 8φ N       ≈         A    1     φ       χ       γ@     4 
+          r            μ        S         ≥  tdi η   n       μ Di         ○         <    L     P       N       /      > 
+    6     g            N        }         c  y+] d   D       $  θ         V         N    e             %       χ      ○ 
+    K               θ  U     ×  v         k  T<S f   ?       p  >         1                            7       v        
+   J5               ν  w ρG  a  ÷         π>2 Yκ ×           jσ                                  t    Y        J        
+  @j|               E  | ÷π  J  β          ρ+ }■ !           ÷b                               ×  \    η       #@        
+  ∂ρu               @  | =β  <  α   ◆      ρo eb 5           ≈T                              Aα  μ    β       7         
+  ○√f             ○ A  W 8÷  B      #      {B Xl             κs                              bM  $    M       S      i  
+  τK6             U σ  U ωg  x      √      ≤$ ■               ψ                              Nt  s    α       >      g  
+  /≈?             A &  √σ)θ  λ      ●      yε ν               1                              θ2  κ    υ     7 γ   D  {  
+ &pBπ             = 1  ζβH∫  ^      j      u× x        8      ψ       t                      iQ  &    N     p $   L  D  
+ ∞ωW0u            ξ ∫  EyE8  i      k      ≥ζ ζ        g              u!                     At  γ    B     β ω  ζ<0 f  
+ ■μω÷S            # n   TCα  ◆      1      Bτ ψ        8              )τ                     (T  ι    y     8    Uψλ r  
+ DP°mψk           V     }1s  ×      U      %Y a        ÷              Aα                     ?]  g    C     ς    ?α% ψ  
+ ° a●δd           6     YmN       F ≥      ≈= S        l         ^    xL      ÷              Aφ  ~    j     a    u≥° °  
+ 1  K≠τ                 ι[        θ θ       4     β    U         Q    ι@      (              ao       ∂     ~    M[μ @  
+ χ  {z≠                 zr        y φ       I     u    π         M     λ      7              %j       %     ι    Ezκ (  
+ ∑   ◆O                 γ√        s υ       B     χ    J   g     G     Q      4              j▲       c     β    13) c  
+ O   L3                 Ec \      κ )             ξ    s   ≈     P     !      E              }        ν          TτK    
+ &   υς               m ^  }      ○ ν             R    ι   >     τ     /      N       x      ρ             q     [2X    
+=== p=0.25 120x40 glyphrain -> life (2 s dissolve)
+              a    >                    ≠          °               7 T  ×ο !   a  @     λ  }        A   +θ          l   
+               [   =                    ×          Pξ              ▲ T  °D ο{     V     9  ±        β   ≈n          λ   
+                                                   Bν              +    Kl  ≈   q ≈     ξ           R   xγ              
+               G   *                               Z(                   n∂      υ ●     9  ^    %       d               
+               S                                   lκ              f    υT  τ   ~ v    EV  y    η       f√              
+               ^              i                     ±     κ             √L  /   l χ    ≈κ  [    n       ■±   2          
+               √              V                           r              t      ι      ζσ  φ        q   7L   r         h
+         l                               8                π u        Y   z      ●      R/   J           UT   7          
+         ×                    D        * t           /    % z        ξ  }   +   η      ∞G  y∫       χ   p=   {          
+         °                    α          ]                0 P   S       Q            E γ            8    i   ▲          
+         o       y            L        h             E    ∞ ÷   ξ               5  6        ψ       ψ    u             φ
+         #       !             ∑         ∑Y          M      ]   ν               H  [ n         d    1  W     r         \
+                 φ            kf       e σ           O    σ <   ≤ √             }  5 ν      $          σ     °  F     r 
+         y       p             *       ≠ Q?          0    e ω  ρ(                  ■        4  σ       ρ        ~     P3
+         ξ       k             ∂O      ≥ L√          ?      υ   ○ φ                $ 3      κ  ×                /     9◆
+         ×                     θμ         χ          \      ^p    Q                oμ!      υ  ρ       @        &      Z
+         B                      λ         a          n      !q =θ y                ~     C  4  π                y     b 
+         {÷                     %      4  τ  L   v          @R HL e                ∑%d   t  A  1       <        s     ZR
+          σ            β               5  ο      #   θ         Rb         n         ∑                  °              ≥I
+          !            ο        t      d     z   ◆   ≈       I 3^         +              ∫     U       l        α     ( 
+          Z            0        I      b  5  } y 9   F         8φ N       ≈         A    1     φ       χ       γ      4 
+                       μ        S         ≥  tdi η   n          i                        L     P       N       /      > 
+          g            N        }         c  y+] d   D       $            V         N                  %       χ        
+    K               θ  U     ×  v         k  T<S f              >  █      1                            7       v        
+   J5               ν  w ρG  a  ÷             Y              jσ                                       Y        J        
+  @ |               E  | ÷π  J             ρ   ■ !           ÷b                               ×  \    η       #@        
+                    @     β  <  α          ρo  b 5           ≈T                              Aα  μ    β       7         
+  ○√              ○ A  W 8÷  B      #      {B Xl             κs                              bM  $▀  █M                 
+  τ 6             U σ  U ωg  x             ≤$ ■               ψ                              Nt  s   ▀α       >      g  
+   ≈              A    √σ)   λ              ε ν               1                              θ   κ    υ     7 γ   D     
+ &pB              = 1   βH∫         j ▀    u×                 ψ                              iQ       N     p $   L  D  
+  ω 0u            ξ ∫  Ey    i      k▀      ζ ζ        g              u!                     At  γ    B     β ω  ζ<  f  
+ ■ ω÷S            # n   TCα                Bτ ψ        8               τ                      T  ι    y     8      λ r  
+ DP mψk           V      1s  ×      U      %Y a                        α                     ?   g    C          ?α% ψ  
+   a●δd           6     YmN       F ≥      ≈                     ^     L      ÷              A   ~    j     a     ≥  °  
+ 1  K τ                  [        θ θ       4     β    U         Q    ι@      (               o       ∂     ~    M[μ @  
+    {z                  zr        y φ       I          π               λ      7              %j       %          E κ (  
+ ∑    O                 γ√        s υ       B     χ    J               Q      4              j        c     β    13) c  
+     L                  Ec \        )                  s   ≈     P     !      E              }        ν           τK    
+ &   υς               m ^  }      ○ ν             R    ι   >           /      N       x      ρ             q     [      
+=== p=0.5 120x40 glyphrain -> life (2 s dissolve)
+              a    >                               °               7 T  ×  !   a  @        }            +           l   
+               [                        ×          Pξ              ▲ T  °D ο               ±        β    n          λ   
+                                                    ν              +    Kl  ≈   q ≈     ξ           R   xγ              
+                   *                               Z                    n       υ ●     9  ^    %                       
+               S                                                   f    υT  τ     v    EV  y    η       f√              
+               ^              i                     ±                   √   /   l χ     κ  [            ■±              
+               √              V                           r              t      ι      ζσ  φ        q   7    r         h
+         l                                                  u        Y   z             R                U    7          
+         ×                               t           /    % z               +   η       G  y∫       χ   p    {          
+         °                    α                                 S       Q            E γ            8    i   ▲          
+         o                             h             E      ÷   ξ                  6                ψ    u              
+                 !             ∑          Y                     ν               H  [ n         d    1  W     r         \
+                 φ            k        e σ           O      <   ≤ √             }  5 ν      $          σ     °  F       
+                 p                     ≠ Q?          0    e ω  ρ                   ■        4  σ       ρ        ~     ▀3
+         ξ       k                     ≥ L                  υ     φ                         κ  ×                /   ▄ 9 
+         ×                     θμ                           ^p    Q                oμ!      υ  ρ       @        &      Z
+         B                      λ         a                  q    y                ~     C  4  π                y     b 
+         {                      %      4  τ  L   v          @R  L                  ∑%    t  A  1                s     ZR
+          σ                            5  ο      #   θ         Rb                   ∑                  °              ≥ 
+                       ο        t      d         ◆   ≈       I 3^         +              ∫     U       l        α     ( 
+          Z            0               b  5    y                φ N       ≈              1             χ       γ      4 
+                       μ        S         ≥  tdi                i                                      N       /        
+                       N        }         c  y+  d   D       $     ▄  ▀   V                            %                
+    K                  U        v         k   <  f              >  █                                   7                
+   J5               ν  w  G  a  ÷             Y               σ     ▀                                 Y        J        
+  @ |               E  | ÷                 ρ     !            b                                  \    η       #         
+                    @     β  <  α          ρo                                                Aα  μ    β                 
+  ○√              ○       ÷  B      #      {B Xl              s                                  ▀▀█ █M                 
+  τ 6                  U  g  x              $                                                Nt  s█  ▀α       >         
+   ≈                   √σ)   λ              ε ν               1                              θ   κ    υ                 
+ &pB                     H∫         j ▀     ×                 ψ                              i        N     p $      D  
+  ω               ξ     y    i      k▀      ζ          g                                     A        B     β    ζ<     
+ ■ ω              # n   T α                Bτ ψ        8               τ                      T  ι    y            λ    
+ DP mψ            V      1   ×      U      %  a                        α                     ?   g    C          ? % ψ  
+    ●                   Y N       F ≥                            ^     L      ÷                  ~          a        °  
+ 1  K τ                  [        θ θ       4     β              Q     @      (               o                  M μ @  
+                                            I                          λ                     %j       %            κ    
+ ∑    O                 γ         s               χ                    Q                              c            ) c  
+     L                   c                             s   ≈     P            E                                    K    
+ &    ς               m ^         ○ ν             R        >                  N       x      ρ             q     [      
+=== p=0.75 120x40 glyphrain -> life (2 s dissolve)
+                                                   °                 T     !   a  @        }            +           l   
+                                        ×                          ▲    °D ο               ±        β               λ   
+                                                                         l  ≈     ≈                 R   xγ              
+                                                   Z                    n                       %                       
+               S                                                   f    υT                      η        √              
+                              i                     ±                           l          [                            
+                                                                         t             ζ   φ                 r         h
+                                                            u            z                                              
+                                                     /    %                     η       G                    {          
+                                                                S                    E              8        ▲          
+                                       h             E      ÷                      6                     u              
+                                          Y                     ν                                      W     r          
+                              k                             <                   }  5        $          σ        F   ▄   
+                 p                     ≠ Q                e    ρ                               σ       ρ        ~   ▀ ▀ 
+                                                            υ                               κ                   /   ▄ 9 
+         ×                      μ                                                    !                                  
+         B                      λ                            q    y                      C     π                        
+                                          τ                 @R                           t                             R
+                                       5         #   θ                              ∑                  °                
+                                       d         ◆             3^         +                    U                α       
+                       0                       y                  N       ≈                            χ       γ        
+                                          ≥                     i                                                       
+                       N        }                                  ▄▀ ▀                                                 
+    K                                     k   <  f                 █                                                    
+   J5                     G  a                                σ    ▀▀▀                                                  
+  @                      ÷                       !                                                    η                 
+                          β                ρo                                                    μ    β                 
+   √              ○                 #       B X               s                                  ▀▀█ █                  
+    6                  U     x              $                                                 t  ▀█  ▀α       >         
+   ≈                     )                  ε ν               1                              θ   ▀   ▀                  
+ &p                      H∫         █ ▀     ×                 ψ                                       N                 
+                             i      k▀      ζ                                                A              β    ζ<     
+   ω                                        τ                                                 T       y                 
+ D  m                    1                                             α                     ?   g    C              ψ  
+                                    ≥                            ^            ÷                  ~          a        °  
+ 1                                  θ             β              Q                                                 μ @  
+                                            I                                                %                     κ    
+                        γ         s               χ                    Q                                           )    
+     L                                                 s                                                           K    
+                                                  R                           N       x      ρ                   [      
+=== p=1 120x40 glyphrain -> life (2 s dissolve)
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                    ▄   
+                                                                                                                    ▀ ▀ 
+                                                                                                                    ▄▀  
+                                                                                                                    █   
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                   ▄▀ ▀                                                 
+                                                                   █  ▄                                                 
+                                                                   ▀▀▀                                                  
+                                                                                                                        
+                                                                                                                        
+                                                                                                 ▀▀█ █                  
+                                                                                                 ▀█  ▀                  
+                                                                                                 ▀  ▀▀                  
+                                    █▀▀                                                                                 
+                                     ▀                                                                                  
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

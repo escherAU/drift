@@ -1,0 +1,41 @@
+=== help 120x40 contrast
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                   ┌────────────────────────────────────────────────┐                                   
+                                   │                                                │                                   
+                                   │  DRIFT  keys                                   │                                   
+                                   │  mode: high contrast    scene: life            │                                   
+                                   │                                                │                                   
+                                   │  Modes                                         │                                   
+                                   │  m             next mode                       │                                   
+                                   │  1             calm mode                       │                               ▄   
+                                   │  2             chaos mode                      │                               ▀ ▀ 
+                                   │  3             high contrast mode              │                               ▄▀  
+                                   │  4             experimental mode               │                               █   
+                                   │                                                │                                   
+                                   │  Scenes                                        │                                   
+                                   │  space         next scene in this mode         │                                   
+                                   │                                                │                                   
+                                   │  Colour                                        │                                   
+                                   │  c             next colour (not in this mode)  │                                   
+                                   │  i             invert black and white          │                                   
+                                   │                                                │                                   
+                                   │  Speed                                         │                                   
+                                   │  +             faster                          │                                   
+                                   │  -             slower                          │                                   
+                                   │                                                │            ▀▀█ █                  
+                                   │  Other                                         │            ▀█  ▀                  
+                                   │  p             pause or resume                 │            ▀  ▀▀                  
+                                   │  h             show or hide this help          │                                   
+                                   │  Esc           close this help                 │                                   
+                                   │  q or Ctrl+C   quit                            │                                   
+                                   │                                                │                                   
+                                   └────────────────────────────────────────────────┘                                   
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
