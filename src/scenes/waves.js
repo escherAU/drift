@@ -13,15 +13,15 @@
 // the colour index is the brightness level of the single-hue calm palette.
 import { rnd, seedState } from './simrng.js';
 
-const KX = 0.45;
+const KX = 0.12;
 const KY = KX / 4;
-const DAMP = 0.997;
+const DAMP = 0.99;
 export const LIMIT = 3;
 const CYCLE = 1500; // steps; the last part of each cycle runs two driven sources
 const DRIVE_FROM = 900, DRIVE_TO = 1400;
-const DRIVE_AMP = 0.18, DRIVE_OMEGA = 0.26;
+const DRIVE_AMP = 0.09, DRIVE_OMEGA = 0.135;
 
-const ENV_K = 3.3; // 1 / typical angular rate (about 0.3 rad per step) turns speed into height units
+const ENV_K = 6; // 1 / typical angular rate (about 0.17 rad per step) turns speed into height units
 const CREST =[32, 0xb7, 0x2591, 0x2592, 0x2593, 0x2588];
 const TROUGH = [32, 0x2802, 0x2812, 0x2836, 0x28e4, 0x28ff];
 
@@ -43,7 +43,7 @@ function drop(s) {
   const { w, h } = s;
   const small = Math.min(1, Math.max(0.5, Math.min(w, h * 2) / 40)); // a small box gets gentler pebbles
   const amp = (1.0 + rnd(s) * 0.8) * small * (rnd(s) < 0.3 ? -1 : 1);
-  pebble(s, 2 + rnd(s) * (w - 4), 2 + rnd(s) * (h - 4), amp, 1.1 + rnd(s) * 1.4);
+  pebble(s, 2 + rnd(s) * (w - 4), 2 + rnd(s) * (h - 4), amp, 2.0 + rnd(s) * 2.0);
 }
 
 function init(w, h, seed) {

@@ -14,6 +14,7 @@ import { renderScene, sceneKind, createCellComposer, STEP_HZ } from '../src/cell
 import { Scheduler } from '../src/compose.js';
 import { isAllowedGlyph, allowedList } from '../src/glyphs.js';
 import { helpFrameGlyphs } from './helpers-help.js';
+import { flashTimesOf, snap, FLASH_FRACTION } from './helpers-flash.js';
 
 export const WIDE_BMP = [
   [0x1100, 0x115f], [0x231a, 0x231b], [0x2329, 0x232a], [0x23e9, 0x23ec], [0x23f0, 0x23f0], [0x23f3, 0x23f3],
@@ -154,37 +155,25 @@ test('the pinned wide list never overlaps the allow-list', () => {
   for (const cp of allowedList()) assert.ok(!isWide(cp), `U+${cp.toString(16)} is in both`);
 });
 
-// ---- flash test: 60 s at 120x40. A frame where more than 25% of cells switch between blank
-// and lit is a flash; flashes must be at least 3 s apart. Over every non-calm scene and every
-// dissolve between any two of them.
+// ---- flash test: 60 s at 120x40. A frame step where more than FLASH_FRACTION (30%, see
+// tests/helpers-flash.js for the measured maxima) of ALL cells change glyph OR colour index is a
+// flash; flashes must be at least 3 s apart. Over every non-calm scene and every dissolve
+// between any two of them.
 const FPS = 18, SECS = 60, W = 120, H = 40;
-const lit = (g) => g !== 32;
 
-function flashTimes(frames) {
-  const times = [];
-  let prev = null;
-  frames.forEach((g, k) => {
-    if (prev) {
-      let sw = 0;
-      for (let i = 0; i < g.length; i++) if (lit(g[i]) !== lit(prev[i])) sw++;
-      if (sw / g.length > 0.25) times.push(k / FPS);
-    }
-    prev = g.slice();
-  });
-  return times;
-}
+function flashTimes(frames) { return flashTimesOf(frames, FPS); }
 function assertSpaced(times, what) {
   for (let i = 1; i < times.length; i++) assert.ok(times[i] - times[i - 1] >= 3, `${what}: flashes at ${times[i - 1]} s and ${times[i]} s`);
 }
 function runSolo(scene) {
   const cc = createCellComposer({ scenes: [scene], cols: W, rows: H, seed: 1 });
   const frames = [];
-  for (let k = 0; k < SECS * FPS; k++) frames.push(cc.frame({ a: 0, b: 0, p: 0 }, k / FPS).glyphs.slice());
+  for (let k = 0; k < SECS * FPS; k++) frames.push(snap(cc.frame({ a: 0, b: 0, p: 0 }, k / FPS)));
   return frames;
 }
 
 for (const { mode, scene } of NON_CALM) {
-  test(`flash: ${mode}/${id0(scene)} over 60 s at 120x40 has no flash closer than 3 s (and counts none above 25% switching)`, () => {
+  test(`flash: ${mode}/${id0(scene)} over 60 s at 120x40 has no flash closer than 3 s (and none above 30% of cells changing glyph or colour)`, () => {
     const times = flashTimes(runSolo(scene));
     assertSpaced(times, scene.id);
     assert.ok(times.length <= 1, `${scene.id}: ${times.length} flashes in 60 s`);
@@ -200,7 +189,7 @@ test('flash: every dissolve between any two non-calm scenes (both directions) ov
     const frames = [];
     for (let k = 0; k < SECS * FPS; k++) {
       sched.advance(1 / FPS);
-      frames.push(cc.frame(sched.state(), k / FPS).glyphs.slice());
+      frames.push(snap(cc.frame(sched.state(), k / FPS)));
     }
     assertSpaced(flashTimes(frames), `${A.scene.id} <-> ${B.scene.id}`);
     assert.ok(sched.cur !== undefined);
@@ -209,10 +198,44 @@ test('flash: every dissolve between any two non-calm scenes (both directions) ov
 
 test('flash control: a blank<->full toggle every 0.5 s IS detected (the detector is not vacuous)', () => {
   const frames = [];
-  for (let k = 0; k < 60 * FPS; k++) frames.push(new Uint16Array(W * H).fill(Math.floor(k / 9) % 2 ? 0x2588 : 32));
+  for (let k = 0; k < 60 * FPS; k++) frames.push({ g: new Uint16Array(W * H).fill(Math.floor(k / 9) % 2 ? 0x2588 : 32), c: new Uint8Array(W * H) });
   const t = flashTimes(frames);
   assert.ok(t.length > 50);
   assert.throws(() => assertSpaced(t, 'control'));
+});
+
+test('flash control: an all-lit scene that re-rolls every glyph each frame IS detected', () => {
+  const frames = [];
+  for (let k = 0; k < 60 * FPS; k++) {
+    const g = new Uint16Array(W * H);
+    for (let i = 0; i < g.length; i++) g[i] = 0x41 + ((k + i) % 2 ? 1 : 0) + (k % 7); // every cell differs from the last frame
+    frames.push({ g, c: new Uint8Array(W * H).fill(3) });
+  }
+  const t = flashTimes(frames);
+  assert.equal(t.length, 60 * FPS - 1);
+  assert.throws(() => assertSpaced(t, 'reroll control'));
+});
+
+test('flash control: an all-lit scene that swaps every cell colour each frame IS detected', () => {
+  const frames = [];
+  for (let k = 0; k < 60 * FPS; k++) frames.push({ g: new Uint16Array(W * H).fill(0x2588), c: new Uint8Array(W * H).fill(k % 2 ? 9 : 4) });
+  const t = flashTimes(frames);
+  assert.equal(t.length, 60 * FPS - 1);
+  assert.throws(() => assertSpaced(t, 'colour control'));
+});
+
+test('flash control: a partial re-roll just under the threshold is not a flash, just over is', () => {
+  const mk = (frac, k) => {
+    const g = new Uint16Array(W * H).fill(0x41);
+    const n = Math.floor(W * H * frac);
+    for (let i = 0; i < n; i++) g[i] = k % 2 ? 0x42 : 0x41;
+    return { g, c: new Uint8Array(W * H) };
+  };
+  const under = [mk(0, 0), mk(FLASH_FRACTION - 0.02, 1)];
+  const over = [mk(0, 0), mk(FLASH_FRACTION + 0.02, 1)];
+  assert.equal(flashTimes(under).length, 0);
+  assert.equal(flashTimes(over).length, 1);
+  assert.ok(FLASH_FRACTION <= 0.4, 'the threshold must never be raised above 40%');
 });
 
 test('STEP_HZ is 30', () => assert.equal(STEP_HZ, 30));

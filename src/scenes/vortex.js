@@ -8,7 +8,7 @@ import { rand, seedOf, timeOf, fastAtan2 } from './util.js';
 
 const ARMS = 5;
 const TWIST = 1.9; // turns of spiral per unit of log radius
-const SPIN = 0.16; // revolutions per second
+const SPIN = 0.09; // revolutions per second
 const WIDTH = 0.62; // fraction of an arm period that is lit
 
 function range(a, b) { const o = []; for (let c = a; c <= b; c++) o.push(c); return o; }
@@ -43,7 +43,7 @@ export default function vortex(t, w, h, params) {
       const lvl = 3 - Math.min(3, Math.floor((f / WIDTH) * 4));
       const zone = r / rMax;
       const set = zone < 0.28 ? INNER : zone < 0.62 ? MID : OUTER;
-      const k = rand(s, x * 4099 + y, 21 + Math.floor(T * 1.2 + ((x * 7 + y * 13) % 11) / 4));
+      const k = rand(s, x * 4099 + y, 21 + Math.floor(T * 1.2 + ((x * 7 + y * 13) % 11) / 11));
       g[y * W + x] = set[(k * set.length) | 0];
       col[y * W + x] = ((arm + (zone * 3 | 0)) & 7) * 4 + lvl;
     }

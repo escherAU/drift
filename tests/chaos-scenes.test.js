@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { PLAYLISTS } from '../src/scenes/index.js';
 import { renderScene, createCellComposer, STEP_DT } from '../src/cells.js';
 import { isAllowedGlyph } from '../src/glyphs.js';
+import { changedFraction, snap, FLASH_FRACTION } from './helpers-flash.js';
 import swarm from '../src/scenes/swarm.js';
 import glitch, { WORDS, SCRAMBLE_SETS, glitchEvent, fullyShown, laneCount } from '../src/scenes/glitch.js';
 import fireworks, { MAX_PARTICLES, particleLevel } from '../src/scenes/fireworks.js';
@@ -36,27 +37,29 @@ for (const scene of CHAOS) {
     }
   });
 
-  test(`B chaos/${scene.id}: no whole-screen invert or flash: lit<->unlit cells never exceed 25% between consecutive 1/18 s frames over 60 s (and the run holds a second scene event)`, () => {
+  test(`B chaos/${scene.id}: no whole-screen invert or flash: glyph or colour changes never exceed ${FLASH_FRACTION * 100}% of all cells between consecutive 1/18 s frames over 60 s`, () => {
     const cc = createCellComposer({ scenes: [scene], cols: 120, rows: 40, seed: 1 });
     let prev = null, worst = 0, worstAt = 0;
     for (let k = 0; k < 60 * FPS; k++) {
-      const g = cc.frame({ a: 0, b: 0, p: 0 }, k / FPS).glyphs;
+      const cur = snap(cc.frame({ a: 0, b: 0, p: 0 }, k / FPS));
       if (prev) {
-        let sw = 0;
-        for (let i = 0; i < g.length; i++) if ((g[i] !== 32) !== (prev[i] !== 32)) sw++;
-        if (sw / g.length > worst) { worst = sw / g.length; worstAt = k / FPS; }
+        const fr = changedFraction(cur.g, prev.g, cur.c, prev.c);
+        if (fr > worst) { worst = fr; worstAt = k / FPS; }
       }
-      prev = g.slice();
+      prev = cur;
     }
-    assert.ok(worst <= 0.25, `${scene.id}: ${(worst * 100).toFixed(1)}% flipped at t=${worstAt}`);
+    assert.ok(worst <= FLASH_FRACTION, `${scene.id}: ${(worst * 100).toFixed(1)}% changed at t=${worstAt}`);
   });
 }
 
-test('B control: the invert detector sees a blank<->full swap (it is not vacuous)', () => {
-  const a = new Uint16Array(100).fill(32), b = new Uint16Array(100).fill(0x41);
-  let sw = 0;
-  for (let i = 0; i < 100; i++) if ((a[i] !== 32) !== (b[i] !== 32)) sw++;
-  assert.ok(sw / 100 > 0.25);
+test('B control: the detector sees a blank<->full swap, a full glyph re-roll and a full colour swap (it is not vacuous)', () => {
+  const n = 100;
+  const blank = new Uint16Array(n).fill(32), full = new Uint16Array(n).fill(0x41), full2 = new Uint16Array(n).fill(0x42);
+  const c0 = new Uint8Array(n).fill(1), c1 = new Uint8Array(n).fill(2);
+  assert.ok(changedFraction(full, blank, c0, c0) > FLASH_FRACTION);
+  assert.ok(changedFraction(full2, full, c0, c0) > FLASH_FRACTION, 'all-lit glyph re-roll');
+  assert.ok(changedFraction(full, full, c1, c0) > FLASH_FRACTION, 'all-lit colour swap');
+  assert.equal(changedFraction(full, full, c0, c0), 0);
 });
 
 // ---------------------------------------------------------------- C: swarm
