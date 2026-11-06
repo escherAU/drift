@@ -14,6 +14,10 @@ import tunnel from './tunnel.js';
 import wire from './wire.js';
 import maze from './maze.js';
 import blocktype from './blocktype.js';
+import sand from './sand.js';
+import waves from './waves.js';
+import pendulum from './pendulum.js';
+import cloth from './cloth.js';
 import { MODES } from '../modes.js';
 
 // Order is the play order; the scheduler wraps after the last.
@@ -26,7 +30,8 @@ export const PLAYLISTS = {
   calm: SCENES,
   chaos: [glyphrain, swarm, glitch, fireworks, vortex],
   contrast: [life, tunnel, wire, maze, blocktype],
-  experimental: [bounce],
+  // the artist scene joins here, after cloth (S4)
+  experimental: [bounce, sand, waves, pendulum, cloth],
 };
 
 export function allSceneIds() {
