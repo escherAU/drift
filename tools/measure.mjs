@@ -112,7 +112,8 @@ async function cli() {
     }
     return;
   }
-  console.log(`measure: scene=${scene} mode=${mode} size=${cols}x${rows} fps=${fps} for ${seconds}s (real app loop, fake TTY that counts bytes)`);
+  const startMode = scene === "mix" ? mode : (findScene(scene) || { mode }).mode;
+  console.log(`measure: scene=${scene} start-mode=${startMode} size=${cols}x${rows} fps=${fps} for ${seconds}s (real app loop, fake TTY that counts bytes)`);
   const r = await runMeasure({ seconds, cols, rows, scene, mode, fps });
   const s = r.summary;
   console.log(`RESULT scene=${scene} mode=${r.mode} size=${cols}x${rows} frames=${r.frames} (${s.framesPerSec.toFixed(1)}/s) bytes=${r.bytes} bytes/s=${s.bytesPerSec.toFixed(0)} (${(s.bytesPerSec / 1024).toFixed(1)} KB/s)`);

@@ -1,7 +1,7 @@
 # Drift
 
-A calm, retro screensaver for the terminal. Full-screen ASCII, one colour, slow
-motion, no sound, no status bar. Built for a side monitor.
+A calm, retro screensaver for the terminal (plus three livelier modes). Full-screen ASCII,
+slow motion by default, no sound, no status bar. Built for a side monitor.
 
 Zero dependencies. Node 20+ (developed on Node 22). Windows 11, Windows Terminal.
 
