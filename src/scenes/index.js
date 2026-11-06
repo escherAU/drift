@@ -10,6 +10,10 @@ import swarm from './swarm.js';
 import glitch from './glitch.js';
 import fireworks from './fireworks.js';
 import vortex from './vortex.js';
+import tunnel from './tunnel.js';
+import wire from './wire.js';
+import maze from './maze.js';
+import blocktype from './blocktype.js';
 import { MODES } from '../modes.js';
 
 // Order is the play order; the scheduler wraps after the last.
@@ -21,7 +25,7 @@ export const SCENE_IDS = SCENES.map((s) => s.id);
 export const PLAYLISTS = {
   calm: SCENES,
   chaos: [glyphrain, swarm, glitch, fireworks, vortex],
-  contrast: [life],
+  contrast: [life, tunnel, wire, maze, blocktype],
   experimental: [bounce],
 };
 
