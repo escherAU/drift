@@ -22,20 +22,58 @@ Options (also available as environment variables):
 | `--fade-seconds N` | `DRIFT_FADE_SECONDS` | 15 | length of the cross-fade between scenes |
 | `--fps N` | `DRIFT_FPS` | 18 | frames per second (1-30) |
 | `--seed N` | `DRIFT_SEED` | 1 | seed for rain and ripples |
-| `--scene NAME` | `DRIFT_SCENE` | squiggle | start scene: squiggle, sunburst, plasma, ripples, rain |
+| `--scene NAME` | `DRIFT_SCENE` | squiggle | start scene, in its own mode: squiggle, sunburst, plasma, ripples, rain, glyphrain, life, bounce (a bare number counts calm scenes) |
 | | `DRIFT_CONFIG` | see below | full path of the config file |
 
 ## Keys
 
 | key | does |
 |---|---|
-| space | next scene (cross-fades; pressing it mid-fade queues exactly one more) |
+| `m` | next mode: calm, chaos, high contrast, experimental, calm... (remembered) |
+| `1` `2` `3` `4` | jump to calm, chaos, high contrast, experimental (the current mode: nothing happens) |
+| space | next scene in this mode's playlist, wrapping (calm cross-fades; pressing it mid-fade queues exactly one more) |
+| `c` | next colour: calm and experimental cycle the single-hue presets; chaos cycles neon, candy, ocean, fire; high contrast ignores it |
+| `i` | high contrast only: invert black on white / white on black (remembered) |
 | `+` / `-` | speed up / slow down (0.25x to 4x, clamped) |
 | `p` | pause / resume (resumes without a jump) |
-| `c` | next colour; the choice is remembered |
+| `h` | help panel: every key, grouped, with the current mode and scene; Esc or `h` closes it |
 | `q` or Ctrl+C | quit; the terminal is restored exactly |
 
-Unknown keys and arrow keys are ignored. There is no status bar and no hint overlay.
+Every key lives in one table, `src/keymap.js`; the help panel and `drift --help` are
+generated from it. While the help panel is open the animation is frozen behind it (nothing
+is written), only `h`, Esc and `q`/Ctrl+C act, and closing it restores your pause state.
+Unknown keys and arrow keys are ignored. There is no status bar.
+
+## Modes
+
+| mode | what it is |
+|---|---|
+| calm (default) | exactly drift v1: one hue, slow, five scenes, 15 s cross-fade |
+| chaos | multi-colour letters, digits and symbols, busy but never strobing |
+| high contrast | strictly black and white (two-tone, the background is painted too); `i` inverts |
+| experimental | physics and ASCII sketches in the calm single-hue palette |
+
+Calm is the default when nothing is saved; the last-used mode is saved and wins at launch.
+In the three new modes, scenes change by a 2 second per-cell dissolve (each cell flips from
+the old scene to the new at its own moment; never a whole-screen cut, no blending).
+**Photosensitivity guard:** the screen background flips between dark and light at most once
+every 3 seconds. A flip asked for sooner (`i`, or a mode change into/out of inverted high
+contrast) is deferred, not dropped, and lands exactly once when the window ends.
+
+Playlists (`src/scenes/index.js`, `PLAYLISTS`): calm = squiggle, sunburst, plasma, ripples,
+rain; chaos = **glyphrain** (fast, dense multi-colour rain of letters, digits and symbols);
+high contrast = **life** (Conway's Game of Life seeded from gliders, R-pentomino, acorn,
+pulsar and friends, half-block pixels; reseeds when it dies or stalls); experimental =
+**bounce** (balls with gravity and friction, bounded energy, fixed-step sim). Later scenes
+join a playlist and are picked up by the shared test suites automatically.
+
+Glyphs outside calm come from an allow-list (`src/glyphs.js`): ASCII, a few Latin-1
+symbols, Greek, arrows 2190-2199, box drawing, blocks, braille, ~20 maths operators and a
+hand-picked set of geometric shapes. Everything is in the Basic Multilingual Plane and
+single-width. **Glyph coverage in Cascadia Mono could not be verified from the build
+machine** (the font is not installed under C:\Windows\Fonts there); see the unsure list in
+the DRIFT-2 report. Arrows 21A0-21FF, the rest of 2200-22FF and the rest of 25A0-25FF are
+deliberately not in the list.
 
 ## Scenes
 
@@ -58,9 +96,10 @@ phosphor, green phosphor, ice blue, violet, white, then a slow orange/violet ble
 (2-minute loop). Truecolor is used when `COLORTERM` is `truecolor`/`24bit` or
 `WT_SESSION` is set (Windows Terminal); otherwise a 256-colour fallback.
 
-Config: `%APPDATA%\drift\config.json`, containing only `{"colour": "<name>"}`.
-Missing or corrupt files are ignored. Drift never writes anywhere else. Override
-the path with `DRIFT_CONFIG`.
+Config: `%APPDATA%\drift\config.json`, `{"colour":"claude","mode":"calm","chaosPalette":"neon","invert":false}`.
+Each field is checked on its own and falls back to its default if it is wrong; a v1 file
+containing only `colour` loads as calm. Missing or corrupt files are ignored. Drift never
+writes anywhere else. Override the path with `DRIFT_CONFIG`.
 
 ## Architecture
 
@@ -71,12 +110,21 @@ of `src/scenes/util.js`. Squiggle may also fill `params.glyphs` with braille dot
 masks.
 
 ```
-src/scenes/*.js   five pure scenes            src/compose.js   cross-fade, scheduler, field -> cells
-src/ramp.js       density ramp + hysteresis   src/renderer.js  diff renderer (one string per frame)
-src/color.js      presets, SGR, 256 fallback  src/term.js      alt screen, raw keys, signal guards
+src/scenes/*.js   calm scenes (pure fields)   src/compose.js   calm cross-fade, scheduler, field -> cells
+src/ramp.js       density ramp + hysteresis   src/renderer.js  diff renderer (one string per frame; palettes may carry a bg)
+src/color.js      palettes, SGR, 256 fallback src/term.js      alt screen, raw keys, signal guards
 src/config.js     JSON config                 src/app.js       the loop that wires it all together
+src/cells.js      cell scenes + sims, dissolve  src/keymap.js    the one key table (help and --help come from it)
+src/overlay.js    help panel                  src/glyphs.js    glyph allow-list
+src/modes.js      the four modes              src/scenes/{glyphrain,life,bounce}.js  the non-calm scenes
 bin/drift.js      entry   bin/drift.cmd  shim  tools/          capture.mjs measure.mjs calm.mjs
 ```
+
+Non-calm scene contract (`src/cells.js`): `kind: 'cells'` scenes are `scene(t, w, h, params)`
+filling `params.glyphs` (Uint16Array code points) and `params.colours` (Uint8Array palette
+indexes), pure in `t`; `kind: 'sim'` scenes are `{init(w,h,seed), step(state) at 1/30 s,
+draw(state, params)}` (same seed + same step count = same frame). The cell composer steps
+sims from an accumulator, at most 4 steps per frame.
 
 Terminal handling: alternate screen, hidden cursor, raw mode; restored on `q`,
 Ctrl+C (byte 0x03), SIGINT/SIGTERM, uncaught exceptions, unhandled rejections and
