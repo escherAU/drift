@@ -22,7 +22,7 @@ Options (also available as environment variables):
 | `--fade-seconds N` | `DRIFT_FADE_SECONDS` | 15 | length of the cross-fade between scenes |
 | `--fps N` | `DRIFT_FPS` | 18 | frames per second (1-30) |
 | `--seed N` | `DRIFT_SEED` | 1 | seed for rain and ripples |
-| `--scene NAME` | `DRIFT_SCENE` | squiggle | start scene, in its own mode: squiggle, sunburst, plasma, ripples, rain, glyphrain, swarm, glitch, fireworks, vortex, life, tunnel, wire, maze, blocktype, bounce, sand, waves, pendulum, cloth (a bare number counts calm scenes) |
+| `--scene NAME` | `DRIFT_SCENE` | squiggle | start scene, in its own mode: squiggle, sunburst, plasma, ripples, rain, glyphrain, swarm, glitch, fireworks, vortex, life, tunnel, wire, maze, blocktype, bounce, sand, waves, pendulum, cloth, artist (a bare number counts calm scenes) |
 | | `DRIFT_CONFIG` | see below | full path of the config file |
 
 ## Keys
@@ -78,8 +78,33 @@ wave equation with dropped pebbles and, now and then, two driven sources; crests
 blocks, troughs braille), **pendulum** (five RK4 double pendula started 0.0015 rad apart, so
 they swing together and then fly apart, with fading tip trails; always on screen) and **cloth**
 (a pinned Verlet curtain in a gusting wind, poked by a swinging ball; links glow as they
-stretch). Later scenes join a playlist and are picked up by the shared test suites
-automatically.
+stretch) and **artist** (ASCII pictures sketched stroke by stroke: a bright pen cell leads and
+the new strokes fade to the piece's resting brightness; the finished piece is held for 8 s, then
+erased, alternating between a wipe in reverse stroke order and a cell-by-cell dissolve, the
+screen rests for 1.5 s, and the next piece of the gallery begins, round and round). Later
+scenes join a playlist and are picked up by the shared test suites automatically.
+
+### The artist's gallery: adding a piece
+
+Drop a `.txt` file in `src/art/pieces/` and restart: the file is a piece (no code to change).
+Pieces are loaded once at start-up, sorted by filename, and drawn in that order (the seed
+rotates which comes first).
+
+```
+title: My Piece
+---
+ the art, as many lines as it needs
+```
+
+The first line is `title: <name>`, the second is `---`, the rest is the raw drawing. CRLF is
+fine and trailing spaces are trimmed. Use only the allow-listed glyphs (see below; a test fails
+on anything else). Aim for 40-70 columns by 18-26 rows; a piece that does not fit the terminal
+is skipped on that screen (80x24 shows the ones up to 80x24, a tiny terminal shows nothing),
+and every piece must fit 116x36. The stroke order is worked out automatically: line characters
+first, then fills; each connected shape is traced by a pen that keeps going in the direction it
+was going, so lines are drawn along their length. A file that does not parse is skipped and the
+test suite reports it. `node tools/capture.mjs` writes `captures/artist-<piece>-half.txt` (50%
+drawn), `-full.txt`, and `captures/artist-gallery.txt` with every piece.
 
 Glyphs outside calm come from an allow-list (`src/glyphs.js`): ASCII, a few Latin-1
 symbols, Greek, arrows 2190-2199, box drawing, blocks, braille, ~20 maths operators and a
@@ -167,7 +192,7 @@ Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 ```
 node tools/capture.mjs [--out captures]     # .txt (chars only) and .ansi, 5 scenes + crossfade, 120x40 and 240x67; scenes at t = 0, 5, 10, 20 s, crossfade at 0, 25, 50, 75, 100% of the 15 s default fade
 node tools/calm.mjs [--seconds 60]          # calmness table (cells changing per frame, mean intensity change) plus cross-fade rows at the shipped fade
-node tools/measure.mjs --seconds 60 --cols 240 --rows 67 [--scene mix|squiggle|sunburst|plasma|ripples|rain|glyphrain|swarm|glitch|fireworks|vortex|life|tunnel|wire|maze|blocktype|bounce|sand|waves|pendulum|cloth|all]
+node tools/measure.mjs --seconds 60 --cols 240 --rows 67 [--scene mix|squiggle|sunburst|plasma|ripples|rain|glyphrain|swarm|glitch|fireworks|vortex|life|tunnel|wire|maze|blocktype|bounce|sand|waves|pendulum|cloth|artist|all]
 ```
 
 `captures/*.ansi` are git-ignored (large); regenerate with the capture command and
