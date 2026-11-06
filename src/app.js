@@ -210,6 +210,7 @@ export function createApp(o) {
     composer.resize(cols, rows);
     term.onKey(handleKey);
     term.onResize(onResize);
+    term.onEnd(() => quit(0)); // input closed: nobody can press q any more
     uninstall = installGuards(proc, guard);
     term.enter();
     running = true;

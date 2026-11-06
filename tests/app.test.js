@@ -65,6 +65,16 @@ test('T4 Q (upper case) also quits', () => {
   cleanup(c);
 });
 
+test('stdin closing (end of input) restores the terminal and exits 0', () => {
+  const c = mkApp();
+  c.app.start();
+  c.stdin.emit('end');
+  assert.equal(c.stdout.writes.at(-1), LEAVE);
+  assert.deepEqual(c.proc.exits, [0]);
+  assert.equal(c.stdin.listenerCount('end'), 0);
+  cleanup(c);
+});
+
 test('T5 byte 0x03 (Ctrl+C in raw mode) restores and exits', () => {
   const c = mkApp();
   c.app.start();

@@ -1,0 +1,72 @@
+measure: scene=squiggle size=240x67 fps=18 for 12s (real app loop, fake TTY that counts bytes)
+  t=  1s cpu(core)=1.60% rss=50.9MB
+  t=  2s cpu(core)=0.00% rss=50.9MB
+  t=  3s cpu(core)=0.00% rss=50.9MB
+  t=  4s cpu(core)=0.00% rss=50.9MB
+  t=  5s cpu(core)=1.49% rss=50.9MB
+  t=  6s cpu(core)=0.00% rss=50.9MB
+  t=  7s cpu(core)=0.00% rss=50.9MB
+  t=  8s cpu(core)=0.00% rss=50.9MB
+  t=  9s cpu(core)=0.00% rss=51.0MB
+  t= 10s cpu(core)=0.00% rss=51.0MB
+  t= 11s cpu(core)=0.00% rss=51.0MB
+  t= 12s cpu(core)=0.00% rss=51.0MB
+RESULT scene=squiggle size=240x67 frames=217 (18.1/s) bytes=125199 (10.2 KB/s)
+RESULT cpu_core_mean=0.26% steady=0.14% max=1.60% machine(32 logical)=0.008% rss_mean=50.9MB rss_peak=51.0MB
+measure: scene=sunburst size=240x67 fps=18 for 12s (real app loop, fake TTY that counts bytes)
+  t=  1s cpu(core)=15.37% rss=52.7MB
+  t=  2s cpu(core)=4.68% rss=52.8MB
+  t=  3s cpu(core)=4.68% rss=53.1MB
+  t=  4s cpu(core)=4.65% rss=53.1MB
+  t=  5s cpu(core)=1.50% rss=53.1MB
+  t=  6s cpu(core)=7.82% rss=53.1MB
+  t=  7s cpu(core)=0.00% rss=53.1MB
+  t=  8s cpu(core)=3.09% rss=53.1MB
+  t=  9s cpu(core)=6.17% rss=53.1MB
+  t= 10s cpu(core)=3.18% rss=53.1MB
+  t= 11s cpu(core)=3.08% rss=53.1MB
+  t= 12s cpu(core)=3.30% rss=53.1MB
+RESULT scene=sunburst size=240x67 frames=216 (18.0/s) bytes=2770942 (225.3 KB/s)
+RESULT cpu_core_mean=4.81% steady=3.83% max=15.37% machine(32 logical)=0.150% rss_mean=53.0MB rss_peak=53.1MB
+measure: scene=plasma size=240x67 fps=18 for 12s (real app loop, fake TTY that counts bytes)
+  t=  1s cpu(core)=2.96% rss=53.0MB
+  t=  2s cpu(core)=0.00% rss=53.0MB
+  t=  3s cpu(core)=0.00% rss=53.0MB
+  t=  4s cpu(core)=1.59% rss=53.0MB
+  t=  5s cpu(core)=0.00% rss=53.0MB
+  t=  6s cpu(core)=0.00% rss=53.0MB
+  t=  7s cpu(core)=3.17% rss=53.0MB
+  t=  8s cpu(core)=0.00% rss=53.0MB
+  t=  9s cpu(core)=0.00% rss=53.1MB
+  t= 10s cpu(core)=1.50% rss=53.1MB
+  t= 11s cpu(core)=0.00% rss=53.1MB
+  t= 12s cpu(core)=0.00% rss=53.1MB
+RESULT scene=plasma size=240x67 frames=210 (17.5/s) bytes=1343162 (109.2 KB/s)
+RESULT cpu_core_mean=0.77% steady=0.57% max=3.17% machine(32 logical)=0.024% rss_mean=53.0MB rss_peak=53.1MB
+measure: scene=ripples size=240x67 fps=18 for 12s (real app loop, fake TTY that counts bytes)
+  t=  1s cpu(core)=9.32% rss=51.5MB
+  t=  2s cpu(core)=1.48% rss=51.5MB
+  t=  3s cpu(core)=0.00% rss=51.5MB
+  t=  4s cpu(core)=1.57% rss=51.5MB
+  t=  5s cpu(core)=4.63% rss=51.6MB
+  t=  6s cpu(core)=4.67% rss=51.6MB
+  t=  7s cpu(core)=1.50% rss=51.6MB
+  t=  8s cpu(core)=0.00% rss=51.6MB
+  t=  9s cpu(core)=1.60% rss=51.7MB
+  t= 10s cpu(core)=0.00% rss=51.7MB
+  t= 11s cpu(core)=0.00% rss=51.7MB
+  t= 12s cpu(core)=0.00% rss=51.8MB
+RESULT scene=ripples size=240x67 frames=215 (17.9/s) bytes=442815 (36.0 KB/s)
+RESULT cpu_core_mean=2.08% steady=1.41% max=9.32% machine(32 logical)=0.065% rss_mean=51.6MB rss_peak=51.8MB
+measure: scene=rain size=240x67 fps=18 for 12s (real app loop, fake TTY that counts bytes)
+  t=  1s cpu(core)=9.28% rss=53.4MB
+  t=  2s cpu(core)=9.29% rss=53.5MB
+  t=  3s cpu(core)=0.00% rss=53.7MB
+  t=  4s cpu(core)=2.98% rss=54.1MB
+  t=  5s cpu(core)=1.48% rss=54.1MB
+  t=  6s cpu(core)=1.61% rss=54.5MB
+  t=  7s cpu(core)=3.09% rss=54.7MB
+  t=  8s cpu(core)=1.57% rss=54.7MB
+  t=  9s cpu(core)=1.55% rss=54.8MB
+  t= 10s cpu(core)=0.00% rss=54.8MB
+  t= 11s cpu(core)=0.00% rss=54.8MB

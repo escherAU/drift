@@ -11,9 +11,10 @@ export const LEAVE = '\x1b[?25h\x1b[?1049l\x1b[0m';
 
 export function createTerminal({ stdin, stdout }) {
   let active = false;
-  let keyCb = null, resizeCb = null;
+  let keyCb = null, resizeCb = null, endCb = null;
 
   const onData = (d) => { if (keyCb) keyCb(typeof d === 'string' ? d : d.toString('utf8')); };
+  const onEnd = () => { if (endCb) endCb(); };
   const onResizeEv = () => { if (resizeCb) { const s = size(); resizeCb(s.cols, s.rows); } };
 
   function size() {
@@ -29,6 +30,7 @@ export function createTerminal({ stdin, stdout }) {
     if (typeof stdin.setRawMode === 'function') stdin.setRawMode(true);
     if (typeof stdin.setEncoding === 'function') stdin.setEncoding('utf8');
     stdin.on('data', onData);
+    stdin.on('end', onEnd);
     stdout.on('resize', onResizeEv);
     stdin.resume();
     if (typeof stdin.ref === 'function') stdin.ref();
@@ -40,6 +42,7 @@ export function createTerminal({ stdin, stdout }) {
     if (!active) { if (cb) cb(); return false; }
     active = false;
     stdin.removeListener('data', onData);
+    stdin.removeListener('end', onEnd);
     stdout.removeListener('resize', onResizeEv);
     if (typeof stdin.setRawMode === 'function') stdin.setRawMode(false);
     stdin.pause();
@@ -53,6 +56,7 @@ export function createTerminal({ stdin, stdout }) {
     get active() { return active; },
     onKey(cb) { keyCb = cb; },
     onResize(cb) { resizeCb = cb; },
+    onEnd(cb) { endCb = cb; },
   };
 }
 
