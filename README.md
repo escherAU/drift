@@ -22,7 +22,7 @@ Options (also available as environment variables):
 | `--fade-seconds N` | `DRIFT_FADE_SECONDS` | 15 | length of the cross-fade between scenes |
 | `--fps N` | `DRIFT_FPS` | 18 | frames per second (1-30) |
 | `--seed N` | `DRIFT_SEED` | 1 | seed for rain and ripples |
-| `--scene NAME` | `DRIFT_SCENE` | squiggle | start scene, in its own mode: squiggle, sunburst, plasma, ripples, rain, glyphrain, life, bounce (a bare number counts calm scenes) |
+| `--scene NAME` | `DRIFT_SCENE` | squiggle | start scene, in its own mode: squiggle, sunburst, plasma, ripples, rain, glyphrain, swarm, glitch, fireworks, vortex, life, tunnel, wire, maze, blocktype, bounce (a bare number counts calm scenes) |
 | | `DRIFT_CONFIG` | see below | full path of the config file |
 
 ## Keys
@@ -61,11 +61,18 @@ every 3 seconds. A flip asked for sooner (`i`, or a mode change into/out of inve
 contrast) is deferred, not dropped, and lands exactly once when the window ends.
 
 Playlists (`src/scenes/index.js`, `PLAYLISTS`): calm = squiggle, sunburst, plasma, ripples,
-rain; chaos = **glyphrain** (fast, dense multi-colour rain of letters, digits and symbols);
-high contrast = **life** (Conway's Game of Life seeded from gliders, R-pentomino, acorn,
-pulsar and friends, half-block pixels; reseeds when it dies or stalls); experimental =
-**bounce** (balls with gravity and friction, bounded energy, fixed-step sim). Later scenes
-join a playlist and are picked up by the shared test suites automatically.
+rain; chaos = **glyphrain** (fast, dense multi-colour rain of letters, digits and symbols),
+**swarm** (bouncing glyphs with fading trails), **glitch** (words assembling out of noise),
+**fireworks** (rockets bursting into rings of glyphs) and **vortex** (a spinning spiral);
+high contrast, strictly two-tone = **life** (Conway's Game of Life seeded from gliders,
+R-pentomino, acorn, pulsar and friends, half-block pixels; reseeds when it dies or stalls),
+**tunnel** (a slowly turning checkerboard tunnel from half and full blocks; no shade blocks,
+which would read as a third tone), **wire** (a rotating wireframe cube then torus in braille
+dots), **maze** (a seeded maze carved live with box-drawing walls, solved in solid blocks,
+held, wiped and regenerated) and **blocktype** (big block capitals spelling short words, with
+a wipe, scroll or wave between them); experimental = **bounce** (balls with gravity and
+friction, bounded energy, fixed-step sim). Later scenes join a playlist and are picked up by
+the shared test suites automatically.
 
 Glyphs outside calm come from an allow-list (`src/glyphs.js`): ASCII, a few Latin-1
 symbols, Greek, arrows 2190-2199, box drawing, blocks, braille, ~20 maths operators and a
@@ -116,7 +123,7 @@ src/color.js      palettes, SGR, 256 fallback src/term.js      alt screen, raw k
 src/config.js     JSON config                 src/app.js       the loop that wires it all together
 src/cells.js      cell scenes + sims, dissolve  src/keymap.js    the one key table (help and --help come from it)
 src/overlay.js    help panel                  src/glyphs.js    glyph allow-list
-src/modes.js      the four modes              src/scenes/{glyphrain,life,bounce}.js  the non-calm scenes
+src/modes.js      the four modes              src/scenes/*.js  the non-calm scenes (blockfont.js is the blocktype font)
 bin/drift.js      entry   bin/drift.cmd  shim  tools/          capture.mjs measure.mjs calm.mjs
 ```
 
@@ -153,7 +160,7 @@ Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 ```
 node tools/capture.mjs [--out captures]     # .txt (chars only) and .ansi, 5 scenes + crossfade, 120x40 and 240x67; scenes at t = 0, 5, 10, 20 s, crossfade at 0, 25, 50, 75, 100% of the 15 s default fade
 node tools/calm.mjs [--seconds 60]          # calmness table (cells changing per frame, mean intensity change) plus cross-fade rows at the shipped fade
-node tools/measure.mjs --seconds 60 --cols 240 --rows 67 [--scene mix|squiggle|sunburst|plasma|ripples|rain|all]
+node tools/measure.mjs --seconds 60 --cols 240 --rows 67 [--scene mix|squiggle|sunburst|plasma|ripples|rain|glyphrain|swarm|glitch|fireworks|vortex|life|tunnel|wire|maze|blocktype|bounce|all]
 ```
 
 `captures/*.ansi` are git-ignored (large); regenerate with the capture command and
