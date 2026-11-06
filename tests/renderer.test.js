@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRenderer, frameToText, frameToAnsi } from '../src/renderer.js';
+import { createRenderer, SYNC_BEGIN, SYNC_END, frameToText, frameToAnsi } from '../src/renderer.js';
 import { makePalette, presetRGB } from '../src/color.js';
 
 const PAL = makePalette(presetRGB('claude', 0), 'truecolor');
@@ -29,6 +29,13 @@ test('R2 one changed cell costs one cursor address + glyph (< 60 bytes)', () => 
   assert.equal(out.split('\x1b[4;8H').length - 1, 1, 'exactly one CUP to row 4 col 8');
   assert.ok(out.includes('▒'));
   assert.equal((out.match(/\x1b\[\d+;\d+H/g) || []).length, 1);
+});
+
+test('R2b the renderer body carries no sync wrapper (the app adds it)', () => {
+  const r = createRenderer();
+  const out = r.render(mk(20, 5, 0x2588, 9));
+  assert.ok(!out.includes('\x1b[?2026'));
+  assert.equal(SYNC_BEGIN + SYNC_END, '\x1b[?2026h\x1b[?2026l');
 });
 
 test('R3 a resize forces a full repaint (clear + every lit cell)', () => {

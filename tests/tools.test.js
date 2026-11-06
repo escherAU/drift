@@ -5,8 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { runCapture, CAPTURE_NAMES } from '../tools/capture.mjs';
 import { runMeasure } from '../tools/measure.mjs';
-import { measureCalm } from '../tools/calm.mjs';
+import { measureCalm, measureFade } from '../tools/calm.mjs';
+import { DEFAULT_FADE_SECONDS } from '../src/app.js';
 import { SCENES } from '../src/scenes/index.js';
+import { createComposer } from '../src/compose.js';
+import { frameToText } from '../src/renderer.js';
 
 const SIZES = [[120, 40], [240, 67]];
 
@@ -24,9 +27,10 @@ test('K1 capture writes .txt (chars only) and .ansi for 5 scenes + crossfade at 
       assert.ok(fs.existsSync(ans), ans);
       const t = fs.readFileSync(txt, 'utf8');
       assert.ok(!t.includes('\x1b'), 'txt has no escapes');
-      for (const sec of [0, 5, 10, 20]) assert.ok(t.includes(`=== t=${sec}s ${w}x${h}`), `${name} t=${sec}`);
-      // 4 frames of h rows each plus 4 header lines
-      assert.equal(t.replace(/\n$/, '').split('\n').length, 4 * (h + 1));
+      const secs = name === 'crossfade' ? [0, 0.25, 0.5, 0.75, 1].map((f) => f * DEFAULT_FADE_SECONDS) : [0, 5, 10, 20];
+      for (const sec of secs) assert.ok(t.includes(`=== t=${sec}s ${w}x${h}`), `${name} t=${sec}`);
+      // one block of h rows plus a header line per frame
+      assert.equal(t.replace(/\n$/, '').split('\n').length, secs.length * (h + 1));
       const a = fs.readFileSync(ans, 'utf8');
       assert.ok(a.includes('\x1b[38;2;'), 'ansi has truecolor');
     }
@@ -42,12 +46,14 @@ test('K1 capture is deterministic (second run is byte-identical) and the crossfa
   for (const f of fs.readdirSync(d1)) {
     assert.equal(fs.readFileSync(path.join(d1, f), 'utf8'), fs.readFileSync(path.join(d2, f), 'utf8'), f);
   }
-  const frames = (name) => fs.readFileSync(path.join(d1, `${name}-120x40.txt`), 'utf8').split(/=== t=\d+s [^\n]*\n/).slice(1);
+  const frames = (name) => fs.readFileSync(path.join(d1, `${name}-120x40.txt`), 'utf8').split(/=== t=[\d.]+s [^\n]*\n/).slice(1);
   const x = frames('crossfade'), a = frames('squiggle'), b = frames('sunburst');
   assert.equal(x[0], a[0], 't=0 equals scene A');
-  assert.equal(x[3], b[3], 't=20 equals scene B');
-  assert.notEqual(x[1], a[1]);
-  assert.notEqual(x[1], b[1]);
+  assert.equal(x.length, 5, 'five fade points: progress 0, 0.25, 0.5, 0.75, 1');
+  const pure = (id, t) => frameToText({ cols: 120, rows: 40, glyphs: createComposer({ scenes: SCENES, cols: 120, rows: 40, seed: 1 }).frame({ a: id, b: id, p: 0 }, t).glyphs.slice() }) + '\n';
+  assert.equal(x[4], pure(1, DEFAULT_FADE_SECONDS), 'progress 1 equals pure scene B at the same time');
+  assert.notEqual(x[2], pure(0, DEFAULT_FADE_SECONDS / 2), 'mid-fade is not pure A');
+  assert.notEqual(x[2], pure(1, DEFAULT_FADE_SECONDS / 2), 'mid-fade is not pure B');
   // control: different scenes differ
   assert.notEqual(a[2], b[2]);
   fs.rmSync(d1, { recursive: true, force: true });
@@ -85,5 +91,30 @@ for (const [i, scene] of SCENES.entries()) {
     assert.ok(c.meanAbs <= lim.abs, `${scene.id} mean abs ${c.meanAbs.toFixed(3)} > ${lim.abs}`);
     const fast = measureCalm({ sceneIndex: i, cols: 120, rows: 40, seconds: 10, fps: 18, seeds: [1], timeScale: 50 });
     assert.ok(fast.meanFrac > lim.mean || fast.meanAbs > lim.abs, `${scene.id}: control must exceed the ceiling`);
+  });
+}
+
+// ---- fade calmness at the SHIPPED default (the cross-fade was the busiest thing on screen at 5 s)
+const FADE_CEIL = 0.07;
+
+test('shipped default fade is 15 s and the tools use that same constant', () => {
+  assert.equal(DEFAULT_FADE_SECONDS, 15);
+});
+
+for (const [cols, rows] of SIZES) {
+  test(`calm fade: every adjacent pair stays under 7% of cells per frame at ${cols}x${rows} (1 s fade control exceeds it)`, () => {
+    let worst = 0;
+    for (let a = 0; a < SCENES.length; a++) {
+      const b = (a + 1) % SCENES.length;
+      const c = measureFade({ a, b, cols, rows });
+      worst = Math.max(worst, c.maxFrac);
+      assert.ok(c.maxFrac < FADE_CEIL, `${SCENES[a].id} > ${SCENES[b].id} peak ${(c.maxFrac * 100).toFixed(2)}% >= 7%`);
+    }
+    // the two pairs the contrarian measured worst, explicitly
+    for (const [a, b] of [[1, 2], [2, 3]]) {
+      assert.ok(measureFade({ a, b, cols, rows }).maxFrac < FADE_CEIL);
+      const fast = measureFade({ a, b, cols, rows, fadeSec: 1 });
+      assert.ok(fast.maxFrac > FADE_CEIL, `control: 1 s fade ${SCENES[a].id} > ${SCENES[b].id} peak ${(fast.maxFrac * 100).toFixed(2)}% must exceed ceiling`);
+    }
   });
 }

@@ -3,14 +3,17 @@
 // so the same code runs against fakes in tests and in tools/measure.mjs.
 import { SCENES, SCENE_IDS } from './scenes/index.js';
 import { Scheduler, createComposer } from './compose.js';
-import { createRenderer } from './renderer.js';
+import { createRenderer, SYNC_BEGIN, SYNC_END } from './renderer.js';
 import { createTerminal, installGuards } from './term.js';
 import { loadConfig, saveConfig, defaultConfigPath } from './config.js';
 import { presetRGB, nextPreset, presetIndex, makePalette, detectColorMode, DEFAULT_PRESET } from './color.js';
 
 export const SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
 const DEFAULT_SPEED_INDEX = 3;
-const DEFAULTS = { fps: 18, sceneSeconds: 180, fadeSeconds: 5, seed: 1 };
+// The cross-fade is long on purpose: at 5 s the busiest pairs changed 11-16% of
+// the screen per frame; at 15 s it stays under 7% (see tools/calm.mjs).
+export const DEFAULT_FADE_SECONDS = 15;
+const DEFAULTS = { fps: 18, sceneSeconds: 180, fadeSeconds: DEFAULT_FADE_SECONDS, seed: 1 };
 
 const HELP = `drift - calm ASCII visualiser for the terminal
 
@@ -20,7 +23,7 @@ keys:  space next scene   + / - speed   p pause   c colour   q or Ctrl+C quit
 
 options:
   --scene-seconds N   seconds per scene (default 180)
-  --fade-seconds N    cross-fade length (default 5)
+  --fade-seconds N    cross-fade length (default 15)
   --fps N             frames per second, 1-30 (default 18)
   --seed N            random seed for rain/ripples (default 1)
   --scene NAME|N      start on a scene (squiggle sunburst plasma ripples rain)
@@ -99,7 +102,8 @@ export function createApp(o) {
   function renderFrame() {
     const f = composer.frame(sched.state(), t);
     const out = renderer.render({ cols, rows, glyphs: f.glyphs, shades: f.shades, palette: paletteNow() });
-    if (out) stdout.write(out);
+    // one write per frame; synchronized output (DEC 2026) so the terminal paints it atomically
+    if (out) stdout.write(SYNC_BEGIN + out + SYNC_END);
     dirty = false;
   }
 

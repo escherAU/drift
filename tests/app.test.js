@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createApp, SPEEDS, parseOptions } from '../src/app.js';
+import { createApp, SPEEDS, parseOptions, DEFAULT_FADE_SECONDS } from '../src/app.js';
+import { SYNC_BEGIN, SYNC_END } from '../src/renderer.js';
 import { ENTER, LEAVE } from '../src/term.js';
 import { SCENES } from '../src/scenes/index.js';
 import { fakeStdin, fakeStdout, fakeProc, fakeStderr, listenerTotal } from './helpers.js';
@@ -150,7 +151,7 @@ test('R5 exactly one stdout.write per changed frame, none for an unchanged frame
   const base = c.stdout.writes.length; // ENTER
   c.app.tick(0.05);
   assert.equal(c.stdout.writes.length, base + 1, 'first frame: one write');
-  assert.ok(c.stdout.writes.at(-1).startsWith('\x1b[2J'));
+  assert.ok(c.stdout.writes.at(-1).startsWith(SYNC_BEGIN + '\x1b[2J'));
   c.app.tick(0.5);
   assert.equal(c.stdout.writes.length, base + 2, 'a moving frame: still one write');
   c.app.tick(0);
@@ -169,7 +170,7 @@ test('T11 live resize updates dimensions and forces a full repaint', () => {
   c.stdout.columns = 100; c.stdout.rows = 30;
   c.stdout.emit('resize');
   assert.equal(c.stdout.writes.length, n + 1);
-  assert.ok(c.stdout.writes.at(-1).startsWith('\x1b[2J'));
+  assert.ok(c.stdout.writes.at(-1).startsWith(SYNC_BEGIN + '\x1b[2J'));
   assert.deepEqual([c.app.getState().cols, c.app.getState().rows], [100, 30]);
   for (const m of c.stdout.writes.at(-1).matchAll(/\x1b\[(\d+);(\d+)H/g)) {
     assert.ok(Number(m[1]) <= 30 && Number(m[2]) <= 100);
@@ -330,8 +331,48 @@ test('parseOptions reads flags and DRIFT_* env', () => {
   const d = parseOptions([], {});
   assert.equal(d.sceneSeconds, 180);
   assert.equal(d.fps, 18);
-  assert.equal(d.fadeSeconds, 5);
+  assert.equal(d.fadeSeconds, 15, 'shipped default fade is 15 s');
+  assert.equal(DEFAULT_FADE_SECONDS, 15);
+  assert.equal(parseOptions(['--fade-seconds', '3'], {}).fadeSeconds, 3, 'flag override works');
+  assert.equal(parseOptions([], { DRIFT_FADE_SECONDS: '8' }).fadeSeconds, 8, 'env override works');
+  assert.equal(parseOptions(['--fade-seconds', '3'], { DRIFT_FADE_SECONDS: '8' }).fadeSeconds, 3, 'flag beats env');
   assert.equal(parseOptions(['--help'], {}).help, true);
   assert.equal(parseOptions(['--fps', 'banana'], {}).fps, 18);
   assert.equal(parseOptions(['--fps', '500'], {}).fps, 30);
+});
+
+test('synchronized output: every frame is ONE write wrapped in ESC[?2026h ... ESC[?2026l', () => {
+  assert.equal(SYNC_BEGIN, '\x1b[?2026h');
+  assert.equal(SYNC_END, '\x1b[?2026l');
+  const c = mkApp();
+  c.app.start();
+  const before = c.stdout.writes.length;
+  for (let i = 0; i < 6; i++) c.app.tick(1 / 18);
+  const frames = c.stdout.writes.slice(before);
+  assert.ok(frames.length >= 2, `frames ${frames.length}`);
+  for (const w of frames) {
+    assert.ok(w.startsWith(SYNC_BEGIN), 'starts with begin');
+    assert.ok(w.endsWith(SYNC_END), 'ends with end');
+    assert.equal(w.split(SYNC_BEGIN).length - 1, 1, 'exactly one begin per write');
+    assert.equal(w.split(SYNC_END).length - 1, 1, 'exactly one end per write');
+  }
+  assert.ok(frames[0].startsWith(SYNC_BEGIN + '\x1b[2J'), 'the first frame is the full repaint inside the wrapper');
+  // control: enter/leave are not wrapped
+  assert.equal(c.stdout.writes[0], ENTER);
+  c.app.quit(0);
+  assert.equal(c.stdout.writes.at(-1), LEAVE);
+  cleanup(c);
+});
+
+test('synchronized output: an unchanged (paused, undirty) frame writes nothing at all', () => {
+  const c = mkApp();
+  c.app.start();
+  c.app.tick(1 / 18);
+  c.app.handleKey('p');
+  c.app.tick(1 / 18); // paused but dirty from the first draw? settle it
+  const n = c.stdout.writes.length;
+  for (let i = 0; i < 5; i++) c.app.tick(1 / 18);
+  assert.equal(c.stdout.writes.length, n, 'no write, not even an empty wrapper');
+  c.app.quit(0);
+  cleanup(c);
 });

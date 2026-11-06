@@ -12,6 +12,12 @@
 
 const CLEAR = '\x1b[2J';
 
+// Synchronized output (DEC private mode 2026): the app wraps each frame's single
+// write in these so a supporting terminal paints it atomically. Others ignore it.
+// The renderer returns the bare body so the diff stays pinned minimal.
+export const SYNC_BEGIN = '\x1b[?2026h';
+export const SYNC_END = '\x1b[?2026l';
+
 export function createRenderer() {
   let prevG = new Uint16Array(0);
   let prevS = new Uint8Array(0);

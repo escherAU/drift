@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { blend, smoothstep, Scheduler, createComposer } from '../src/compose.js';
+import { blend, smoothstep, Scheduler, createComposer, fadeOffsets, FADE_SPREAD } from '../src/compose.js';
 import { SCENES } from '../src/scenes/index.js';
 
 function field(n, f) { const a = new Uint8Array(n); for (let i = 0; i < n; i++) a[i] = f(i); return a; }
@@ -142,4 +142,32 @@ test('composer: resize reallocates and stays correct', () => {
   assert.equal(f.glyphs.length, 33 * 11);
   assert.equal(f.shades.length, 33 * 11);
   assert.equal(f.cols, 33);
+});
+
+test('X5 staggered blend: exactly A at p=0, exactly B at p=1, between A and B in between, deterministic offsets', () => {
+  const n = 400;
+  const A = field(n, (i) => (i * 7) % 256), B = field(n, (i) => 255 - ((i * 3) % 256));
+  const off = fadeOffsets(n);
+  assert.deepEqual(Array.from(off), Array.from(fadeOffsets(n)), 'same offsets every call');
+  assert.ok(off.every((v) => v >= 0 && v < FADE_SPREAD), 'offsets stay inside the spread');
+  assert.ok(new Set(Array.from(off)).size > n / 2, 'offsets actually differ cell to cell (control)');
+  const out = new Uint8Array(n);
+  assert.deepEqual(Array.from(blend(A, B, 0, out, off, FADE_SPREAD)), Array.from(A));
+  assert.deepEqual(Array.from(blend(A, B, 1, out, off, FADE_SPREAD)), Array.from(B));
+  for (const p of [0.05, 0.3, 0.5, 0.8, 0.97]) {
+    blend(A, B, p, out, off, FADE_SPREAD);
+    for (let i = 0; i < n; i++) {
+      assert.ok(out[i] >= Math.min(A[i], B[i]) && out[i] <= Math.max(A[i], B[i]), `cell ${i} p=${p}`);
+    }
+  }
+  // every cell moves monotonically toward B as p rises
+  let prev = Array.from(blend(A, B, 0, out, off, FADE_SPREAD));
+  for (let k = 1; k <= 50; k++) {
+    blend(A, B, k / 50, out, off, FADE_SPREAD);
+    for (let i = 0; i < n; i++) {
+      const d = Math.sign(B[i] - A[i]);
+      assert.ok((out[i] - prev[i]) * d >= 0, `cell ${i} went backwards at step ${k}`);
+    }
+    prev = Array.from(out);
+  }
 });

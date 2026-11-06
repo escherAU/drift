@@ -6,11 +6,41 @@ export function smoothstep(x) {
   return c * c * (3 - 2 * c);
 }
 
+// How far each cell's own cross-fade is staggered from its neighbours (fraction
+// of the fade). Without it, big flat areas of the same intensity cross a ramp
+// band all in one frame and the screen flickers in bursts (10% of cells in one
+// frame against a 3% average, measured). Staggered, the same crossings spread
+// over the whole fade.
+export const FADE_SPREAD = 0.25;
+
+// Fixed per-cell offsets in [0, spread): a deterministic integer hash of the
+// cell index, so captures and tests stay reproducible.
+export function fadeOffsets(n, spread = FADE_SPREAD) {
+  const off = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let h = Math.imul(i + 1, 0x9e3779b1);
+    h ^= h >>> 15; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13;
+    off[i] = ((h >>> 0) / 4294967296) * spread;
+  }
+  return off;
+}
+
 // out[i] = a[i] + (b[i]-a[i]) * p. p=0 gives exactly a, p=1 exactly b.
-export function blend(a, b, p, out) {
+// With offsets (and their spread), cell i's own progress is
+// clamp(p*(1+spread) - off[i]): still exactly a at p=0 and exactly b at p=1.
+export function blend(a, b, p, out, off, spread = 0) {
   const n = out.length;
   if (p <= 0) { out.set(a.length === n ? a : a.subarray(0, n)); return out; }
   if (p >= 1) { out.set(b.length === n ? b : b.subarray(0, n)); return out; }
+  if (off) {
+    const q = p * (1 + spread);
+    for (let i = 0; i < n; i++) {
+      let pi = q - off[i];
+      pi = pi < 0 ? 0 : pi > 1 ? 1 : pi;
+      out[i] = a[i] + (b[i] - a[i]) * pi + 0.5;
+    }
+    return out;
+  }
   for (let i = 0; i < n; i++) out[i] = a[i] + (b[i] - a[i]) * p + 0.5;
   return out;
 }
@@ -72,7 +102,7 @@ export function createComposer({ scenes, cols, rows, seed = 1, bandMargin = 7, l
     cols: 0, rows: 0, field: null, glyphs: null, shades: null,
     resize, frame,
   };
-  let bufA, bufB, maskA, maskB, mask, bandH, levelH;
+  let bufA, bufB, maskA, maskB, mask, bandH, levelH, fadeOff;
   const params = { seed, out: null, glyphs: null };
 
   function resize(w, h) {
@@ -83,6 +113,7 @@ export function createComposer({ scenes, cols, rows, seed = 1, bandMargin = 7, l
     c.field = new Uint8Array(n);
     c.glyphs = new Uint16Array(n);
     c.shades = new Uint8Array(n);
+    fadeOff = fadeOffsets(n);
     bandH = createHysteresis(n, BANDS, bandMargin);
     levelH = createHysteresis(n, LEVELS, levelMargin);
   }
@@ -103,13 +134,15 @@ export function createComposer({ scenes, cols, rows, seed = 1, bandMargin = 7, l
     if (st.p > 0 && st.b !== st.a) {
       const B = scenes[st.b];
       const hasB = draw(B, t, bufB, maskB);
-      blend(bufA, bufB, st.p, c.field);
+      blend(bufA, bufB, st.p, c.field, fadeOff, FADE_SPREAD);
       field = c.field;
       if (hasA || hasB) {
         // each cell takes the braille mask of whichever scene contributes more there
-        const p = st.p;
+        const q = st.p * (1 + FADE_SPREAD);
         for (let i = 0; i < n; i++) {
           const ma = hasA ? maskA[i] : 0, mb = hasB ? maskB[i] : 0;
+          let p = q - fadeOff[i];
+          p = p < 0 ? 0 : p > 1 ? 1 : p;
           mask[i] = (bufA[i] * (1 - p) > bufB[i] * p) ? ma : mb;
         }
         m = mask;

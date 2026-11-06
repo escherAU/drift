@@ -2,21 +2,26 @@
 // Writes, for each of the 5 scenes and a cross-fade, at 120x40 and 240x67:
 //   <name>-<cols>x<rows>.txt   glyph characters only
 //   <name>-<cols>x<rows>.ansi  same frames with truecolor SGR (Claude orange)
-// Frames are taken at t = 0, 5, 10, 20 s, each from a fresh composer, so the
-// output is fully deterministic. The cross-fade runs squiggle -> sunburst over
-// 20 s (progress eased), so t=0 is pure squiggle and t=20 is pure sunburst.
+// Scene frames are taken at t = 0, 5, 10, 20 s, each from a fresh composer, so
+// the output is fully deterministic. The cross-fade runs squiggle -> sunburst
+// over the app's shipped fade length (DEFAULT_FADE_SECONDS, imported, not
+// copied), at 0, 25, 50, 75 and 100% of its time (progress eased with the same
+// smoothstep), so the first frame is pure squiggle and the last pure sunburst.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { SCENES } from '../src/scenes/index.js';
 import { createComposer, smoothstep } from '../src/compose.js';
 import { frameToText, frameToAnsi } from '../src/renderer.js';
+import { DEFAULT_FADE_SECONDS } from '../src/app.js';
 import { makePalette, presetRGB } from '../src/color.js';
 
 export const CAPTURE_NAMES = [...SCENES.map((s) => s.id), 'crossfade'];
 const SIZES = [[120, 40], [240, 67]];
 const TIMES = [0, 5, 10, 20];
-const FADE_SEC = 20;
+// the cross-fade is captured with the app's shipped fade length, at these fractions of it
+const FADE_SEC = DEFAULT_FADE_SECONDS;
+const FADE_POINTS = [0, 0.25, 0.5, 0.75, 1];
 
 export function runCapture({ outDir, sizes = SIZES, times = TIMES, seed = 1 }) {
   fs.mkdirSync(outDir, { recursive: true });
@@ -25,7 +30,8 @@ export function runCapture({ outDir, sizes = SIZES, times = TIMES, seed = 1 }) {
   for (const name of CAPTURE_NAMES) {
     for (const [cols, rows] of sizes) {
       let txt = '', ansi = '';
-      for (const sec of times) {
+      const secs = name === 'crossfade' ? FADE_POINTS.map((f) => f * FADE_SEC) : times;
+      for (const sec of secs) {
         const comp = createComposer({ scenes: SCENES, cols, rows, seed });
         const st = name === 'crossfade'
           ? { a: 0, b: 1, p: smoothstep(sec / FADE_SEC) }

@@ -19,7 +19,7 @@ Options (also available as environment variables):
 | flag | env | default | meaning |
 |---|---|---|---|
 | `--scene-seconds N` | `DRIFT_SCENE_SECONDS` | 180 | seconds per scene (scene time, so `+` speeds this up too) |
-| `--fade-seconds N` | `DRIFT_FADE_SECONDS` | 5 | length of the cross-fade between scenes |
+| `--fade-seconds N` | `DRIFT_FADE_SECONDS` | 15 | length of the cross-fade between scenes |
 | `--fps N` | `DRIFT_FPS` | 18 | frames per second (1-30) |
 | `--seed N` | `DRIFT_SEED` | 1 | seed for rain and ripples |
 | `--scene NAME` | `DRIFT_SCENE` | squiggle | start scene: squiggle, sunburst, plasma, ripples, rain |
@@ -39,7 +39,7 @@ Unknown keys and arrow keys are ignored. There is no status bar and no hint over
 
 ## Scenes
 
-Five, about three minutes each, joined by a 4-6 second cross-fade that blends the
+Five, about three minutes each, joined by a 15 second cross-fade that blends the
 two intensity fields continuously (never a hard cut). They loop in order:
 
 1. **Squiggle** - a long soft fading trail on a slowly morphing Lissajous/spirograph. The line is drawn in braille dots; a faint block glow follows the head.
@@ -103,8 +103,8 @@ Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 ## Capture, calmness, measure
 
 ```
-node tools/capture.mjs [--out captures]     # .txt (chars only) and .ansi, 5 scenes + crossfade, 120x40 and 240x67, t = 0, 5, 10, 20 s
-node tools/calm.mjs [--seconds 60]          # calmness table (cells changing per frame, mean intensity change)
+node tools/capture.mjs [--out captures]     # .txt (chars only) and .ansi, 5 scenes + crossfade, 120x40 and 240x67; scenes at t = 0, 5, 10, 20 s, crossfade at 0, 25, 50, 75, 100% of the 15 s default fade
+node tools/calm.mjs [--seconds 60]          # calmness table (cells changing per frame, mean intensity change) plus cross-fade rows at the shipped fade
 node tools/measure.mjs --seconds 60 --cols 240 --rows 67 [--scene mix|squiggle|sunburst|plasma|ripples|rain|all]
 ```
 
