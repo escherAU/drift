@@ -1,6 +1,6 @@
 // Sunburst: soft rays rotating slowly around a centre that drifts, with a
 // gentle breathing pulse and a faint glow at the hub.
-import { dims, outBuf, seedOf, timeOf, rand } from './util.js';
+import { dims, outBuf, seedOf, timeOf, rand, sinTurns, fastAtan2 } from './util.js';
 
 const TAU = Math.PI * 2;
 const N1 = 12; // main ray count
@@ -23,7 +23,9 @@ export default function sunburst(t, w, h, params) {
   const R0 = 0.5 * R * pulse;
   const invR0sq = 1 / (R0 * R0);
   const glowK = 1 / (2 * (0.07 * R + 1) * (0.07 * R + 1));
-  const a1 = N1 * rot1, a2 = N2 * rot2;
+  const INV_TAU = 1 / TAU;
+  const a1 = (N1 * rot1) * INV_TAU, a2 = (N2 * rot2) * INV_TAU; // in turns
+  const n1t = N1 * INV_TAU, n2t = N2 * INV_TAU;
   for (let j = 0; j < H; j++) {
     const dy = 2 * j - cy;
     const dy2 = dy * dy;
@@ -32,13 +34,14 @@ export default function sunburst(t, w, h, params) {
       const dx = i - cx;
       const r2 = dx * dx + dy2;
       const r = Math.sqrt(r2);
-      const th = Math.atan2(dy, dx);
-      const q1 = 0.5 + 0.5 * Math.sin(N1 * th - a1);
-      const q2 = 0.5 + 0.5 * Math.sin(N2 * th - a2);
+      const th = fastAtan2(dy, dx);
+      const q1 = 0.5 + 0.5 * sinTurns(n1t * th - a1);
+      const q2 = 0.5 + 0.5 * sinTurns(n2t * th - a2);
       const ray = 0.72 * (q1 * q1 * (3 - 2 * q1)) + 0.28 * (q2 * q2 * (3 - 2 * q2));
       const rad = 1 / (1 + r2 * invR0sq);
       const hub = r / (r + 5); // rays dissolve toward the centre (no angular singularity)
-      let v = ray * rad * hub * amp + 0.5 * Math.exp(-r2 * glowK);
+      const gq = r2 * glowK;
+      let v = ray * rad * hub * amp + (gq < 6 ? 0.5 * Math.exp(-gq) : 0);
       v = v > 1 ? 1 : v;
       out[base + i] = (v * 255 + 0.5) | 0;
     }

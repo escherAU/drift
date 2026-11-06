@@ -72,3 +72,30 @@ export function clamp255(v) {
 export function pmod(a, m) {
   return ((a % m) + m) % m;
 }
+
+// ---- cheap trig for per-cell inner loops (accuracy ~1e-6, plenty for shading)
+const SIN_N = 4096;
+const SIN_TAB = new Float64Array(SIN_N + 2);
+for (let i = 0; i < SIN_N + 2; i++) SIN_TAB[i] = Math.sin((i / SIN_N) * Math.PI * 2);
+
+// sin(2*pi*x) for any finite x (x in turns).
+export function sinTurns(x) {
+  x -= Math.floor(x);
+  const p = x * SIN_N;
+  const i = p | 0;
+  const f = p - i;
+  return SIN_TAB[i] + (SIN_TAB[i + 1] - SIN_TAB[i]) * f;
+}
+
+// atan2 with ~1e-5 rad error; no special cases beyond (0,0) -> 0.
+export function fastAtan2(y, x) {
+  const ax = x < 0 ? -x : x, ay = y < 0 ? -y : y;
+  const mx = ax > ay ? ax : ay, mn = ax > ay ? ay : ax;
+  if (mx === 0) return 0;
+  const a = mn / mx;
+  const s = a * a;
+  let r = ((-0.0464964749 * s + 0.15931422) * s - 0.327622764) * s * a + a;
+  if (ay > ax) r = 1.57079637 - r;
+  if (x < 0) r = 3.14159274 - r;
+  return y < 0 ? -r : r;
+}
