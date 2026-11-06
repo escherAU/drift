@@ -22,7 +22,7 @@ Options (also available as environment variables):
 | `--fade-seconds N` | `DRIFT_FADE_SECONDS` | 15 | length of the cross-fade between scenes |
 | `--fps N` | `DRIFT_FPS` | 18 | frames per second (1-30) |
 | `--seed N` | `DRIFT_SEED` | 1 | seed for rain and ripples |
-| `--scene NAME` | `DRIFT_SCENE` | squiggle | start scene, in its own mode: squiggle, sunburst, plasma, ripples, rain, glyphrain, swarm, glitch, fireworks, vortex, life, tunnel, wire, maze, blocktype, bounce (a bare number counts calm scenes) |
+| `--scene NAME` | `DRIFT_SCENE` | squiggle | start scene, in its own mode: squiggle, sunburst, plasma, ripples, rain, glyphrain, swarm, glitch, fireworks, vortex, life, tunnel, wire, maze, blocktype, bounce, sand, waves, pendulum, cloth (a bare number counts calm scenes) |
 | | `DRIFT_CONFIG` | see below | full path of the config file |
 
 ## Keys
@@ -70,9 +70,16 @@ R-pentomino, acorn, pulsar and friends, half-block pixels; reseeds when it dies 
 which would read as a third tone), **wire** (a rotating wireframe cube then torus in braille
 dots), **maze** (a seeded maze carved live with box-drawing walls, solved in solid blocks,
 held, wiped and regenerated) and **blocktype** (big block capitals spelling short words, with
-a wipe, scroll or wave between them); experimental = **bounce** (balls with gravity and
-friction, bounded energy, fixed-step sim). Later scenes join a playlist and are picked up by
-the shared test suites automatically.
+a wipe, scroll or wave between them); experimental (the calm single-hue palette, 16 brightness levels, physics sims stepped at a
+fixed 1/30 s) = **bounce** (balls with gravity and friction, bounded energy), **sand** (a
+falling-sand sim: moving emitters, slopes, a slow wind, ramps and a sieve on some cycles, and a
+gradual dim-out when the box is half full; the grain count is conserved), **waves** (the 2D
+wave equation with dropped pebbles and, now and then, two driven sources; crests are shade
+blocks, troughs braille), **pendulum** (five RK4 double pendula started 0.0015 rad apart, so
+they swing together and then fly apart, with fading tip trails; always on screen) and **cloth**
+(a pinned Verlet curtain in a gusting wind, poked by a swinging ball; links glow as they
+stretch). Later scenes join a playlist and are picked up by the shared test suites
+automatically.
 
 Glyphs outside calm come from an allow-list (`src/glyphs.js`): ASCII, a few Latin-1
 symbols, Greek, arrows 2190-2199, box drawing, blocks, braille, ~20 maths operators and a
@@ -160,7 +167,7 @@ Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 ```
 node tools/capture.mjs [--out captures]     # .txt (chars only) and .ansi, 5 scenes + crossfade, 120x40 and 240x67; scenes at t = 0, 5, 10, 20 s, crossfade at 0, 25, 50, 75, 100% of the 15 s default fade
 node tools/calm.mjs [--seconds 60]          # calmness table (cells changing per frame, mean intensity change) plus cross-fade rows at the shipped fade
-node tools/measure.mjs --seconds 60 --cols 240 --rows 67 [--scene mix|squiggle|sunburst|plasma|ripples|rain|glyphrain|swarm|glitch|fireworks|vortex|life|tunnel|wire|maze|blocktype|bounce|all]
+node tools/measure.mjs --seconds 60 --cols 240 --rows 67 [--scene mix|squiggle|sunburst|plasma|ripples|rain|glyphrain|swarm|glitch|fireworks|vortex|life|tunnel|wire|maze|blocktype|bounce|sand|waves|pendulum|cloth|all]
 ```
 
 `captures/*.ansi` are git-ignored (large); regenerate with the capture command and
