@@ -1,4 +1,4 @@
-=== Whale (whale.txt) 50% drawn, t=222.3s 120x40
+=== Whale (whale.txt) 50% drawn, t=215.4s 120x40
                                                                                                                         
                                                                                                                         
                                                                                                                         
