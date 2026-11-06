@@ -220,6 +220,41 @@ test('bounce: energy is bounded (never above the launch bound) over a long run, 
   }
 });
 
+test('bounce: total mechanical energy, computed from the state outside the scene clamp, only rises at kick events, and kicks are bounded and infrequent', () => {
+  // E = sum over balls of v^2/2 + g * height above the floor, read from the sim state after every step.
+  // A "kick" is identified from the outside as a single-step rise of more than 5% of one ball's
+  // launch bound; every other step may not raise the total by more than 2% of it (collision
+  // separation pushes are the only legitimate source; measured worst 0.93% at 20x8).
+  const KICK_RISE = 0.05, SMALL_RISE = 0.02;
+  for (const [w, h, seed] of [[120, 40, 1], [60, 20, 2], [20, 8, 3], [120, 40, 4]]) {
+    const s = bounce.init(w, h, seed);
+    const n = s.balls.length;
+    const energyOf = (b) => 0.5 * (b.vx * b.vx + b.vy * b.vy) + s.g * (s.H2 - b.r - b.y);
+    const total = () => s.balls.reduce((a, b) => a + energyOf(b), 0);
+    const STEPS = 30 * 600;
+    let prev = total(), kicks = 0, maxJump = 0, maxSmall = 0, clampHits = 0, maxTotal = 0;
+    for (let i = 0; i < STEPS; i++) {
+      bounce.step(s);
+      const e = total();
+      const d = e - prev;
+      if (d > KICK_RISE * s.emax) { kicks++; if (d > maxJump) maxJump = d; }
+      else if (d > maxSmall) maxSmall = d;
+      for (const b of s.balls) if (Math.abs(energyOf(b) - s.emax) <= 1e-9 * s.emax) clampHits++;
+      if (e > maxTotal) maxTotal = e;
+      prev = e;
+    }
+    const tag = `${w}x${h} seed ${seed}`;
+    assert.ok(maxSmall <= SMALL_RISE * s.emax, `${tag}: energy rose by ${(maxSmall / s.emax * 100).toFixed(2)}% of the bound outside a kick`);
+    assert.ok(maxJump <= 2 * s.emax, `${tag}: a single step added ${(maxJump / s.emax).toFixed(2)} x the bound`);
+    assert.ok(maxTotal <= n * s.emax, `${tag}: total energy above n * bound`);
+    const perBallMinute = kicks / n / 10;
+    assert.ok(perBallMinute <= 15, `${tag}: ${perBallMinute.toFixed(1)} kicks per ball per minute`);
+    assert.ok(kicks > 0, `${tag}: the sim never kicks (it would run down)`);
+    // the seat-belt clamp must be a rarity, not what keeps the sim bounded
+    assert.ok(clampHits <= STEPS * n * 0.0005, `${tag}: the clamp engaged ${clampHits} times`);
+  }
+});
+
 test('bounce: gravity pulls down, bounces lose energy, and the balls are still moving after 10 minutes', () => {
   const s = bounce.init(120, 40, 1);
   const b = s.balls[0];
@@ -231,15 +266,22 @@ test('bounce: gravity pulls down, bounces lose energy, and the balls are still m
   one.balls.length = 1;
   const b1 = one.balls[0];
   b1.x = 60; b1.y = one.H2 - 20; b1.vx = 0; b1.vy = 0;
-  let peaks = [];
+  const startY = b1.y;
+  const peaks = [];
   let lastVy = 0;
-  for (let i = 0; i < 30 * 8; i++) {
+  const E1 = () => 0.5 * (b1.vx * b1.vx + b1.vy * b1.vy) + one.g * (one.H2 - b1.r - b1.y);
+  let eLast = E1(), kicked = false;
+  for (let i = 0; i < 30 * 8 && !kicked; i++) {
     bounce.step(one);
+    const e = E1();
+    if (e > eLast + 0.05 * one.emax) { kicked = true; break; } // a kick ends the free flight we are measuring
+    eLast = e;
     if (lastVy < 0 && b1.vy >= 0) peaks.push(b1.y); // top of an arc
     lastVy = b1.vy;
   }
-  assert.ok(peaks.length >= 2, 'bounced more than once');
-  assert.ok(peaks[1] > peaks[0] - 1e-9 || peaks[0] > one.H2 - 20, 'each arc is lower than the one before (y larger = lower)');
+  assert.ok(peaks.length >= 2, 'bounced more than once before any kick');
+  assert.ok(peaks[0] > startY, 'the first arc tops out lower than the release point (y larger = lower)');
+  for (let k = 1; k < peaks.length; k++) assert.ok(peaks[k] > peaks[k - 1], `arc ${k} (${peaks[k]}) is not lower than arc ${k - 1} (${peaks[k - 1]})`);
   const moving = bounce.init(120, 40, 4);
   for (let i = 0; i < 30 * 600; i++) bounce.step(moving);
   const sp = moving.balls.reduce((a, q) => a + Math.hypot(q.vx, q.vy), 0);
