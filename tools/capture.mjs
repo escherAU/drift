@@ -19,6 +19,9 @@ import { createComposer, smoothstep } from '../src/compose.js';
 import { frameToText, frameToAnsi } from '../src/renderer.js';
 import { DEFAULT_FADE_SECONDS, DISSOLVE_SECONDS, createApp } from '../src/app.js';
 import { makePalette, presetRGB } from '../src/color.js';
+import artist, { timeline } from '../src/scenes/artist.js';
+import { PIECES } from '../src/art/gallery.js';
+import { buildPlan, pieceToText } from '../src/art/engine.js';
 
 export const CAPTURE_NAMES = [...SCENES.map((s) => s.id), 'crossfade'];
 const SIZES = [[120, 40], [240, 67]];
@@ -129,11 +132,40 @@ export function runCaptureModes({ outDir, seed = 1 }) {
   return written;
 }
 
+// ---- DRIFT-2 S4: the artist's gallery, plain text at 120x40 (shipped defaults: seed 1)
+//   artist-<piece file>-half.txt   the piece 50% drawn (pen and fading strokes included)
+//   artist-<piece file>-full.txt   the finished piece
+//   artist-gallery.txt             every piece, titled, exactly as it is drawn when complete
+export function galleryCaptureNames() {
+  return [...PIECES.flatMap((p) => { const b = p.file.replace(/\.txt$/i, ''); return [`artist-${b}-half.txt`, `artist-${b}-full.txt`]; }), 'artist-gallery.txt'];
+}
+
+export function runCaptureGallery({ outDir, seed = 1 }) {
+  fs.mkdirSync(outDir, { recursive: true });
+  const written = [];
+  const put = (name, text) => { const f = path.join(outDir, name); fs.writeFileSync(f, text); written.push(f); };
+  const tl = timeline(PIECES, MODE_COLS, MODE_ROWS, seed);
+  let all = '';
+  for (const p of PIECES) {
+    const e = tl.list.find((x) => x.piece === p);
+    if (!e) continue; // does not fit 120x40
+    const base = p.file.replace(/\.txt$/i, '');
+    const plan = buildPlan(p);
+    const shot = (t) => frameToText({ cols: MODE_COLS, rows: MODE_ROWS, glyphs: renderScene(artist, t, MODE_COLS, MODE_ROWS, seed).glyphs });
+    put(`artist-${base}-half.txt`, `=== ${p.title} (${p.file}) 50% drawn, t=${(e.start + plan.drawSec / 2).toFixed(1)}s ${MODE_COLS}x${MODE_ROWS}\n${shot(e.start + plan.drawSec / 2)}\n`);
+    put(`artist-${base}-full.txt`, `=== ${p.title} (${p.file}) finished, t=${e.drawEnd.toFixed(1)}s ${MODE_COLS}x${MODE_ROWS}\n${shot(e.drawEnd)}\n`);
+    all += `=== ${p.title} (${p.file}) ${p.width}x${p.height}\n${pieceToText(p)}\n\n`;
+  }
+  put('artist-gallery.txt', all);
+  return written;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const i = process.argv.indexOf('--out');
   const here = path.dirname(fileURLToPath(import.meta.url));
   const out = i >= 0 ? path.resolve(process.argv[i + 1]) : path.join(here, '..', 'captures');
   const files = runCapture({ outDir: out });
   const more = runCaptureModes({ outDir: out });
-  console.log(`wrote ${files.length} calm files and ${more.length} mode files to ${out}`);
+  const art = runCaptureGallery({ outDir: out });
+  console.log(`wrote ${files.length} calm files, ${more.length} mode files and ${art.length} gallery files to ${out}`);
 }

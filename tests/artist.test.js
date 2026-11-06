@@ -259,3 +259,33 @@ test('the seed rotates the first piece; another seed shows a different first pie
   assert.notEqual(a, b);
   assert.equal(a, expectedOrder(1)[0]);
 });
+
+// ---- captures
+import { runCaptureGallery, galleryCaptureNames } from '../tools/capture.mjs';
+import { frameToText } from '../src/renderer.js';
+
+test('capture: <piece>-half and -full at 120x40, plus artist-gallery.txt with every title; half is part of full', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-art-cap-'));
+  try {
+    const files = runCaptureGallery({ outDir: dir });
+    assert.deepEqual(fs.readdirSync(dir).sort(), galleryCaptureNames().sort());
+    assert.equal(files.length, PIECES.length * 2 + 1);
+    const body = (f) => fs.readFileSync(path.join(dir, f), 'utf8').split('\n').slice(1, 41);
+    for (const p of PIECES) {
+      const b = p.file.replace(/\.txt$/i, '');
+      const half = body(`artist-${b}-half.txt`), full = body(`artist-${b}-full.txt`);
+      assert.equal(full.length, 40);
+      for (const l of [...half, ...full]) assert.equal(Array.from(l).length, 120);
+      const lit = (rows) => rows.join('').replace(/ /g, '').length;
+      assert.ok(lit(half) > 0 && lit(half) < lit(full), `${p.title}: half is between nothing and the whole`);
+      assert.deepEqual(full, frameToText({ cols: 120, rows: 40, glyphs: expectedGrid(p) }).split('\n'));
+    }
+    const gallery = fs.readFileSync(path.join(dir, 'artist-gallery.txt'), 'utf8');
+    for (const p of PIECES) {
+      assert.ok(gallery.includes(`=== ${p.title} (${p.file})`), p.title);
+      assert.ok(gallery.includes(pieceToText(p)), `${p.title} drawn in full`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
