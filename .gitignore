@@ -1,3 +1,9 @@
 node_modules/
 captures/*.ansi
+!captures/crossfade-*.ansi
+!captures/plasma-*.ansi
+!captures/rain-*.ansi
+!captures/ripples-*.ansi
+!captures/squiggle-*.ansi
+!captures/sunburst-*.ansi
 .tmp/

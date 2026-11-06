@@ -2,3 +2,4 @@
 *.cmd text eol=crlf
 captures/*.txt -text
 bin/drift.js text eol=lf
+captures/*.ansi -text
