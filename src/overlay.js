@@ -1,33 +1,63 @@
 // The help panel: a centred box drawn into the frame buffers AFTER composition, so the
 // renderer treats it like any other cells. Text is plain ASCII plus the box-drawing
-// corners and lines (all on the glyph allow-list). Never throws, whatever the size:
-// a terminal too small for the whole panel gets a clipped one.
+// corners and lines (all on the glyph allow-list). Never throws, whatever the size.
+//
+// Three layouts, the roomiest that fits the terminal's rows:
+//   roomy    blank line between groups, a blank pad row inside the top and bottom border (30 rows)
+//   compact  no blank lines between groups, one blank line under the mode line         (24 rows)
+//   tight    the same without that blank line                                          (23 rows)
+// Below that the tight layout is cut to fit and its last text row says how much is missing:
+// "(+N more, enlarge window)", N counting the body lines left out.
 import { helpLines } from './keymap.js';
 
 const PAD = 2; // blank columns between border and text
 
 // info = { mode, modeName, sceneName, ui: { text, dim, head } }  (ui = palette indexes)
-export function panelLines(info) {
-  const lines = [
+function head(info, withBlank) {
+  const out = [
     { text: 'DRIFT  keys', style: 'head' },
     { text: `mode: ${info.modeName}    scene: ${info.sceneName}`, style: 'text' },
-    { text: '', style: 'text' },
-    ...helpLines(info.mode),
   ];
-  return lines;
+  if (withBlank) out.push({ text: '', style: 'text' });
+  return out;
 }
 
-export function panelSize(info) {
-  const lines = panelLines(info);
+const withoutBlanks = (lines) => lines.filter((l) => l.text !== '');
+
+// { lines, pad } for a terminal of `rows` rows (rows omitted = the roomy layout).
+export function layoutFor(info, rows = Infinity) {
+  const roomy = { lines: [...head(info, true), ...helpLines(info.mode)], pad: 1 };
+  if (roomy.lines.length + 4 <= rows) return roomy;
+  const body = withoutBlanks(helpLines(info.mode));
+  const compact = { lines: [...head(info, true), ...body], pad: 0 };
+  if (compact.lines.length + 2 <= rows) return compact;
+  const tight = { lines: [...head(info, false), ...body], pad: 0 };
+  if (tight.lines.length + 2 <= rows) return tight;
+  // below the minimum: keep the top of the tight layout and end with a hint line
+  const room = Math.max(0, rows - 2); // text rows inside the border
+  if (room <= 0) return { lines: [], pad: 0 };
+  if (room === 1) return { lines: [{ text: `(+${tight.lines.length} more, enlarge window)`, style: 'dim' }], pad: 0 };
+  const keep = room - 1;
+  const left = tight.lines.length - keep;
+  return { lines: [...tight.lines.slice(0, keep), { text: `(+${left} more, enlarge window)`, style: 'dim' }], pad: 0 };
+}
+
+export function panelLines(info) {
+  return layoutFor(info).lines;
+}
+
+export function panelSize(info, rows = Infinity) {
+  const { lines, pad } = layoutFor(info, rows);
   let wide = 0;
   for (const l of lines) if (l.text.length > wide) wide = l.text.length;
-  return { width: wide + 2 * PAD + 2, height: lines.length + 4 }; // borders + one blank row above and below
+  return { width: wide + 2 * PAD + 2, height: lines.length + 2 + 2 * pad }; // borders + optional pad rows
 }
 
 // Returns { left, top, width, height } of the box actually drawn, or null when nothing fits.
 export function drawHelp(glyphs, shades, cols, rows, info) {
   if (cols < 5 || rows < 3) return null;
-  const want = panelSize(info);
+  const { lines, pad } = layoutFor(info, rows);
+  const want = panelSize(info, rows);
   const bw = Math.min(cols, want.width), bh = Math.min(rows, want.height);
   const left = Math.floor((cols - bw) / 2), top = Math.floor((rows - bh) / 2);
   const ui = info.ui;
@@ -38,11 +68,10 @@ export function drawHelp(glyphs, shades, cols, rows, info) {
   for (let y = 1; y < bh - 1; y++) { put(0, y, 0x2502, ui.text); put(bw - 1, y, 0x2502, ui.text); }
   put(0, 0, 0x250c, ui.text); put(bw - 1, 0, 0x2510, ui.text);
   put(0, bh - 1, 0x2514, ui.text); put(bw - 1, bh - 1, 0x2518, ui.text);
-  // text rows: row 0 of the box is the border, row 1 a blank pad row
-  const lines = panelLines(info);
-  const rowEnd = bh < want.height ? bh - 1 : bh - 2; // exclusive; keeps the pad row when it all fits
+  // text rows start under the border (and the pad row, when the layout has one)
+  const rowEnd = bh - 1 - pad; // exclusive
   for (let k = 0; k < lines.length; k++) {
-    const y = 2 + k;
+    const y = 1 + pad + k;
     if (y >= rowEnd) break;
     const l = lines[k];
     const shade = l.style === 'dim' ? ui.dim : l.style === 'head' ? ui.head : ui.text;

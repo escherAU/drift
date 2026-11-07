@@ -562,3 +562,43 @@ test('flip guard: nothing is written while help is open, even if a flip is due; 
   assert.equal(c.app.getState().light, false, 'lands once help is closed');
   c.done();
 });
+
+// ---- the help panel at small sizes (every KEYMAP row once; a graceful hint only below the minimum)
+for (const [cols, rows] of [[80, 24], [100, 25], [120, 30], [80, 23]]) {
+  test(`help panel at ${cols}x${rows}: every KEYMAP entry exactly once (including Other, Esc and q), centred, no truncation hint`, () => {
+    for (const mode of ['calm', 'chaos', 'contrast', 'experimental']) {
+      const f = helpAt(mode, cols, rows);
+      const lines = frameLines(f);
+      const text = lines.join('\n');
+      for (const e of KEYMAP) {
+        const row = rowFor(e, mode).text;
+        assert.equal(text.split(row).length - 1, 1, `${mode} ${cols}x${rows}: ${e.id}`);
+      }
+      assert.ok(text.includes('Other') && text.includes('Esc') && text.includes('q or Ctrl+C'));
+      assert.ok(!text.includes('more, enlarge window'), 'no hint when everything fits');
+      const top = lines.findIndex((l) => l.includes('┌')), bottom = lines.findIndex((l) => l.includes('└'));
+      assert.ok(top >= 0 && bottom > top);
+      assert.ok(Math.abs((top + bottom + 1) / 2 - rows / 2) <= 1, `${mode}: centred vertically (${top}..${bottom})`);
+      const x0 = lines[top].indexOf('┌'), x1 = lines[top].lastIndexOf('┐');
+      assert.ok(Math.abs((x0 + x1 + 1) / 2 - cols / 2) <= 1, `${mode}: centred horizontally`);
+    }
+  });
+}
+
+test('help panel at 40x12 (below the minimum): shows what fits plus "(+N more, enlarge window)", N is the count of rows left out', () => {
+  for (const mode of ['calm', 'contrast']) {
+    const f = helpAt(mode, 40, 12);
+    const lines = frameLines(f);
+    const text = lines.join('\n');
+    const m = /\(\+(\d+) more, enlarge window\)/.exec(text);
+    assert.ok(m, `${mode}: hint present`);
+    const shown = KEYMAP.filter((e) => text.includes(rowFor(e, mode).text.slice(0, 30))).length;
+    assert.ok(shown >= 1 && shown < KEYMAP.length);
+    // N counts every body line (headings and entries) that is not drawn
+    assert.ok(Number(m[1]) >= KEYMAP.length - shown, `${mode}: N = ${m[1]}, entries left out ${KEYMAP.length - shown}`);
+    assert.equal(lines.filter((l) => l.includes('┌')).length, 1);
+  }
+  // both arms: at 80x24 nothing is left out, so no hint (asserted above); at 80x12 the hint is back
+  const text = frameLines(helpAt('chaos', 80, 12)).join('\n');
+  assert.match(text, /more, enlarge window/);
+});
