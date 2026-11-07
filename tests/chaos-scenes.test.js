@@ -173,16 +173,16 @@ test('D glitch scramble sets: at least 4 varied sets, every glyph on the allow-l
 
 test('D glitch: at a pinned t and seed a target word is fully shown on screen; at an earlier t in its scramble phase it is not (both arms)', () => {
   const W = 120, H = 40;
-  const ev = glitchEvent(1, 2, 0, 3, W, H);
+  const ev = glitchEvent(1, 2, 0, 2, W, H);
   assert.ok(WORDS.includes(ev.word));
   const mid = (Math.max(...ev.lockAt) + ev.outStart) / 2 + ev.t0;
   const early = ev.t0 + 0.2;
   assert.ok(fullyShown(ev, mid) && !fullyShown(ev, early));
-  // pinned literals (seed 1, lane 2, left track, event 3 is FUZZ at column 25, row 7, starting at 23.735 s)
+  // pinned literals (seed 1, lane 2, left track, event 2 is FUZZ at column 5, row 5, starting at 10.665 s)
   assert.equal(ev.word, 'FUZZ');
-  const lit1 = renderScene(glitch, 25.5, W, H, 1), lit0 = renderScene(glitch, 23.9, W, H, 1);
-  assert.equal(rowText(lit1, 7, 25, 4), 'FUZZ', 'pinned t = 25.5 s: FUZZ is shown');
-  assert.notEqual(rowText(lit0, 7, 25, 4), 'FUZZ', 'pinned t = 23.9 s: still scrambling');
+  const lit1 = renderScene(glitch, 12.7, W, H, 1), lit0 = renderScene(glitch, 10.9, W, H, 1);
+  assert.equal(rowText(lit1, 5, 5, 4), 'FUZZ', 'pinned t = 12.7 s: FUZZ is shown');
+  assert.notEqual(rowText(lit0, 5, 5, 4), 'FUZZ', 'pinned t = 10.9 s: still scrambling');
   const shown = renderScene(glitch, mid, W, H, 1);
   assert.equal(rowText(shown, ev.row, ev.x, ev.word.length), ev.word, 'word on screen at the locked moment');
   const scr = renderScene(glitch, early, W, H, 1);
@@ -346,3 +346,32 @@ test('F vortex: arms cover a good part of the screen (20 to 80% lit), centred on
 });
 
 test('STEP_DT is 1/30 (the sims here are written against it)', () => assert.equal(STEP_DT, 1 / 30));
+
+// ---------------------------------------------------------------- lit fraction scales with the screen
+for (const [W, H] of [[240, 67], [120, 40]]) {
+  for (const scene of [glitch, fireworks]) {
+    test(`G ${scene.id} at ${W}x${H}: averaged over 60 simulated s at least 6% of cells are lit (chaos is not an empty screen)`, () => {
+      const cc = createCellComposer({ scenes: [scene], cols: W, rows: H, seed: 1 });
+      let sum = 0, n = 0;
+      for (let k = 0; k < 60 * FPS; k++) {
+        const f = cc.frame({ a: 0, b: 0, p: 0 }, k / FPS);
+        let lit = 0;
+        for (let i = 0; i < f.glyphs.length; i++) if (f.glyphs[i] !== 32) lit++;
+        sum += lit / f.glyphs.length; n++;
+      }
+      assert.ok(sum / n >= 0.06, `${scene.id} ${W}x${H}: ${(100 * sum / n).toFixed(2)}% lit`);
+    });
+  }
+}
+
+test('G fireworks: several rockets or bursts are live at once on a big screen, and particles stay under the cap', () => {
+  const st = fireworks.init(240, 67, 1);
+  let maxLive = 0, maxP = 0;
+  for (let i = 0; i < 30 * 60; i++) {
+    fireworks.step(st);
+    maxLive = Math.max(maxLive, st.rockets.length);
+    maxP = Math.max(maxP, st.particles.length);
+  }
+  assert.ok(maxLive >= 2, `max rockets in flight ${maxLive}`);
+  assert.ok(maxP <= MAX_PARTICLES);
+});

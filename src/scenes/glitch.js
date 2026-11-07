@@ -1,8 +1,9 @@
 // Chaos / glitch: short words that assemble out of noise. A word starts as scrambling
 // characters (drawn from one of several glyph sets), its letters lock in one by one
 // (left to right, or in random order), it holds, then it scrambles out letter by letter
-// and vanishes. Many words run at once: every lane of three screen rows carries two
-// independent streams (left half and right half), each on its own period.
+// and vanishes. Many words run at once: the screen is cut into lanes of LANE_ROWS rows and
+// every lane into slots about SLOT_COLS wide, so the number of streams grows with the screen
+// area. Each stream has its own period and phase, so the words are staggered.
 //
 // kind 'cells', pure in t. Colour index = hue * 4 + brightness level.
 // Everything about an event comes from glitchEvent(), which tests use to pin times.
@@ -35,10 +36,15 @@ const OUT_SCRAMBLE = 0.35; // a letter scrambles this long before it vanishes
 const DMAX = IN_START + 7 * LOCK_STEP + HOLD + OUT_SCRAMBLE + 7 * OUT_STEP + 0.1; // longest possible event
 const ROLL_HZ = 14; // scramble glyphs change this many times a second
 
-export function laneCount(H) { return Math.max(1, Math.floor(H / 3)); }
+export const LANE_ROWS = 2; // screen rows per lane
+export const SLOT_COLS = 16; // target columns per stream; the words are at most 8 long
+const KEY_TRACKS = 64; // stream key = lane * KEY_TRACKS + track
+
+export function laneCount(H) { return Math.max(1, Math.floor(H / LANE_ROWS)); }
+export function trackCount(W) { return Math.max(2, Math.floor(W / SLOT_COLS)); }
 function laneRow(lane, H) { return Math.min(H - 1, Math.floor(((lane + 0.5) * H) / laneCount(H))); }
 
-function streamPeriod(seed, key) { return DMAX + 1.4 + 2.5 * rand(seed, key, 1); }
+function streamPeriod(seed, key) { return DMAX + 0.3 + 1.4 * rand(seed, key, 1); }
 function streamPhase(seed, key, P) { return rand(seed, key, 2) * P; }
 
 function permutation(n, seed, a, b) {
@@ -52,7 +58,7 @@ function permutation(n, seed, a, b) {
 
 // Event k of stream (lane, track) at screen W x H. Times are in scene seconds (t0 absolute).
 export function glitchEvent(seed, lane, track, k, W, H) {
-  const key = lane * 2 + track;
+  const key = lane * KEY_TRACKS + track;
   const P = streamPeriod(seed, key), phase = streamPhase(seed, key, P);
   const r = (n) => rand(seed * 977 + 13, key * 4099 + k, n);
   const word = WORDS[(r(1) * WORDS.length) | 0];
@@ -66,8 +72,8 @@ export function glitchEvent(seed, lane, track, k, W, H) {
   for (let i = 0; i < len; i++) lockAt[i] = IN_START + lockOrder[i] * LOCK_STEP;
   const outStart = IN_START + (len - 1) * LOCK_STEP + HOLD;
   for (let i = 0; i < len; i++) vanishAt[i] = outStart + OUT_SCRAMBLE + outOrder[i] * OUT_STEP;
-  const half = Math.floor(W / 2);
-  const lo = track === 0 ? 0 : half, hi = track === 0 ? half : W;
+  const tracks = trackCount(W);
+  const lo = Math.floor((track * W) / tracks), hi = Math.floor(((track + 1) * W) / tracks);
   const x = lo + Math.floor(r(5) * Math.max(1, hi - lo - len + 1));
   return {
     word, len, x, row: laneRow(lane, H), hue: (r(6) * 8) | 0, set: (r(7) * SCRAMBLE_SETS.length) | 0,
@@ -78,7 +84,7 @@ export function glitchEvent(seed, lane, track, k, W, H) {
 
 // The event of the cycle that contains t (it may not have started yet, or may be over).
 export function glitchEventAt(seed, lane, track, t, W, H) {
-  const key = lane * 2 + track;
+  const key = lane * KEY_TRACKS + track;
   const P = streamPeriod(seed, key), phase = streamPhase(seed, key, P);
   return glitchEvent(seed, lane, track, Math.floor((t + phase) / P), W, H);
 }
@@ -97,9 +103,9 @@ export default function glitch(t, w, h, params) {
   if (W === 0 || H === 0) return;
   const T = timeOf(t), s = seedOf(params);
   const roll = Math.floor(T * ROLL_HZ);
-  const lanes = laneCount(H);
+  const lanes = laneCount(H), tracks = trackCount(W);
   for (let lane = 0; lane < lanes; lane++) {
-    for (let track = 0; track < 2; track++) {
+    for (let track = 0; track < tracks; track++) {
       const ev = glitchEventAt(s, lane, track, T, W, H);
       const tau = T - ev.t0;
       if (tau < 0 || tau >= ev.duration) continue;
@@ -112,7 +118,7 @@ export default function glitch(t, w, h, params) {
         if (tau >= ev.vanishAt[i]) continue;
         if (tau >= ev.lockAt[i] && tau < ev.outStart) { ch = ev.word.charCodeAt(i); lvl = 3; }
         else {
-          const hsh = hash32(s * 31 + roll, lane * 64 + track * 32 + i, ev.t0 * 100 | 0);
+          const hsh = hash32(s * 31 + roll, (lane * KEY_TRACKS + track) * 16 + i, ev.t0 * 100 | 0);
           // mostly this event's set, now and then a glyph from another set
           const pick = (hsh & 7) === 0 ? SCRAMBLE_SETS[(hsh >>> 4) % SCRAMBLE_SETS.length] : set;
           ch = pick[(hsh >>> 8) % pick.length];

@@ -1,12 +1,16 @@
 // Chaos / fireworks: rockets climb, burst into rings of radial glyphs in several hues, and the
 // sparks fall under gravity while they fade. Particles are capped (MAX_PARTICLES) and bursts
-// are always short-lived, so the sim never runs away and never goes quiet.
+// are always short-lived, so the sim never runs away and never goes quiet. The launch rate,
+// the size of a burst (count and radius) and the sparks' life all scale with the screen, so a
+// 240x67 window is as busy as a 120x40 one: several rockets are in the air at once and a burst
+// is staggered against the next (they never go off together).
 //
 // kind 'sim' (fixed 1/30 s step). Units: x in columns, y in half-rows (isotropic), y grows
 // downward; the box is [0, w] by [0, 2h]. Colour index = hue * 4 + brightness level.
 
 const DT = 1 / 30;
-export const MAX_PARTICLES = 700;
+export const MAX_PARTICLES = 1800;
+const REF_AREA = 120 * 40; // the screen the base numbers are tuned for
 
 // radial glyphs (* + x . o) plus maths, Greek and geometric shapes from the allow-list
 const BURST = [
@@ -30,8 +34,10 @@ export function particleLevel(p) {
 
 function init(w, h, seed) {
   const W = w > 0 ? Math.floor(w) : 0, H = h > 0 ? Math.floor(h) : 0;
+  const area = Math.max(0.25, Math.min(4, (W * H) / REF_AREA)); // 1 at 120x40
   const s = {
     w: W, h: H, H2: H * 2, rs: (seed | 0) ^ 0x2f6b1a93, g: Math.max(6, H * 2 * 0.8),
+    area, size: Math.sqrt(area), // size scales burst radius and counts
     rockets: [], particles: [], launchIn: 5, launched: 0, bursts: 0, steps: 0,
   };
   return s;
@@ -50,8 +56,8 @@ function launch(s) {
 function burst(s, r) {
   s.bursts++;
   const room = MAX_PARTICLES - s.particles.length;
-  const n = Math.min(room, 28 + ((rnd(s) * 24) | 0));
-  const scale = Math.min(1.8, Math.max(0.6, s.H2 / 80));
+  const n = Math.min(room, Math.round((52 + ((rnd(s) * 36) | 0)) * s.size));
+  const scale = Math.min(2.6, Math.max(0.6, s.H2 / 80));
   const hue2 = (r.hue + 1 + ((rnd(s) * 7) | 0)) & 7;
   const ringGlyph = BURST[(rnd(s) * BURST.length) | 0];
   const rings = rnd(s) < 0.5; // two shells (inner slower) or one
@@ -59,7 +65,7 @@ function burst(s, r) {
   for (let i = 0; i < n; i++) {
     const a = phase + (i / n) * Math.PI * 2 + (rnd(s) - 0.5) * 0.25;
     const sp = (rings && i % 2 ? 9 : 16 + 10 * rnd(s)) * scale;
-    const max = 36 + ((rnd(s) * 24) | 0); // 1.2 to 2 s
+    const max = 70 + ((rnd(s) * 50) | 0); // 2.3 to 4 s
     s.particles.push({
       x: r.x, y: r.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: max, max,
       hue: i % 3 === 2 ? hue2 : r.hue, ch: i % 4 === 0 ? ringGlyph : BURST[(rnd(s) * BURST.length) | 0],
@@ -73,7 +79,8 @@ function step(s) {
   const g = s.g;
   if (--s.launchIn <= 0) {
     launch(s);
-    s.launchIn = 8 + ((rnd(s) * 18) | 0);
+    // 5 to 15 steps at 120x40; shorter on bigger screens (never under 3 steps apart)
+    s.launchIn = Math.max(3, Math.round((5 + ((rnd(s) * 11) | 0)) / s.area));
   }
   for (let i = s.rockets.length - 1; i >= 0; i--) {
     const r = s.rockets[i];
