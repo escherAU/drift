@@ -10,7 +10,7 @@ import { Scheduler, createComposer } from './compose.js';
 import { createCellComposer } from './cells.js';
 import { createRenderer, SYNC_BEGIN, SYNC_END } from './renderer.js';
 import { createTerminal, installGuards } from './term.js';
-import { loadConfig, saveConfig, defaultConfigPath } from './config.js';
+import { loadConfig, updateConfig, defaultConfigPath } from './config.js';
 import {
   presetRGB, nextPreset, presetIndex, makePalette, detectColorMode, DEFAULT_PRESET,
   makeMultiPalette, makeTwoTone, nextChaosPalette,
@@ -207,14 +207,16 @@ export function createApp(o) {
     dirty = true;
   }
 
-  function persist() {
-    saveConfig(configPath, { colour: cfg.colour, mode: want.mode, chaosPalette: cfg.chaosPalette, invert: want.invert });
+  // Save ONLY the field that changed, re-reading the file first: two windows sharing a config
+  // file never overwrite each other's colour, mode, palette or polarity.
+  function persist(patch) {
+    updateConfig(configPath, patch);
   }
 
   function setMode(m) {
     if (!isMode(m) || m === want.mode) return;
     want.mode = m;
-    persist();
+    persist({ mode: m });
     settle();
   }
 
@@ -224,12 +226,11 @@ export function createApp(o) {
     modeJump: (arg) => setMode(arg),
     sceneNext: () => { sched(shown.mode).skip(); dirty = true; },
     colourNext: () => {
-      if (want.mode === 'chaos') cfg.chaosPalette = nextChaosPalette(cfg.chaosPalette);
-      else cfg.colour = nextPreset(cfg.colour);
-      persist();
+      if (want.mode === 'chaos') { cfg.chaosPalette = nextChaosPalette(cfg.chaosPalette); persist({ chaosPalette: cfg.chaosPalette }); }
+      else { cfg.colour = nextPreset(cfg.colour); persist({ colour: cfg.colour }); }
       dirty = true;
     },
-    invertToggle: () => { want.invert = !want.invert; persist(); settle(); },
+    invertToggle: () => { want.invert = !want.invert; persist({ invert: want.invert }); settle(); },
     speedUp: () => { speedIdx = Math.min(SPEEDS.length - 1, speedIdx + 1); },
     speedDown: () => { speedIdx = Math.max(0, speedIdx - 1); },
     pauseToggle: () => { paused = !paused; },

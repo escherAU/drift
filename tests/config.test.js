@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadConfig, saveConfig, defaultConfigPath, DEFAULT_CONFIG } from '../src/config.js';
+import { loadConfig, saveConfig, updateConfig, defaultConfigPath, DEFAULT_CONFIG } from '../src/config.js';
 
 function tmp() { return fs.mkdtempSync(path.join(os.tmpdir(), 'drift-cfg-')); }
 
@@ -121,5 +121,52 @@ test('config: all four modes and all chaos palettes round-trip; saveConfig write
   }
   saveConfig(p, { colour: 'amber', mode: 'nonsense', extra: 1 });
   assert.deepEqual(JSON.parse(fs.readFileSync(p, 'utf8')), { colour: 'amber', mode: 'calm', chaosPalette: 'neon', invert: false });
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// ---- DRIFT-2: atomic saves, and each save changes only the field that changed
+
+test('config: a save is atomic - the temp file is in the same directory and is gone afterwards (also after a failed save)', () => {
+  const dir = tmp();
+  const p = path.join(dir, 'drift', 'config.json');
+  assert.equal(saveConfig(p, { colour: 'ice' }), true);
+  assert.deepEqual(fs.readdirSync(path.dirname(p)), ['config.json'], 'no leftover temp file');
+  // the temp name is built next to the target (same directory = a rename on the same volume)
+  const seen = [];
+  const realRename = fs.renameSync;
+  fs.renameSync = (a, b) => { seen.push([a, b]); return realRename(a, b); };
+  try { saveConfig(p, { colour: 'amber' }); } finally { fs.renameSync = realRename; }
+  assert.equal(seen.length, 1);
+  assert.equal(path.dirname(seen[0][0]), path.dirname(p));
+  assert.equal(seen[0][1], p);
+  assert.notEqual(seen[0][0], p);
+  // a failing rename: false, nothing thrown, no temp left, the old file intact
+  fs.renameSync = () => { throw new Error('EPERM'); };
+  try { assert.equal(saveConfig(p, { colour: 'violet' }), false); } finally { fs.renameSync = realRename; }
+  assert.deepEqual(fs.readdirSync(path.dirname(p)), ['config.json']);
+  assert.equal(loadConfig(p).colour, 'amber');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('config: updateConfig re-reads the file and changes only the named fields; invalid values are ignored; never throws', () => {
+  const dir = tmp();
+  const p = path.join(dir, 'drift', 'config.json');
+  saveConfig(p, { colour: 'ice', mode: 'chaos', chaosPalette: 'fire', invert: true });
+  assert.equal(updateConfig(p, { mode: 'contrast' }), true);
+  assert.deepEqual(loadConfig(p), { colour: 'ice', mode: 'contrast', chaosPalette: 'fire', invert: true });
+  // someone else edits the file; our next update keeps their change
+  saveConfig(p, { colour: 'green', mode: 'contrast', chaosPalette: 'ocean', invert: true });
+  assert.equal(updateConfig(p, { invert: false }), true);
+  assert.deepEqual(loadConfig(p), { colour: 'green', mode: 'contrast', chaosPalette: 'ocean', invert: false });
+  // invalid values are not written (the field keeps what the file had); unknown keys are dropped
+  updateConfig(p, { colour: 'chartreuse', mode: 'disco', extra: 1 });
+  assert.deepEqual(JSON.parse(fs.readFileSync(p, 'utf8')), { colour: 'green', mode: 'contrast', chaosPalette: 'ocean', invert: false });
+  // a missing or corrupt file starts from the defaults
+  fs.writeFileSync(p, '{not json');
+  assert.equal(updateConfig(p, { colour: 'amber' }), true);
+  assert.deepEqual(loadConfig(p), { ...DEFAULT_CONFIG, colour: 'amber' });
+  // unwritable path: false, no throw
+  assert.equal(updateConfig(path.join(p, 'sub', 'c.json'), { colour: 'ice' }), false);
+  assert.equal(updateConfig(p, null), true);
   fs.rmSync(dir, { recursive: true, force: true });
 });

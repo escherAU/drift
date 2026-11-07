@@ -602,3 +602,32 @@ test('help panel at 40x12 (below the minimum): shows what fits plus "(+N more, e
   const text = frameLines(helpAt('chaos', 80, 12)).join('\n');
   assert.match(text, /more, enlarge window/);
 });
+
+// ---- two windows, one config file: each save changes only its own field
+test('config: two apps on one file - A changes the colour, B changes the mode, then A the invert; nothing is overwritten', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-two-'));
+  const configPath = path.join(root, 'drift', 'config.json');
+  const A = mk({ configPath, config: { colour: 'claude', mode: 'calm', chaosPalette: 'neon', invert: false } });
+  const B = mk({ configPath });
+  A.app.start(); B.app.start();
+  A.key('c'); // A: calm colour -> next preset
+  const colourA = A.cfg().colour;
+  assert.notEqual(colourA, 'claude');
+  B.key('3'); // B (started before A's save, still believes colour is claude): high contrast
+  assert.deepEqual({ colour: A.cfg().colour, mode: A.cfg().mode }, { colour: colourA, mode: 'contrast' }, "B's save kept A's colour");
+  A.key('2'); // A: chaos mode; B's earlier mode is replaced, A's colour stays
+  assert.equal(A.cfg().mode, 'chaos');
+  B.key('i'); // B (contrast): invert on, nothing else touched
+  const end = A.cfg();
+  assert.equal(end.invert, true);
+  assert.equal(end.mode, 'chaos', "B's invert did not roll the mode back");
+  assert.equal(end.colour, colourA);
+  A.key('c'); // A is in chaos now: it changes only the chaos palette
+  const after = A.cfg();
+  assert.notEqual(after.chaosPalette, 'neon');
+  assert.equal(after.colour, colourA);
+  assert.equal(after.invert, true);
+  assert.deepEqual(fs.readdirSync(path.dirname(configPath)), ['config.json']);
+  A.done(); B.done();
+  fs.rmSync(root, { recursive: true, force: true });
+});

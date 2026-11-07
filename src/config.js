@@ -39,12 +39,50 @@ export function loadConfig(file) {
   return { ...DEFAULT_CONFIG };
 }
 
+// Write text to the file atomically: a temp file in the SAME directory, then a rename over the
+// target (a rename inside one directory is atomic on Windows and POSIX; a reader sees the old
+// file or the new one, never half of it). Returns true when written, false on any failure.
+function writeAtomic(file, text) {
+  const tmp = path.join(path.dirname(file), '.' + path.basename(file) + '.' + process.pid + '.' + Math.random().toString(36).slice(2, 8) + '.tmp');
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(tmp, text);
+    let err = null;
+    for (let i = 0; i < 4; i++) { // Windows can refuse a rename for a moment while another window reads the target
+      try { fs.renameSync(tmp, file); err = null; break; } catch (e) { err = e; }
+    }
+    if (err) throw err;
+    return true;
+  } catch {
+    try { fs.rmSync(tmp, { force: true }); } catch { /* nothing to clean */ }
+    return false;
+  }
+}
+
 // Returns true when written, false on any failure.
 export function saveConfig(file, cfg) {
   try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(validateConfig(cfg), null, 2) + '\n');
-    return true;
+    return writeAtomic(file, JSON.stringify(validateConfig(cfg), null, 2) + '\n');
+  } catch {
+    return false;
+  }
+}
+
+// Read the file again NOW, change only the fields in the patch (an invalid value is ignored, so the
+// field keeps what the file had), write atomically. This is what the app calls on a keypress, so two
+// windows sharing one file never roll each other's fields back. Never throws.
+export function updateConfig(file, patch) {
+  try {
+    const cur = loadConfig(file);
+    const p = patch && typeof patch === 'object' ? patch : {};
+    const check = validateConfig({ ...DEFAULT_CONFIG, ...p });
+    const next = { ...cur };
+    for (const k of Object.keys(DEFAULT_CONFIG)) {
+      if (!(k in p)) continue;
+      const valid = k === 'invert' ? typeof p[k] === 'boolean' : check[k] === p[k];
+      if (valid) next[k] = p[k];
+    }
+    return saveConfig(file, next);
   } catch {
     return false;
   }
