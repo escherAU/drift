@@ -72,17 +72,31 @@ test('dissolve: changed cells per frame stay within budget (6%) over the 2 s dis
   assert.ok(total > 0.5 * W * H * 0.3, 'but the dissolve does change the screen');
 });
 
-test('sim stepping: at most 4 steps per frame, so a huge dt or 4x speed slows the sim instead of burning CPU', () => {
-  assert.equal(MAX_STEPS, 4);
+test('sim stepping: at most MAX_STEPS (8) per frame; 4x speed at 18 fps gets about 4x the steps of 1x; a huge dt cannot spiral', () => {
+  assert.equal(MAX_STEPS, 8);
+  const run = (speed) => {
+    const cc = createCellComposer({ scenes: [life], cols: 40, rows: 10, seed: 1 });
+    const st = { a: 0, b: 0, p: 0 };
+    cc.frame(st, 0);
+    const base = cc.stepsTotal;
+    let t = 0;
+    for (let k = 0; k < 18 * 20; k++) { t += speed / 18; cc.frame(st, t); assert.ok(cc.stepsLastFrame <= MAX_STEPS); }
+    return cc.stepsTotal - base;
+  };
+  const one = run(1), four = run(4), three = run(3);
+  assert.ok(Math.abs(one - 20 * STEP_HZ) <= 2, `1x: ${one}`);
+  assert.ok(Math.abs(four / one - 4) < 0.05, `4x gives ${(four / one).toFixed(2)}x the steps`);
+  assert.ok(Math.abs(three / one - 3) < 0.05, `3x gives ${(three / one).toFixed(2)}x the steps`);
+  // a stall: the app clamps dt to 0.25 s (x4 speed = 1 s of scene time = 30 steps wanted); 100 s jumps too
   const cc = createCellComposer({ scenes: [life], cols: 40, rows: 10, seed: 1 });
   const st = { a: 0, b: 0, p: 0 };
   cc.frame(st, 0);
-  cc.frame(st, 100); // a 100 s jump
-  assert.equal(cc.stepsLastFrame, 4);
-  // 4x speed at 18 fps wants 6.7 steps a frame
-  let t = 100;
-  for (let k = 0; k < 40; k++) { t += 4 / 18; cc.frame(st, t); assert.ok(cc.stepsLastFrame <= 4); }
-  assert.equal(cc.stepsLastFrame, 4);
+  cc.frame(st, 100);
+  assert.equal(cc.stepsLastFrame, MAX_STEPS);
+  const total = cc.stepsTotal;
+  cc.frame(st, 100.01); // the next normal frame owes nothing from the stall
+  assert.ok(cc.stepsLastFrame <= 1, `after a stall the next frame takes ${cc.stepsLastFrame} steps`);
+  assert.ok(cc.stepsTotal - total <= 1);
 });
 
 test('sim stepping: normal speed keeps real time (30 steps per scene second); paused (same t) steps nothing', () => {

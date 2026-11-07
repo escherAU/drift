@@ -10,14 +10,14 @@
 //                  step runs at a fixed 1/30 s. Same seed + same step count gives the same frame.
 //                  draw fills params.glyphs / params.colours in full and never mutates state.
 //
-// createCellComposer owns the sim states, steps them from a time accumulator (at most 4
-// steps per frame, so 4x speed slows the sim rather than burning CPU), and runs the
+// createCellComposer owns the sim states, steps them from a time accumulator (at most MAX_STEPS = 8
+// steps per frame: enough for 4x speed at 18 fps, never a spiral after a stall), and runs the
 // transition between two scenes: a per-cell dissolve, never a whole-screen cut.
 import { fadeOffsets } from './compose.js';
 
 export const STEP_HZ = 30;
 export const STEP_DT = 1 / STEP_HZ;
-export const MAX_STEPS = 4;
+export const MAX_STEPS = 8; // 4x speed at 18 fps wants 6.7 steps a frame; a stall (the app clamps dt to 0.25 s) is cut to this
 
 export function sceneKind(scene) {
   return scene && scene.kind ? scene.kind : 'ramp';
