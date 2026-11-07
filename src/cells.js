@@ -5,7 +5,9 @@
 //
 //   kind 'cells'   scene(t, w, h, params) fills params.glyphs (Uint16Array w*h, code points
 //                  from src/glyphs.js) and params.colours (Uint8Array w*h). Pure in t.
-//                  Every cell must be written (blank = 32, colour 0).
+//                  Every cell must be written (blank = 32, colour 0). params.t0, when the
+//                  composer supplies it, is the clock value when this scene became active, so
+//                  a scene may run on t - t0 (the artist does: a visit starts at the first stroke).
 //   kind 'sim'     { id, kind: 'sim', init(w, h, seed) -> state, step(state), draw(state, params) }
 //                  step runs at a fixed 1/30 s. Same seed + same step count gives the same frame.
 //                  draw fills params.glyphs / params.colours in full and never mutates state.
@@ -55,6 +57,7 @@ export function createCellComposer({ scenes, cols, rows, seed = 1 }) {
   };
   let gA, cA, gB, cB, thr;
   let states = scenes.map(() => null);
+  let since = scenes.map(() => null); // clock value when each scene became active (its visit started)
   let acc = 0, lastT = null;
   const params = { seed, glyphs: null, colours: null };
 
@@ -69,11 +72,13 @@ export function createCellComposer({ scenes, cols, rows, seed = 1 }) {
     thr = fadeOffsets(n, 0.98);
     for (let i = 0; i < n; i++) thr[i] += 0.01;
     states = scenes.map(() => null);
+    since = scenes.map(() => null);
     acc = 0;
   }
 
   function reset(t) {
     states = scenes.map(() => null);
+    since = scenes.map(() => null);
     acc = 0;
     lastT = Number.isFinite(t) ? t : null;
   }
@@ -86,6 +91,7 @@ export function createCellComposer({ scenes, cols, rows, seed = 1 }) {
   function drawInto(idx, t, g, col) {
     const scene = scenes[idx];
     params.glyphs = g; params.colours = col;
+    params.t0 = since[idx] === null ? t : since[idx]; // scene-local time: cells scenes may use t - t0
     if (sceneKind(scene) === 'sim') scene.draw(stateOf(idx), params);
     else scene(t, c.cols, c.rows, params);
   }
@@ -95,8 +101,10 @@ export function createCellComposer({ scenes, cols, rows, seed = 1 }) {
     const T = Number.isFinite(t) ? t : 0;
     const dissolving = st.p > 0 && st.b !== st.a;
     for (let i = 0; i < states.length; i++) {
-      if (i !== st.a && !(dissolving && i === st.b)) states[i] = null; // inactive scenes start fresh next time
+      if (i !== st.a && !(dissolving && i === st.b)) { states[i] = null; since[i] = null; } // inactive scenes start fresh next time
     }
+    if (since[st.a] === null) since[st.a] = T;
+    if (dissolving && since[st.b] === null) since[st.b] = T;
     // time -> fixed steps, capped
     if (lastT === null) lastT = T;
     let dt = T - lastT;

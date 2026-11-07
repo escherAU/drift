@@ -87,8 +87,10 @@ scenes join a playlist and are picked up by the shared test suites automatically
 ### The artist's gallery: adding a piece
 
 Drop a `.txt` file in `src/art/pieces/` and restart: the file is a piece (no code to change).
-Pieces are loaded once at start-up, sorted by filename, and drawn in that order (the seed
-rotates which comes first).
+Pieces are loaded once at start-up and drawn in a fixed order: the ones named in
+OPENING_ORDER (src/art/gallery.js: cat, lighthouse, whale) first, then the rest by filename
+(the seed rotates which comes first; the default seed 1 opens on the lighthouse). Each visit
+to the artist starts at the beginning of a drawing, not part-way through the cycle.
 
 ```
 title: My Piece

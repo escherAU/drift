@@ -301,3 +301,22 @@ test('bounce: gravity pulls down, bounces lose energy, and the balls are still m
   const sp = moving.balls.reduce((a, q) => a + Math.hypot(q.vx, q.vy), 0);
   assert.ok(sp > 1, `balls came to rest (speed sum ${sp})`);
 });
+
+test('scene-local time: a cells scene gets params.t0 = the clock when it became active; a dissolve target starts at its first frame; leaving resets it', () => {
+  const seen = [];
+  const mk = (id) => { const f = (t, w, h, p) => { seen.push([id, t, p.t0]); p.glyphs.fill(32); p.colours.fill(0); }; f.id = id; f.kind = 'cells'; return f; };
+  const A = mk('A'), B = mk('B');
+  const cc = createCellComposer({ scenes: [A, B], cols: 10, rows: 4, seed: 1 });
+  cc.frame({ a: 0, b: 0, p: 0 }, 100);
+  cc.frame({ a: 0, b: 0, p: 0 }, 101);
+  assert.deepEqual(seen.map((s) => s[2]), [100, 100], 'A started at 100');
+  seen.length = 0;
+  cc.frame({ a: 0, b: 1, p: 0.2 }, 150); // B joins the dissolve at 150
+  cc.frame({ a: 0, b: 1, p: 0.6 }, 151);
+  assert.deepEqual(seen.filter((s) => s[0] === 'B').map((s) => s[2]), [150, 150]);
+  assert.deepEqual(seen.filter((s) => s[0] === 'A').map((s) => s[2]), [100, 100], 'A keeps its start');
+  cc.frame({ a: 1, b: 1, p: 0 }, 160); // A is inactive now
+  seen.length = 0;
+  cc.frame({ a: 0, b: 0, p: 0 }, 300); // back to A: a new visit
+  assert.deepEqual(seen.map((s) => s[2]), [300]);
+});

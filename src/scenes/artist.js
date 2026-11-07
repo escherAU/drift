@@ -66,7 +66,9 @@ export default function artist(t, w, h, params) {
   c.fill(0);
   if (W === 0 || H === 0) return;
   const seed = Number.isFinite(params.seed) ? params.seed | 0 : 1;
-  const st = stateAt(timelineFor(W, H, seed), t);
+  // scene-local time when the composer supplies it (params.t0): a visit starts at the start of a drawing
+  const t0 = Number.isFinite(params.t0) ? params.t0 : 0;
+  const st = stateAt(timelineFor(W, H, seed), t - t0);
   if (!st || st.phase === 'rest') return;
   const p = st.piece;
   paintPiece(p, st.phase, st.sec, ERASE_SEC, {

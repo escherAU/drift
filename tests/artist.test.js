@@ -10,9 +10,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import artist, { timeline, stateAt, HOLD_SEC, ERASE_SEC, REST_SEC } from '../src/scenes/artist.js';
-import { PIECES, GALLERY_ERRORS, PIECES_DIR, loadGallery } from '../src/art/gallery.js';
+import { PIECES, GALLERY_ERRORS, PIECES_DIR, loadGallery, OPENING_ORDER } from '../src/art/gallery.js';
 import { buildPlan, pieceToText, strokeOrder, parsePiece } from '../src/art/engine.js';
-import { renderScene } from '../src/cells.js';
+import { renderScene, createCellComposer } from '../src/cells.js';
 import { isAllowedGlyph } from '../src/glyphs.js';
 import { PLAYLISTS } from '../src/scenes/index.js';
 import { WIDE_BMP } from './noncalm-scenes.test.js';
@@ -29,11 +29,15 @@ test('the artist is the last scene of the experimental playlist', () => {
 });
 
 // ---- the gallery
-test('gallery: every file parses (no errors), there are at least 8 pieces, loaded in filename order', () => {
+test('gallery: every file parses (no errors), there are at least 8 pieces, loaded in the gallery order (OPENING_ORDER first, then filename)', () => {
   assert.deepEqual(GALLERY_ERRORS, []);
   assert.ok(PIECES.length >= 8, `${PIECES.length} pieces`);
   const files = fs.readdirSync(PIECES_DIR).filter((f) => f.endsWith('.txt')).sort();
-  assert.deepEqual(PIECES.map((p) => p.file), files);
+  assert.deepEqual([...PIECES.map((p) => p.file)].sort(), files, 'every file is loaded once');
+  const names = PIECES.map((p) => p.file.replace(/\.txt$/i, ''));
+  assert.deepEqual(names.slice(0, OPENING_ORDER.length), OPENING_ORDER.filter((n) => names.includes(n)));
+  const rest = names.slice(OPENING_ORDER.length);
+  assert.deepEqual(rest, [...rest].sort(), 'the rest follow in filename order');
 });
 
 test('gallery: titles are unique and non-empty; no two pieces are identical; no file is a copy of another', () => {
@@ -288,4 +292,40 @@ test('capture: <piece>-half and -full at 120x40, plus artist-gallery.txt with ev
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ---- the start of a visit
+test('the default seed opens on the cat or the lighthouse, never the dragon', () => {
+  const first = stateAt(timeline(PIECES, W, H, 1), 0).piece.title;
+  assert.ok(['Cat', 'Lighthouse'].includes(first), `opens on ${first}`);
+});
+
+test('scene-local time: the composer hands the artist t0, so a visit begins at the start of a drawing (not mid-cycle)', () => {
+  const cc = createCellComposer({ scenes: [artist], cols: W, rows: H, seed: 1 });
+  const st = { a: 0, b: 0, p: 0 };
+  const lit = (f) => f.glyphs.reduce((n, g) => n + (g !== 32 ? 1 : 0), 0);
+  // the app's global clock is far into the cycle (here 100.3 s) when the artist is first shown
+  const first = cc.frame(st, 100.3);
+  const fresh = renderScene(artist, 0, W, H, 1);
+  assert.deepEqual(Array.from(first.glyphs), Array.from(fresh.glyphs), 'first frame = the piece at its own t = 0');
+  const litFirst = lit(first); // the composer reuses its buffer, so count now
+  const first4 = stateAt(timeline(PIECES, W, H, 1), 0);
+  assert.equal(first4.phase, 'draw');
+  // 3 s later it is 3 s into that same drawing
+  const later = cc.frame(st, 103.3);
+  const want = renderScene(artist, 3, W, H, 1);
+  assert.deepEqual(Array.from(later.glyphs), Array.from(want.glyphs));
+  assert.ok(lit(later) > litFirst, 'the drawing has progressed');
+  // leaving and returning starts a new visit from the top again
+  const cc2 = createCellComposer({ scenes: [artist, PLAYLISTS.experimental[0]], cols: W, rows: H, seed: 1 });
+  cc2.frame({ a: 0, b: 0, p: 0 }, 50);
+  cc2.frame({ a: 1, b: 1, p: 0 }, 60);
+  const back = cc2.frame({ a: 0, b: 0, p: 0 }, 200);
+  assert.deepEqual(Array.from(back.glyphs), Array.from(fresh.glyphs), 'a second visit also starts at t = 0');
+});
+
+test('scene-local time: without t0 (captures, shared tests) the artist still runs on the t it is given (pure, unchanged)', () => {
+  const a = renderScene(artist, 12, W, H, 1), b = renderScene(artist, 12, W, H, 1);
+  assert.deepEqual(Array.from(a.glyphs), Array.from(b.glyphs));
+  assert.ok(litCount(a) > 20);
 });
