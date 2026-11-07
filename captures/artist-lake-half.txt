@@ -1,4 +1,4 @@
-=== Mountain Lake (lake.txt) 50% drawn, t=41.0s 120x40
+=== Mountain Lake (lake.txt) 50% drawn, t=104.1s 120x40
                                                                                                                         
                                                                                                                         
                                                                                                                         

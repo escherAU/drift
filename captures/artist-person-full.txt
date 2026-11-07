@@ -1,4 +1,4 @@
-=== Waving (person.txt) finished, t=133.7s 120x40
+=== Waving (person.txt) finished, t=164.9s 120x40
                                                                                                                         
                                                                                                                         
                                                                                                                         

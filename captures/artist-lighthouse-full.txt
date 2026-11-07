@@ -1,4 +1,4 @@
-=== Lighthouse (lighthouse.txt) finished, t=82.0s 120x40
+=== Lighthouse (lighthouse.txt) finished, t=18.0s 120x40
                                                                                                                         
                                                                                                                         
                                                                                                                         

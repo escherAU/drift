@@ -1,4 +1,4 @@
-=== Cat (cat.txt) 50% drawn, t=246.3s 120x40
+=== Cat (cat.txt) 50% drawn, t=243.0s 120x40
                                                                                                                         
                                                                                                                         
                                                                                                                         

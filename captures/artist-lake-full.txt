@@ -1,4 +1,4 @@
-=== Mountain Lake (lake.txt) finished, t=50.0s 120x40
+=== Mountain Lake (lake.txt) finished, t=113.1s 120x40
                                                                                                                         
                                                                                                                         
                                                                                                                         

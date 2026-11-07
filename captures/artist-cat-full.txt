@@ -1,4 +1,4 @@
-=== Cat (cat.txt) finished, t=254.2s 120x40
+=== Cat (cat.txt) finished, t=250.9s 120x40
                                                                                                                         
                                                                                                                         
                                                                                                                         

@@ -1,4 +1,4 @@
-=== Whale (whale.txt) finished, t=224.4s 120x40
+=== Whale (whale.txt) finished, t=50.0s 120x40
                                                                                                                         
                                                                                                                         
                                                                                                                         

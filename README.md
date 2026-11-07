@@ -42,7 +42,9 @@ Options (also available as environment variables):
 Every key lives in one table, `src/keymap.js`; the help panel and `drift --help` are
 generated from it. While the help panel is open the animation is frozen behind it (nothing
 is written), only `h`, Esc and `q`/Ctrl+C act, and closing it restores your pause state.
-Unknown keys and arrow keys are ignored. There is no status bar.
+Unknown keys and arrow keys are ignored. There is no status bar. The panel shrinks to fit:
+roomy at 30 rows or more, compact (no blank lines between groups) at 23 to 29, and below
+that it shows what fits and ends with "(+N more, enlarge window)".
 
 ## Modes
 
@@ -62,8 +64,8 @@ contrast) is deferred, not dropped, and lands exactly once when the window ends.
 
 Playlists (`src/scenes/index.js`, `PLAYLISTS`): calm = squiggle, sunburst, plasma, ripples,
 rain; chaos = **glyphrain** (fast, dense multi-colour rain of letters, digits and symbols),
-**swarm** (bouncing glyphs with fading trails), **glitch** (words assembling out of noise),
-**fireworks** (rockets bursting into rings of glyphs) and **vortex** (a spinning spiral);
+**swarm** (bouncing glyphs with fading trails), **glitch** (words assembling out of noise; streams scale with the screen),
+**fireworks** (several rockets at once, bursts that scale with the screen) and **vortex** (a spinning spiral);
 high contrast, strictly two-tone = **life** (Conway's Game of Life seeded from gliders,
 R-pentomino, acorn, pulsar and friends, half-block pixels; reseeds when it dies or stalls),
 **tunnel** (a slowly turning checkerboard tunnel from half and full blocks; no shade blocks,
@@ -109,8 +111,8 @@ test suite reports it. `node tools/capture.mjs` writes `captures/artist-<piece>-
 drawn), `-full.txt`, and `captures/artist-gallery.txt` with every piece.
 
 Glyphs outside calm come from an allow-list (`src/glyphs.js`): ASCII, a few Latin-1
-symbols, Greek, arrows 2190-2199, box drawing, blocks, braille, ~20 maths operators and a
-hand-picked set of geometric shapes. Everything is in the Basic Multilingual Plane and
+symbols, Greek, arrows 2190-2195, box drawing, blocks, braille, ~20 maths operators and a
+hand-picked set of geometric shapes. Ten code points Cascadia Mono lacks (2196-2199, 2205, 2207, 2208, 2227, 2228, 222A) were removed; a test scans src/ so none comes back. Everything is in the Basic Multilingual Plane and
 single-width. **Glyph coverage in Cascadia Mono could not be verified from the build
 machine** (the font is not installed under C:\Windows\Fonts there); see the unsure list in
 the DRIFT-2 report. Arrows 21A0-21FF, the rest of 2200-22FF and the rest of 25A0-25FF are
@@ -140,7 +142,9 @@ phosphor, green phosphor, ice blue, violet, white, then a slow orange/violet ble
 Config: `%APPDATA%\drift\config.json`, `{"colour":"claude","mode":"calm","chaosPalette":"neon","invert":false}`.
 Each field is checked on its own and falls back to its default if it is wrong; a v1 file
 containing only `colour` loads as calm. Missing or corrupt files are ignored. Drift never
-writes anywhere else. Override the path with `DRIFT_CONFIG`.
+writes anywhere else. Override the path with `DRIFT_CONFIG`. Saves are atomic (a temp file
+in the same folder, then a rename), and each save re-reads the file and changes only the field you
+touched, so two windows sharing one file do not undo each other.
 
 ## Architecture
 
@@ -165,7 +169,8 @@ Non-calm scene contract (`src/cells.js`): `kind: 'cells'` scenes are `scene(t, w
 filling `params.glyphs` (Uint16Array code points) and `params.colours` (Uint8Array palette
 indexes), pure in `t`; `kind: 'sim'` scenes are `{init(w,h,seed), step(state) at 1/30 s,
 draw(state, params)}` (same seed + same step count = same frame). The cell composer steps
-sims from an accumulator, at most 4 steps per frame.
+sims from an accumulator, at most 8 steps per frame (enough for 4x speed at 18 fps; a stall
+cannot snowball). A cells scene also gets `params.t0`, the clock when it became active.
 
 Terminal handling: alternate screen, hidden cursor, raw mode; restored on `q`,
 Ctrl+C (byte 0x03), SIGINT/SIGTERM, uncaught exceptions, unhandled rejections and
