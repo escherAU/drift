@@ -429,13 +429,14 @@ export function validateSkin(obj) {
   if (obj.frame !== undefined) {
     const f = obj.frame;
     if (!isObj(f)) return fail('frame must be an object');
-    const k = unknownKey(f, ['show', 'glyphs', 'title', 'colour'], 'frame');
+    const k = unknownKey(f, ['show', 'glyphs', 'title', 'colour', 'ornament'], 'frame');
     if (k) return fail(k);
     const o = {};
     if (f.show !== undefined) { if (!SHOW.includes(f.show)) return fail(`frame.show must be one of ${SHOW.join(', ')}`); o.show = f.show; }
     if (f.glyphs !== undefined) { const e = exactChars(f.glyphs, 'frame.glyphs', 8); if (e) return fail(e); o.glyphs = f.glyphs; }
     if (f.title !== undefined) { const e = strErr(f.title, 'frame.title', 30); if (e) return fail(e); o.title = f.title; }
     if (f.colour !== undefined) { const e = idx(f.colour, 'frame.colour'); if (e) return fail(e); o.colour = f.colour; }
+    if (f.ornament !== undefined) { const e = strErr(f.ornament, 'frame.ornament', 30); if (e) return fail(e); o.ornament = f.ornament; }
     out.frame = o;
   }
   if (obj.console !== undefined) {
@@ -446,7 +447,7 @@ export function validateSkin(obj) {
   if (obj.menu !== undefined) {
     const m = obj.menu;
     if (!isObj(m)) return fail('menu must be an object');
-    const k = unknownKey(m, ['layout', 'anchor', 'cursor', 'title', 'box'], 'menu');
+    const k = unknownKey(m, ['layout', 'anchor', 'cursor', 'title', 'box', 'prompt', 'autostartSeconds'], 'menu');
     if (k) return fail(k);
     const o = {};
     if (m.layout !== undefined) { if (!LAYOUTS.includes(m.layout)) return fail(`menu.layout must be one of ${LAYOUTS.join(', ')}`); o.layout = m.layout; }
@@ -454,6 +455,8 @@ export function validateSkin(obj) {
     if (m.cursor !== undefined) { const e = exactChars(m.cursor, 'menu.cursor', 1); if (e) return fail(e); o.cursor = m.cursor; }
     if (m.title !== undefined) { const e = strErr(m.title, 'menu.title', 40); if (e) return fail(e); o.title = m.title; }
     if (m.box !== undefined) { const e = exactChars(m.box, 'menu.box', 8); if (e) return fail(e); o.box = m.box; }
+    if (m.prompt !== undefined) { const e = strErr(m.prompt, 'menu.prompt', 60); if (e) return fail(e); o.prompt = m.prompt; }
+    if (m.autostartSeconds !== undefined) { if (!Number.isInteger(m.autostartSeconds) || m.autostartSeconds < 5 || m.autostartSeconds > 60) return fail('menu.autostartSeconds must be a whole number from 5 to 60'); o.autostartSeconds = m.autostartSeconds; }
     out.menu = o;
   }
   if (obj.help !== undefined) {

@@ -10,10 +10,9 @@
 // is the caller's decision. The boot's last zoom frame IS this border. Only the border cells are written.
 import { drawBox, putEdgeTitle, put, lenOf, uiOf } from './ui.js';
 
-// The ornament set into the bottom edge, centred (a short text such as 'Ψ · Δ · Ξ'). Empty for now: the schema
-// item that adds a frame ornament returns it from here, and nothing else in the chrome changes.
-export function chromeOrnament(skin) { // eslint-disable-line no-unused-vars
-  return '';
+// The ornament set into the bottom edge, centred (skin.frame.ornament, a short text such as 'Ψ · Δ · Ξ'); empty without one.
+export function chromeOrnament(skin) {
+  return (skin && skin.frame && skin.frame.ornament) || '';
 }
 
 // Text centred in the bottom edge of the frame with a space on each side, clipped to the edge.
