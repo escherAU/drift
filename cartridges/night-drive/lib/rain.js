@@ -8,7 +8,7 @@
 //   runs      about 1 drop in 4.5 is a runner: it slides down and to the right with the wind, a cell every 3 to 5 steps for 3 to 9 cells,
 //             leaving a short trail of ╲ behind it
 //   wiper     a cycle of 72 steps (2.4 s): still for 44, then 28 steps (0.93 s) up and back. The arm is a line of ╱ from the pivot, swinging
-//             from SREST to STOP columns per row (past upright, to the left). Every cell the blade crosses is dried: the water on it is
+//             from sRest to sTop columns per row (past upright, to the left). Every cell the blade crosses is dried: the water on it is
 //             gone, the rain in the air shows nothing there for 12 to 19 steps, and the blade throws spray off its leading edge
 //   spray     short-lived particles (6 to 11 steps) thrown from the blade along its sweep and up: * then x then a degree sign
 import { rnd } from '../../../src/scenes/simrng.js';
