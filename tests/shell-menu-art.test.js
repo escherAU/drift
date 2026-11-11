@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { isAllowedGlyph } from '../src/glyphs.js';
 import { drawMenu } from '../src/shell/menu.js';
-import { drawChrome } from '../src/shell/chrome.js';
+import { drawChrome, chromeOrnament, drawEdgeOrnament } from '../src/shell/chrome.js';
 import { newFrame } from '../src/shell/ui.js';
 import { DEFAULT_UI } from '../src/cartridge/palette.js';
 import { isWide, isInvisible } from './helpers-width.js';
@@ -287,4 +287,61 @@ test('grid: 22x7 tiles, 3 per row from 120 columns and 2 from 100, a list below 
   const g = newFrame(120, 40);
   drawMenu(g, { entries: mkEntries(3), index: 0 }, mkSkin('grid', { box: '╔═╗║╝═╚║' }));
   assert.equal(count(g, '╔'), 1);
+});
+
+// ---- chrome
+
+
+test('chrome: the title sits in the top edge with spaces round it, as ╡ TITLE ╞ only when the top glyph is ═ or ━', () => {
+  const top = (glyphs, title = 'Journal', cols = 60) => {
+    const f = newFrame(cols, 10);
+    drawChrome(f, { palette: { ui: UI }, frame: { glyphs, title, colour: 6 } });
+    return { f, line: frameLines(f)[0] };
+  };
+  assert.ok(top('◆═◆║◆═◆║').line.includes('╡ Journal ╞'));
+  assert.ok(top('┏━┓┃┛━┗┃').line.includes('┥ Journal ┝'));
+  const plain = top('┌─┐│┘─└│').line;
+  assert.ok(plain.includes(' Journal ') && !plain.includes('╡') && !plain.includes('╞'), plain);
+  const { f } = top('◆═◆║◆═◆║');
+  // border in the frame colour, title in the head shade, the spaces are blanks
+  assert.equal(f.shades[cell(f, 0, 0)], 6);
+  assert.equal(f.shades[cell(f, 59, 9)], 6);
+  const x = frameLines(f)[0].indexOf('Journal');
+  assert.equal(f.shades[cell(f, x, 0)], UI.head);
+  assert.equal(f.glyphs[cell(f, x - 1, 0)], 32);
+  assert.equal(f.shades[cell(f, x - 1, 0)], 0);
+  assert.equal(f.glyphs[cell(f, x - 2, 0)], 0x2561, 'the cap');
+  // the rest of the edge is the border glyph
+  assert.equal(frameLines(f)[0][1], '═');
+  assert.equal(frameLines(f)[9].slice(1, 59), '═'.repeat(58));
+  // a title too long for the edge is cut, never overflows the corners; no colour falls back to the dim shade
+  const long = top('◆═◆║◆═◆║', 'A very very long title indeed', 20);
+  assert.equal(long.line[19], '◆');
+  assert.equal(long.line[0], '◆');
+  const dflt = newFrame(30, 6);
+  drawChrome(dflt, { palette: { ui: UI }, frame: { glyphs: '+-+|+-+|' } });
+  assert.equal(dflt.shades[0], UI.dim);
+  // every size: no throw, allowed glyphs, in palette, interior untouched
+  for (const [w, h] of SIZES) {
+    const base = dirty(w, h), g = dirty(w, h);
+    assert.doesNotThrow(() => drawChrome(g, { palette: { ui: UI }, frame: { glyphs: '◆═◆║◆═◆║', title: 'Journal', colour: 4 } }));
+    assert.deepEqual(problems(g, `chrome ${w}x${h}`), []);
+    for (let y = 1; y < h - 1; y++) for (let xx = 1; xx < w - 1; xx++) assert.equal(g.glyphs[cell(g, xx, y)], base.glyphs[cell(g, xx, y)]);
+  }
+});
+
+test('chrome: the bottom-edge ornament hook is empty for now and draws centred in the bottom edge when it has text', () => {
+  assert.equal(chromeOrnament({ frame: { glyphs: '◆═◆║◆═◆║' } }), '');
+  const before = newFrame(40, 8), after = newFrame(40, 8);
+  drawChrome(before, { palette: { ui: UI }, frame: { glyphs: '◆═◆║◆═◆║' } });
+  drawChrome(after, { palette: { ui: UI }, frame: { glyphs: '◆═◆║◆═◆║' } });
+  assert.deepEqual(Array.from(after.glyphs), Array.from(before.glyphs), 'an empty ornament changes nothing');
+  drawEdgeOrnament(after, 'Ψ · Δ', 6);
+  const bottom = frameLines(after)[7];
+  assert.ok(bottom.includes(' Ψ · Δ '), bottom);
+  assert.equal(bottom[0], '◆');
+  assert.equal(bottom[39], '◆');
+  assert.equal(Math.abs(bottom.indexOf('Ψ') - (40 - 5) / 2) <= 1, true, 'centred');
+  const tiny = newFrame(6, 3);
+  assert.doesNotThrow(() => drawEdgeOrnament(tiny, 'a long ornament that cannot fit', 6));
 });
