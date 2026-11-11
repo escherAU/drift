@@ -8,7 +8,7 @@
   "runtime": "cartridge",
   "code": "DM-01",
   "facts": [
-    "Woodsy fantasy · about 3 min"
+    "Woodsy fantasy · about 4 min"
   ],
   "labelHue": "#6FAE5A",
   "scenes": [
@@ -21,6 +21,11 @@
       "id": "tallow",
       "kind": "sim",
       "title": "The Tallow & Tin"
+    },
+    {
+      "id": "cinderhorn",
+      "kind": "cells",
+      "title": "The Cinderhorn"
     }
   ],
   "programs": [
@@ -30,7 +35,8 @@
       "transition": "dissolve",
       "scenes": [
         "thornwell",
-        "tallow"
+        "tallow",
+        "cinderhorn"
       ],
       "sceneSeconds": 75
     }
@@ -50,6 +56,13 @@
       "scene": "tallow",
       "note": "about 1 min",
       "desc": "Warm ale, a crackling hearth, and a rumour about the Lamp."
+    },
+    {
+      "label": "THE CINDERHORN",
+      "program": "tale",
+      "scene": "cinderhorn",
+      "note": "about 1 min",
+      "desc": "A stag of embers blocks the road. Orrin stands his ground."
     },
     {
       "label": "Eject the cartridge",
@@ -76,6 +89,17 @@
       "icon": [
         "┌▲▲┐",
         "└▓▓┘"
+      ],
+      "minutes": 1
+    },
+    {
+      "id": "cinderhorn",
+      "numeral": "III",
+      "place": "Ashen Clearing · noon",
+      "line": "A stag of embers blocks the road. Orrin stands his ground.",
+      "icon": [
+        "ψ  ψ",
+        "▀██▀"
       ],
       "minutes": 1
     }

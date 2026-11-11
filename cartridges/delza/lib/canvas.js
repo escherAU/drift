@@ -44,19 +44,23 @@ export function fillRect(cv, x, y, w, h, cp, col) {
 //   opts.hue    one hue letter for every cell when there is no ink (default d)
 //   opts.shade  force this shade (0 to 3) on every cell, whatever the ink says
 //   opts.col    force one palette index on every cell
+//   opts.remap  swap hue letters before colouring, e.g. { e: 'f', f: 'h' } (the Cinderhorn cooling)
+//   opts.keep   a function (column, row) -> true to draw that cell, false to leave it (a reveal that goes cell by cell)
 export function blit(cv, x, y, art, opts = {}) {
-  const { ink, hue = 'd', shade, col } = opts;
+  const { ink, hue = 'd', shade, col, remap, keep } = opts;
   for (let j = 0; j < art.length; j++) {
     const row = art[j];
     const inkRow = ink ? ink[j] : null;
     let i = 0;
     for (const ch of row) {
-      if (ch !== ' ') {
+      if (ch !== ' ' && (!keep || keep(x + i, y + j))) {
         let k = col;
         if (k === undefined) {
-          const letter = inkRow && inkRow[i] !== undefined && inkRow[i] !== ' ' ? inkRow[i] : hue;
+          let letter = inkRow && inkRow[i] !== undefined && inkRow[i] !== ' ' ? inkRow[i] : hue;
           const lower = letter === letter.toLowerCase();
-          k = colour(letter.toLowerCase(), shade !== undefined ? shade : lower ? 2 : 3);
+          letter = letter.toLowerCase();
+          if (remap && remap[letter]) letter = remap[letter];
+          k = colour(letter, shade !== undefined ? shade : lower ? 2 : 3);
         }
         put(cv, x + i, y + j, ch.codePointAt(0), k);
       }
