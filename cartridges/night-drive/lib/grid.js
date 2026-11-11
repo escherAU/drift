@@ -1,8 +1,9 @@
 // The clock and the grid maths of Sundown Grid. Pure numbers, no drawing.
 //
 // Everything that moves in the scene moves on a 15 Hz tick, counted from the scene's own start: a picture is a pure function of
-// the tick, so it repeats exactly. A tick is 1/15 s, a little longer than a frame at 18 fps, so a frame never spans two ticks and
-// the number of things that change in a frame can be counted and capped.
+// the tick, so it repeats exactly. A tick is 1/15 s, a little longer than a frame at 18 fps, so at 1x a frame spans at most one tick;
+// at 4x (4/18 s a frame) it spans three or four. The number of things that change in a frame can therefore be counted and capped, for
+// one tick and for four in a row: see the budget below.
 //
 //   horizontals   one every 0.8 s = 12 ticks. Each one follows the same path, a table of rows by tick (lineTable); the one that is
 //                 q ticks old is at row table[q], and the lines in flight are 12 ticks apart on that path.
@@ -10,8 +11,10 @@
 //   sinks         the sun steps down a row every 225 ticks (15 s) for 60 s and back up for 60 s: 1800 ticks, 120 s, one loop.
 //   sways         every 600 ticks (40 s) the left palm sways at 10 s and the right at 30 s, for 22 ticks: a sway every 20 s.
 //
-// A slide, a sink and a moving horizontal each change a share of the picture; capsOf keeps their sum under budget on every tick: taken
-// mod 12 (a horizontal's period) the slides fall on ticks 1, 4, 7 and 10, the sinks on 0, 3, 6 and 9, a new horizontal arrives on 0.
+// A slide, a sink and a moving horizontal each change a share of the picture; planOf keeps their sum under budget on every tick and on
+// every four in a row: taken mod 12 (a horizontal's period) the slides fall on ticks 1, 4, 7 and 10, the sinks on 0, 3, 6 and 9, a new
+// horizontal arrives on 0. The slide is always on tick 1 of its second and the sink on tick 0 of its 15 s (the scene promises both), so
+// the horizontals' steps are what the plan places.
 export const TICK_HZ = 15;
 export const LINE_TICKS = 12;
 export const SLIDE_TICKS = 15;
@@ -58,18 +61,100 @@ export function gapAt(e, slides, G) {
 
 // ---- the horizontals
 
-// The most horizontals that may change row on each tick of a horizontal's 12-tick period, for a window w x h whose sun costs
-// `slideCells` cells to slide and `sinkCells` to step down. A moving line costs 2 * w cells (its old row and its new one), a new
-// line arriving as the nearest leaves the same again; no picture may change more than BUDGET of its cells. Never more than two.
+// ---- the budget
+//
+// A frame at 1x spans at most one tick, but the console can step the clock 2x or 4x a frame: 4/18 s is 3.33 ticks, so a 4x frame holds
+// the changes of up to four ticks together. The scene is a pure function of time, with no memory of the last frame, so the calm has to
+// be in the schedule: no single tick may change more than BUDGET of the cells, and no four ticks in a row more than BUDGET_WINDOW
+// (the dissolve into or out of the scene adds about 11% on top at 4x, and the photosensitivity rule is 30%).
 export const BUDGET = 0.115;
-export function capsOf(w, h, slideCells, sinkCells) {
-  const caps = [];
-  for (let r = 0; r < LINE_TICKS; r++) {
-    const busy = (r % 3 === 1 ? slideCells : r % 3 === 0 ? sinkCells : 0) + (r === 0 ? 2 * w : 0);
-    // the new line arriving on tick 0 counts as one of the two that may move
-    caps.push(Math.max(0, Math.min(r === 0 ? 1 : 2, Math.floor((BUDGET * w * h - busy) / (2 * w)))));
+export const BUDGET_WINDOW = 0.17;
+export const WINDOW_TICKS = 4;
+// A window too small to hold the steps that keep the horizontals apart (every step costs 2 / h of the picture, so the short windows have
+// the most to pay) gets the least budget that does, raised by this much at a time.
+const RAISE = 0.005;
+// What the plan keeps back from each budget: the palms' sway, and the sum of the changes being a little more than their union.
+const MARGIN = 0.002;
+
+// What changes on each tick of the 1800-tick loop apart from the horizontals' steps: whatever the sun changes (sunCells[m], the slides
+// and the sinks; the scene counts them) and the arrival of a new horizontal as the nearest leaves (2 * w cells). The worst of each,
+// over the loop, for a tick that is r mod 12 (one tick) and for the four ticks that start on one (the steps are a function of the tick
+// mod 12, so only these matter).
+function eventPeaks(w, sunCells) {
+  const e = new Float64Array(LOOP_TICKS);
+  for (let m = 0; m < LOOP_TICKS; m++) e[m] = sunCells[m] + (m % LINE_TICKS === 0 ? 2 * w : 0);
+  const one = new Array(LINE_TICKS).fill(0), four = new Array(LINE_TICKS).fill(0);
+  for (let m = 0; m < LOOP_TICKS; m++) {
+    let sum = 0;
+    for (let i = 0; i < WINDOW_TICKS; i++) sum += e[(m + i) % LOOP_TICKS];
+    one[m % LINE_TICKS] = Math.max(one[m % LINE_TICKS], e[m]);
+    four[m % LINE_TICKS] = Math.max(four[m % LINE_TICKS], sum);
   }
-  return caps;
+  return { one, four };
+}
+
+// The worst four ticks, in cells, when caps[r] horizontals step on every tick that is r mod 12 (a step costs 2 * w cells: its old row
+// and its new one), and the worst single tick.
+function worstOf(peaks, caps, w) {
+  let one = 0, four = 0;
+  for (let r = 0; r < LINE_TICKS; r++) {
+    let n = 0;
+    for (let i = 0; i < WINDOW_TICKS; i++) n += caps[(r + i) % LINE_TICKS];
+    one = Math.max(one, peaks.one[r] + 2 * w * caps[r]);
+    four = Math.max(four, peaks.four[r] + 2 * w * n);
+  }
+  return { one, four };
+}
+
+// At every tick the n horizontals are on n different rows, nearest last.
+function apart(table, n) {
+  for (let k = 0; k < LINE_TICKS; k++) for (let j = 1; j < n; j++) if (table[j * LINE_TICKS + k] <= table[(j - 1) * LINE_TICKS + k]) return false;
+  return true;
+}
+
+// The most horizontals that may step on each tick of a horizontal's 12-tick period (caps[r] for ticks r mod 12), for a window w x h
+// whose sun changes sunCells[m] cells on tick m of the loop, with n horizontals on the `below` rows under the horizon.
+// Every set of caps that keeps one tick under BUDGET and four ticks under a window budget (no more than two on a tick, one on the tick
+// a new horizontal arrives) is tried, the most steps first (more steps, smaller jumps, no more than there are rows to cover), and the
+// first that lets the horizontals keep apart (lineTable) is used. The window budget starts at BUDGET_WINDOW and goes up by RAISE until
+// one does: a big window never needs more, a small one is as calm as its pictures allow. `level` is the window budget it took (above 1
+// when one tick had to be let over BUDGET too, Infinity when nothing keeps the horizontals apart): a plan over BUDGET_WINDOW is a
+// window with too many horizontals for its rows.
+const planMemo = new Map();
+export const capsOf = (w, h, sunCells, below, n) => planOf(w, h, sunCells, below, n).caps;
+export function planOf(w, h, sunCells, below, n) {
+  const key = [w, h, below, n, sunCells.join(',')].join('|');
+  let plan = planMemo.get(key);
+  if (plan) return plan;
+  let found = null, level = Infinity;
+  const peaks = eventPeaks(w, sunCells), cells = w * h, want = Math.max(0, below - 1);
+  // first with one tick held to BUDGET, then (a window whose arrival alone is over it) with that raised as well
+  for (let pass = 0; pass < 2 && !found; pass++) for (let budget = BUDGET_WINDOW; budget <= 1 && !found; budget += RAISE) {
+    const one = (pass === 0 ? BUDGET : Math.max(BUDGET, budget - 0.055)) * cells, four = (budget - MARGIN) * cells;
+    const list = [], caps = new Array(LINE_TICKS).fill(0);
+    const rec = (r) => {
+      if (r === LINE_TICKS) {
+        const total = caps.reduce((a, v) => a + v, 0);
+        if (total >= Math.max(1, n - 1) && total <= want) list.push({ caps: caps.slice(), total, worst: worstOf(peaks, caps, w).four });
+        return;
+      }
+      for (let v = 0; v <= (r === 0 ? 1 : 2); v++) {
+        caps[r] = v;
+        const x = worstOf(peaks, caps, w);
+        if (x.one > one || x.four > four) break;
+        rec(r + 1);
+      }
+      caps[r] = 0;
+    };
+    rec(0);
+    list.sort((a, b) => b.total - a.total || a.worst - b.worst);
+    for (const c of list) if (apart(lineTable(below, n, c.caps), n)) { found = c.caps; level = pass + budget; break; }
+  }
+  // nothing keeps them apart (a window of a few rows): the plain spread, one step on every tick but the arrival's
+  if (!found) found = new Array(LINE_TICKS).fill(0).map((v, r) => (r === 0 ? 0 : 1));
+  plan = { caps: found, level };
+  planMemo.set(key, plan);
+  return plan;
 }
 
 const tables = new Map();
@@ -132,9 +217,23 @@ export function lineTable(below, n, caps) {
   }
   t = new Array(N).fill(1);
   const done = steps.length;
-  for (let i = 0, q = 0; q < N; q++) {
-    while (i < done && steps[i] <= q) i++;
-    t[q] = done ? 1 + Math.round((i * Tt) / done) : 1;
+  // the rows each step covers: one each, and the rest of the way shared out in growing portions (the nearer a step, the bigger), so a
+  // line covers more ground the nearer it is even when there are few steps; sorted, so no step is smaller than the one before
+  const jumps = new Array(done).fill(1);
+  if (done) {
+    let wsum = 0;
+    for (let i = 0; i < done; i++) wsum += done + i;
+    for (let i = 0, acc = 0, given = 0; i < done; i++) {
+      acc += ((Tt - done) * (done + i)) / wsum;
+      const upTo = Math.round(acc);
+      jumps[i] += upTo - given;
+      given = upTo;
+    }
+    jumps.sort((a, b) => a - b);
+  }
+  for (let i = 0, q = 0, row = 1; q < N; q++) {
+    while (i < done && steps[i] <= q) row += jumps[i++];
+    t[q] = row;
   }
   tables.set(key, t);
   return t;

@@ -524,7 +524,17 @@ test('sundown (S9): at 80x24 the sun is 34x8, there are no palms and four horizo
   const cyan0 = [];
   for (let i = 0; i < f.g.length; i++) if (f.c[i] === CYAN[0]) cyan0.push([i % 80, Math.floor(i / 80)]);
   assert.ok(cyan0.length > 20);
-  assert.ok(cyan0.filter(([, y]) => y === hz + 2).every(([x]) => Math.abs(x - 40) <= 5));
+  // on the rows under the horizon that no horizontal covers, the outer verticals are as far from the middle as the grid's spread says (10 columns
+  // a row-share of 11 rows, four of them out)
+  const covered = lineRows(0, 80, 24);
+  let bare = 0;
+  for (const y of [hz + 1, hz + 2, hz + 3]) {
+    if (covered.includes(y)) continue;
+    bare++;
+    assert.ok(cyan0.filter(([, yy]) => yy === y).every(([x]) => Math.abs(x - 40) <= (40 * (y - hz)) / 11 + 1), `row ${y}`);
+    assert.ok(cyan0.some(([, yy]) => yy === y), `row ${y} shows the verticals`);
+  }
+  assert.ok(bare >= 1, 'at least one of the first three rows is bare');
 });
 
 // ---- S10
@@ -588,4 +598,58 @@ test('sundown (S10): no cell that keeps its glyph changes family or moves more t
   // control: the checker does see a family change
   assert.notEqual(familyOf(SUN[3])[0], familyOf(TANG[3])[0]);
   assert.ok(ramps >= 0);
+});
+
+// ---- S11
+
+// Calm at speed. The console can step the clock 2x or 4x per frame (4/18 s a frame spans three to four 15 Hz ticks), so the slide, the
+// sink and the line moves of several ticks land in one frame. The scene's own worst frame must stay low enough that a dissolve on top
+// of it (about 11% at 4x) stays under the 30% rule. Each walk is run from several start offsets inside one frame, so the frame grid meets the ticks at other phases.
+// The sizes the plan was tuned on, the first size of every LAYOUTS breakpoint, just under them, and sizes it never saw (the plan comes
+// from lib/grid.js capsOf, which reads each size's own sun and rows; a number tuned on a few sizes has to hold on others).
+const CALM_SIZES = [[120, 40], [80, 24], [240, 67], [41, 11], [40, 12], [60, 18]];
+for (const l of LAYOUTS) if (l.minCols > 0) CALM_SIZES.push([l.minCols, l.minRows], [l.minCols - 1, l.minRows], [l.minCols, l.minRows - 1]);
+CALM_SIZES.push([110, 36], [90, 28], [150, 50], [100, 40], [130, 30], [200, 60], [70, 22], [80, 23], [101, 33]);
+// 12% at 1x and 18% at 2x and 4x, except in short windows: the new horizontal alone changes 2 / rows of the picture as the nearest leaves
+// (60x18: 11.1%, 41x11: 18.2%) and on every 60 s the sun steps on that same tick, which no schedule can move (60x18: 13.3%, 41x11:
+// 23.5%). So at 1x under 20 rows the limit is 14%, and under 14 rows every speed is held under 28%.
+const calmLimit = (h, step) => (h < 14 ? 0.28 : step === 1 ? (h < 20 ? 0.14 : 0.12) : 0.18);
+const calmWorst = (w, h, step, off) => {
+  let prev = frame(off, w, h), worst = 0, at = 0;
+  const n = Math.floor((120 * FPS) / step);
+  for (let k = 1; k <= n; k++) {
+    const T = off + (k * step) / FPS;
+    const cur = frame(T, w, h);
+    const share = changedFraction(cur.g, prev.g, cur.c, prev.c);
+    if (share > worst) { worst = share; at = T; }
+    prev = cur;
+  }
+  return { worst, at };
+};
+
+test('sundown (S11): calm at speed: stepping the clock 1/18, 2/18 and 4/18 s a frame over 120 s, the worst frame is under 12% at 1x and 18% at 2x and 4x (14% at 1x under 20 rows, 28% under 14), at every size and at several frame phases', () => {
+  const rows = [], bad = [];
+  for (const [w, h] of CALM_SIZES) {
+    const cells = [];
+    for (const step of [1, 2, 4]) {
+      let worst = 0, at = 0;
+      const phases = step === 4 ? 8 : 4;
+      for (let i = 0; i < phases; i++) {
+        const off = (i * step) / (FPS * phases); // the frame grid meets the ticks at other phases: the console's start is not ours
+        const r = calmWorst(w, h, step, off);
+        if (r.worst > worst) { worst = r.worst; at = r.at; }
+      }
+      cells.push(`${step}x ${(worst * 100).toFixed(2)}% at ${at.toFixed(2)} s`);
+      if (!(worst < calmLimit(h, step))) bad.push(`${w}x${h} ${step}x: ${(worst * 100).toFixed(2)}% at ${at.toFixed(2)} s (limit ${calmLimit(h, step) * 100}%)`);
+    }
+    rows.push(`${w}x${h}: ${cells.join(' | ')}`);
+  }
+  console.log('# sundown calm at speed:\n# ' + rows.join('\n# '));
+  assert.deepEqual(bad, [], 'frames over the limit');
+});
+
+test('sundown (S11 control): the same walk sees a scene that changes every cell on every other frame', () => {
+  const flicker = Object.assign((t, w, h, p) => { p.glyphs.fill(cp('█')); p.colours.fill(Math.floor(t * 18 + 1e-6) % 2 ? SUN[1] : SUN[2]); }, { id: 'flicker' });
+  const a = renderScene(flicker, 0, 120, 40), b = renderScene(flicker, 1 / 18, 120, 40);
+  assert.ok(!(changedFraction(b.glyphs, a.glyphs, b.colours, a.colours) < calmLimit(40, 4)));
 });

@@ -379,8 +379,11 @@ take 1.2 s from the horizon to the car, a street lamp every 2.4 s, one star at a
 from 41 s a car ahead that closes and slides past. Under 100 columns or 32 rows (80x24) it drops to a one-row ridge, no lamps and the 20x4 car.
 Sundown Grid is a half-disc sun on a horizon, cut by gaps that slide down it a half-row a second, over a neon grid whose horizontals arrive every
 0.8 s; the sun steps down a row every 15 s for 60 s and back up for 60 s, so the scene loops every 120 s (palms at the edges, a frond swaying every
-20 s; under 100 columns or 32 rows a 34x8 sun, four horizontals and no palms). Everything in it moves on a 15 Hz tick (`lib/grid.js`) so a frame never
-takes more than about a tenth of its cells changing.
+20 s; under 100 columns or 32 rows a 34x8 sun, four horizontals and no palms; under 24 rows a 24x5 sun with no gaps and two horizontals; on a short
+window of the big layout, such as 100x32, four horizontals instead of five). Everything in it moves on a 15 Hz tick (`lib/grid.js`) on a schedule planned for the
+window (`capsOf`), so that no frame at 1x changes more than about a tenth of its cells and, because the console can step the clock 2x or 4x a frame (up to four
+ticks in one), no four ticks in a row change more than 18% of them (120x40: 11.3%; 80x24: 16.3%; the short windows under 14 rows, where the arriving horizontal alone
+is 14% or more of the picture, 23.5% at 41x11). To keep that, each horizontal moves in a few jumps of several rows rather than a row at a time.
 Red Light, Rain is a simulation (it steps at 30 a second, so the same seed and step count always draw the same frame): the view from the driver's seat at a red
 light in the rain, with a traffic light blurred by the rain into a bokeh, a pedestrian crossing under an umbrella, drops landing about seven a second (3 in 10
 send a trickle down) and one wiper that sweeps for 1.2 s every 4.2 s and clears the drops it crosses. At 58 s the red ramps down and the green ramps up over a
