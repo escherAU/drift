@@ -235,10 +235,11 @@ test('idle: a locked cartridge is the same picture for 10 s (label, LED, plate);
 const SIZES = [[120, 40], [240, 67], [80, 24]];
 for (const [cols, rows] of SIZES) {
   test(`idle ${cols}x${rows}: no frame step changes more than about 1% of the cells over 60 s (selected unlocked and locked)`, () => {
-    for (const index of [0, 1]) {
+    // (at the app's 18 fps and at frame rates and start phases the quantisation was not tuned on)
+    for (const [index, fps, phase] of [[0, 18, 0], [1, 18, 0], [0, 24, 0.013], [0, 12, 0.031], [0, 30, 0.007], [1, 15, 0.02]]) {
       let prev = null, worst = 0, moving = 0, frames = 0;
-      for (let k = 0; k <= 60 * 18; k++) {
-        const s = snap(draw(cols, rows, view(index, k / 18)));
+      for (let k = 0; k <= 60 * fps; k++) {
+        const s = snap(draw(cols, rows, view(index, k / fps + phase)));
         if (prev) {
           const fr = changedFraction(s.g, prev.g, s.c, prev.c);
           if (k > 1) worst = Math.max(worst, fr);
@@ -247,7 +248,7 @@ for (const [cols, rows] of SIZES) {
         }
         prev = s;
       }
-      assert.ok(worst <= 0.011, `${cols}x${rows} index ${index}: worst step ${(worst * 100).toFixed(2)}%`);
+      assert.ok(worst <= 0.011, `${cols}x${rows} index ${index} at ${fps} fps: worst step ${(worst * 100).toFixed(2)}%`);
       if (cols >= 88) assert.ok(moving > 0, 'something moves');
     }
   });

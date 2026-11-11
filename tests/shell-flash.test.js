@@ -153,3 +153,34 @@ test('flash: Classic <-> library round trips: only the key steps are big (the re
   assertSafe(r, 'round trip');
   c.done();
 });
+
+// A2: the library's motion. Idle, a slide (with its queued second press), and the locked dip, driven through the real app.
+for (const [cols, rows] of [...SIZES, [240, 67]]) {
+  test(`flash ${cols}x${rows}: library idle 60 s, slides (one queued, one dropped) and a locked dip stay under the limit`, (t) => {
+    const c = mkShell({ startScreen: { screen: 'library' }, cols, rows });
+    c.app.start();
+    const r = recorder(c);
+    r.run(30); // idle: LED, ripple, scanline, cursor
+    r.press('\x1b[C'); r.press('\x1b[C'); r.press('\x1b[C'); r.run(1.6); // one slide, a queued one, a dropped one
+    r.press('\x1b[D'); r.run(1);
+    r.press('\x1b[C'); r.run(0.9);
+    assert.equal(c.sh().cartridge, 'locker');
+    r.press('\r'); r.run(1.2); // locked: dip, spring back, message
+    r.press('\x1b[D'); r.run(0.9);
+    r.press('\x1b[D'); r.run(30); // and idle again, on another cartridge
+    assert.equal(c.sh().screen, 'library');
+    const { worst, worstAt } = assertSafe(r, `motion ${cols}x${rows}`);
+    // no flash at all (any step over the limit) - not even on a key step
+    assert.deepEqual(r.stepFractions().filter((f) => f > FLASH_FRACTION), [], 'no step over the limit, key steps included');
+    // the slide: the biggest step is the one carrying the key (first slide frame), the rest ease out
+    const steps = r.stepFractions();
+    const slideSteps = steps.slice(Math.floor(30 * FPS), Math.floor(30 * FPS) + 8);
+    assert.ok(Math.max(...slideSteps) <= FLASH_FRACTION);
+    assert.ok(r.keySteps.size >= 6, 'the presses were recorded');
+    // 60 s of idle in all: the idle stretches stay at about 1% a frame
+    const idleSteps = steps.slice(0, Math.floor(30 * FPS) - 1).concat(steps.slice(steps.length - Math.floor(29 * FPS)));
+    assert.ok(Math.max(...idleSteps) <= 0.011, `idle worst ${(Math.max(...idleSteps) * 100).toFixed(2)}%`);
+    c.done();
+    t.diagnostic(`motion ${cols}x${rows}: worst non-key step ${(worst * 100).toFixed(1)}% at frame ${worstAt}; worst slide step ${(Math.max(...slideSteps) * 100).toFixed(1)}%; worst idle step ${(Math.max(...idleSteps) * 100).toFixed(2)}%`);
+  });
+}
