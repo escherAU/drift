@@ -356,6 +356,16 @@ The tale plays the six in order, 75 s each except the cut scene (45 s): 7 minute
 `tests/delza-*.test.js` check the manifest, skin, palette, Journal at 120x40 and 80x24, help words, boot lines, the countdown, the
 seasons and each scene's promises on rendered frames.
 
+To try it (from this folder):
+
+```
+node bin\drift.js --library              # the shelf: Classic, Arcade, then Delza (right arrow twice, Enter)
+node bin\drift.js --cartridge delza      # straight in: insert, boot, the Journal menu (it starts the tale by itself after 15 s)
+```
+
+`q` quits from the library and from inside Delza; `e` ejects Delza back to the library. Both quits, `Ctrl+C` and a crash
+inside the running cartridge are checked against the real process in `tests/real-process.test.js` (the terminal is restored each time).
+
 ### Where cartridges are read from, and the trust rule
 
 | folder | trusted | may hold |
@@ -501,7 +511,7 @@ not a TTY, drift prints a message and exits 0 without emitting any escape sequen
 npm test            # node --test, no dependencies
 ```
 
-The suite is 1138 tests in `tests/*.test.js` and takes about 20 seconds (test files run in parallel). The cartridge work is
+The suite is 1145 tests in `tests/*.test.js` and takes about 80 seconds (test files run in parallel; the real-process arms start the real program and wait in real time, about 28 s of that). The cartridge work is
 covered by `cartridge-schema` (validators, text scene, skin palette), `cartridge-loader`
 (every way a cartridge can be wrong, and both arms of the trust rule), `cartridge-scenes` (every
 install cartridge's scenes through the size, glyph, colour, determinism and flash checks, with controls
@@ -534,11 +544,18 @@ The same capture command also writes the mode captures (`<mode>-<scene>-1/-2.txt
 `dissolve-<mode>.txt`), the artist's gallery and the cartridge console (all plain text, one frame per file):
 `cart-library-<id>-120x40.txt` and `-80x24.txt` for every install cartridge (locked ones included),
 `cart-library-240x67.txt` and `cart-library-list-60x14.txt` (Classic selected), `cart-insert-<id>-t<ms>.txt` /
-`cart-boot-<id>-t<ms>.txt` at 0.4, 0.9, 1.25, 1.6, 2.5, 3.6, 4.2, 5.0 and 5.6 s after Enter (insert before 1.5 s,
+`cart-boot-<id>-t<ms>.txt` at 0.4, 0.9, 1.25, 1.6, 2.5, 3.4, 4.2, 5.0 and 5.6 s after Enter (insert before 1.5 s,
 boot after; the 80x24 ones carry a `-80x24` before the time), `cart-eject-<id>-t<ms>.txt` for a cartridge that runs
 in the shell, and `cart-help-classic-120x40.txt` (the help panel while Classic runs). Only the install folder is
 captured, so the files do not depend on what is in your user cartridge folder. `node tools/capture.mjs --cartridges`
 writes only these.
+
+Delza adds a set of its own, all named `cart-delza-*.txt`: `library-240x67`; `journal-120x40` and `-80x24`; `help-120x40`
+and `-80x24` (her own help words); `boot-hint-t3400` (the one boot that shows the first-insert hint `e ejects · h shows the keys`;
+every other insert and boot file shows the plain bar); `scene-<id>-t2`, `-t20` and `-t40` for each of the six scenes (seconds of
+scene time, reached by choosing the chapter in the Journal); `fight-t<ms>` (five moments of the Cinderhorn's third turn, from the
+cursor walking to the stag's charge landing); and `cutscene-t<ms>` (four text states of the Lampwarden). Her eject files are the
+usual `cart-eject-delza-...`. A test fails if the folder holds a `cart-*` file the tool no longer writes.
 
 `captures/*.ansi` are git-ignored (large) except the calm scenes' and the crossfade's; regenerate with the
 capture command and view with `type captures\sunburst-120x40.ansi` in a truecolor terminal.
