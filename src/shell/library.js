@@ -143,6 +143,13 @@ export const hasWater = (label) => (label || []).some((l) => /[~≈]/.test(l));
 // o = { selected, level (1-3 brightness of label and chrome), ui, led (1-3, the idle breath), ripple (label column | -1) }
 // Shell and window frame take the chrome shade, the name its own, the label the cartridge's tint.
 export function cartridgeGrid(cart, o = {}) {
+  const G = cartridgeBase(cart, o);
+  if (!!o.selected && !cart.locked && o.ripple >= 0 && o.ripple < LABEL_W) rippleColumn(G, o.ripple);
+  return G;
+}
+
+// The cartridge without the ripple (which only swaps a few water glyphs after everything else is drawn).
+function cartridgeBase(cart, o) {
   const ui = o.ui || { text: 15, dim: 19, head: 15, accent: 16 };
   const locked = !!cart.locked;
   const selected = !!o.selected;
@@ -172,7 +179,6 @@ export function cartridgeGrid(cart, o = {}) {
       gPut(G, 3 + c, 3 + r, cp, cart.tint + lv);
     }
   }
-  if (selected && !locked && o.ripple >= 0 && o.ripple < LABEL_W) rippleColumn(G, o.ripple);
   if (locked) {
     for (let c = 0; c < LABEL_W; c++) gPut(G, 3 + c, 3 + 4, 32, 0); // the strip replaces row 4 whole
     gText(G, 3, 3 + 4, SOON_STRIP, ui.dim);
@@ -329,6 +335,13 @@ function applyScan(G, scan, tint) {
 // o = { st (console style), ui, n (cartridges on the shelf), index (the cursor), dial (TUNE dial steps; default index),
 //       type (0..1 of the screen text typed), scan ({ row, from, p }), cursor (shade of the prompt cursor) }
 export function consoleGrid(sel, o = {}) {
+  const G = consoleBase(sel, o);
+  if (o.scan) applyScan(G, o.scan, sel.tint); // the scan touches only the screen's interior, which nothing after it in the base draws on
+  return G;
+}
+
+// The console without the scanline (the part that does not change from one idle step to the next).
+function consoleBase(sel, o) {
   const st = o.st || {};
   const ui = o.ui || { text: 15, dim: 19, head: 15, accent: 16 };
   const n = o.n || 1;
@@ -363,7 +376,6 @@ export function consoleGrid(sel, o = {}) {
       if (reveal - seg.x > 0) gText(G, BEZEL_X + 2 + seg.x, 4 + j, seg.text, seg.shade, 1, reveal - seg.x);
     }
   }
-  if (o.scan) applyScan(G, o.scan, sel.tint);
   // the panel
   ledRow(G, PANEL_X, 3, st, ui);
   for (let r = 0; r < DIAL.length; r++) {
@@ -414,6 +426,80 @@ export function miniGrid(o = {}) {
   gText(G, 19, 2, 'DRIFTMAN 2000', st.bar === undefined ? ui.head : st.bar);
   gPut(G, 0, 3, FR[6], sh); gRun(G, 1, 3, FR[5], 36, sh); gPut(G, 37, 3, FR[4], sh);
   return G;
+}
+
+// ---- the memo (F3): the library at rest redraws the same art every tick
+//
+// The shell passes view.memo (makeLibraryMemo()) so the grids it has built are kept: a cartridge without its ripple
+// (per cartridge object, level, chrome, LED level), the console without its scanline (per cartridge object, dial
+// position, typing, cursor shade), the mini console, and the water columns of each label. A grid from the memo is
+// only read, never written; the ripple and the scanline are applied to a copy. Cartridge objects are assumed not to
+// change while a memo holds them (the shell's never do). Without view.memo nothing is kept and every draw is fresh.
+// tests/shell-library-memo.test.js: with and without the memo the pictures are identical at every idle step.
+const MEMO_CAP = 600;
+export function makeLibraryMemo() {
+  return { builds: 0, nextId: 1, carts: new WeakMap(), consoles: new WeakMap(), minis: new WeakMap(), spines: new WeakMap(), styles: new WeakMap(), water: new WeakMap() };
+}
+function memoGet(map, owner, key, build, memo) {
+  let m = map.get(owner);
+  if (!m) { m = new Map(); map.set(owner, m); }
+  let g = m.get(key);
+  if (g === undefined) {
+    if (m.size >= MEMO_CAP) m.clear();
+    g = build(); memo.builds++; m.set(key, g);
+  }
+  return g;
+}
+function memoStyle(memo, skin) {
+  let s = memo.styles.get(skin);
+  if (!s) { s = { id: memo.nextId++, st: consoleStyle(skin, {}) }; memo.styles.set(skin, s); }
+  return s;
+}
+const NO_WATER = { has: false, cols: new Uint8Array(LABEL_W) };
+// which label columns hold water in the first LABEL_H rows (what waterIn asks), and whether any row does (hasWater)
+function waterInfo(memo, label) {
+  if (!label) return NO_WATER;
+  let w = memo.water.get(label);
+  if (!w) {
+    const cols = new Uint8Array(LABEL_W);
+    for (const l of label.slice(0, LABEL_H)) { const a = [...l]; for (let c = 0; c < LABEL_W; c++) if (a[c] === '~' || a[c] === '≈') cols[c] = 1; }
+    w = { has: hasWater(label), cols };
+    memo.water.set(label, w);
+  }
+  return w;
+}
+function cloneGrid(G) { return { w: G.w, h: G.h, g: G.g.slice(), s: G.s.slice(), fl: G.fl.slice() }; }
+// cartridgeGrid(cart, o) from the memo. o.led / o.ripple only matter for the selected, unlocked cartridge.
+function memoCart(memo, cart, o) {
+  const live = !!o.selected && !cart.locked;
+  const led = live ? Math.max(1, Math.min(3, o.led || 3)) : 0;
+  const ui = o.ui;
+  const base = memoGet(memo.carts, cart, `${live ? 1 : 0}${o.selected ? 1 : 0}|${o.level}|${o.chrome}|${led}|${ui ? ui.dim : ''}`, () => cartridgeBase(cart, o), memo);
+  if (live && o.ripple >= 0 && o.ripple < LABEL_W && waterInfo(memo, cart.label).cols[o.ripple]) {
+    const G = cloneGrid(base);
+    rippleColumn(G, o.ripple);
+    return G;
+  }
+  return base;
+}
+function memoConsole(memo, sel, skin, o) {
+  const sk = memoStyle(memo, skin);
+  const pos = wrapIdx(o.dial === undefined ? (o.index || 0) : o.dial, DIAL_POSITIONS);
+  const reveal = o.type === undefined ? -1 : Math.ceil(Math.max(0, Math.min(1, o.type)) * SCREEN_W);
+  const base = memoGet(memo.consoles, sel, `${sk.id}|${o.n}|${pos}|${reveal}|${o.cursor}`, () => consoleBase(sel, { ...o, scan: null }), memo);
+  if (!o.scan) return base;
+  const G = cloneGrid(base);
+  applyScan(G, o.scan, sel.tint);
+  return G;
+}
+function memoSpine(memo, cart, o) {
+  return memoGet(memo.spines, cart, `${o.selected ? 1 : 0}|${o.chrome}|${o.ui ? o.ui.dim : ''}`, () => spineGrid(cart, o), memo);
+}
+function memoMini(memo, skin, ui) {
+  const sk = memoStyle(memo, skin);
+  let g = memo.minis.get(skin);
+  if (!g) { g = miniGrid({ st: sk.st, ui }); memo.builds++; memo.minis.set(skin, g); }
+  return g;
 }
 
 // ---- idle: four small movements at rest (the clock is view.idle seconds; 0 / absent = the still picture)
@@ -467,12 +553,14 @@ export function cursorShadeAt(idle) {
 
 // What the idle clock would draw for the selected cartridge, as a string: equal strings = the same picture.
 // The shell redraws only when it changes. tier: 'full' | 'compact' | other (list and tiny never animate).
-export function idleSignature(idle, sel, tier) {
+// memo (optional, makeLibraryMemo()) keeps each label's water columns, so asking every tick costs next to nothing.
+export function idleSignature(idle, sel, tier, memo) {
   if (!(idle > 0) || (tier !== 'full' && tier !== 'compact')) return '';
   const parts = [];
   if (!sel.locked) {
     parts.push('led:' + ledLevelAt(idle));
-    if (hasWater(sel.label)) { const col = rippleColAt(idle); parts.push('rip:' + (waterIn(sel.label, col) ? col : -1)); }
+    const water = memo ? waterInfo(memo, sel.label) : null;
+    if (water ? water.has : hasWater(sel.label)) { const col = rippleColAt(idle); parts.push('rip:' + ((water ? water.cols[col] : waterIn(sel.label, col)) ? col : -1)); }
     if (tier === 'full') parts.push('cur:' + cursorShadeAt(idle));
   }
   if (tier === 'full') { const s = scanAt(idle); parts.push('scan:' + (s ? `${s.row},${s.from},${s.p}` : '-')); }
@@ -720,17 +808,26 @@ export function drawShelf(f, view, skin, o = {}) {
   const fadeP = o.fadeP || 0;
   const sel = view.cartridges[view.index];
   const ctx = fadeCtx(f, fadeP);
-  const st = consoleStyle(skin, o.body || {});
+  const memo = view.memo || null;
+  const plain = memo ? memoStyle(memo, skin).st : null; // the console style with no overrides, when a memo is in use
+  const st = o.body ? consoleStyle(skin, o.body) : (plain || consoleStyle(skin, {}));
   const offset = (view.dip || 0) + (o.drop || 0) - (o.lift || 0);
   const idle = view.idle > 0 ? view.idle : 0;
   // compact: the one cartridge on show is swapped in place, so its chrome stays at the selected shade (a ramp would
   // flip every border cell from silver to graphite in one frame when the cursor moves)
-  const cartAt = (i, selected, compact = false) => cartridgeGrid(view.cartridges[i], {
-    selected, level: levelOf(look, i), chrome: compact ? 13 : chromeShadeOf(look, i) ?? undefined, ui, led: selected && idle ? ledLevelAt(idle) : undefined, ripple: selected && idle ? rippleColAt(idle) : -1,
-  });
+  const cartAt = (i, selected, compact = false) => {
+    const co = {
+      selected, level: levelOf(look, i), chrome: compact ? 13 : chromeShadeOf(look, i) ?? undefined, ui, led: selected && idle ? ledLevelAt(idle) : undefined, ripple: selected && idle ? rippleColAt(idle) : -1,
+    };
+    return memo ? memoCart(memo, view.cartridges[i], co) : cartridgeGrid(view.cartridges[i], co);
+  };
 
   // the console, then the takeover band over it
-  const makeConsole = (style) => (L.full ? consoleGrid(sel, { st: style, ui, n, index: view.index, dial: view.dial, type: view.type, scan: idle ? scanAt(idle) : null, cursor: idle ? cursorShadeAt(idle) : undefined }) : miniGrid({ st: style, ui }));
+  const makeConsole = (style) => {
+    if (!L.full) return memo && style === plain ? memoMini(memo, skin, ui) : miniGrid({ st: style, ui });
+    const co = { st: style, ui, n, index: view.index, dial: view.dial, type: view.type, scan: idle ? scanAt(idle) : null, cursor: idle ? cursorShadeAt(idle) : undefined };
+    return memo && style === plain ? memoConsole(memo, sel, skin, co) : consoleGrid(sel, co);
+  };
   const cx = L.full ? L.consoleX : L.miniX, cy = L.full ? L.consoleTop : L.miniTop;
   blit(f, makeConsole(st), cx, cy, { fadeP });
   if (o.sweep && o.sweep.x > 0) {
@@ -841,7 +938,8 @@ function drawSpines(f, view, ui, L, fadeP, cartAt) {
   const x0 = centerX(f.cols, total);
   for (let k = 0; k < count; k++) {
     const i = first + k;
-    blit(f, spineGrid(view.cartridges[i], { selected: i === view.index, chrome: chromeShadeOf(view, i) ?? undefined, ui }), x0 + k * pitch, L.spineY, { fadeP, all: true });
+    const so = { selected: i === view.index, chrome: chromeShadeOf(view, i) ?? undefined, ui };
+    blit(f, view.memo ? memoSpine(view.memo, view.cartridges[i], so) : spineGrid(view.cartridges[i], so), x0 + k * pitch, L.spineY, { fadeP, all: true });
   }
   const bx = Math.max(0, x0 - 2), bw = Math.min(f.cols - bx, total + 4);
   const ctx = fadeCtx(f, fadeP);

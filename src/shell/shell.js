@@ -18,7 +18,7 @@ import { makeSkinPalette } from '../cartridge/palette.js';
 import { loadScenes as defaultLoadScenes } from '../cartridge/loader.js';
 import { parseHex, sgrFor } from '../color.js';
 import { driftmanSkin, classicBootSkin, plainBootSkin } from './driftman.js';
-import { drawLibrary, idleSignature, dipAt, DIP_SECONDS } from './library.js';
+import { drawLibrary, idleSignature, dipAt, DIP_SECONDS, makeLibraryMemo } from './library.js';
 import { drawInsert, INSERT_END } from './insert.js';
 import { drawBoot, bootPhases, mergeBootPalette } from './boot.js';
 import { createCartridgeRuntime, dissolveFrames } from './runtime.js';
@@ -52,10 +52,12 @@ export function createShell(o) {
   const loadScenes = o.loadScenes || defaultLoadScenes;
   const carts = o.cartridges || [];
   let { cols, rows } = o;
+  let tier = sizeTier(cols, rows);
   let disposed = false;
 
   const lib = libraryPalette(carts, cmode);
   const libPal = lib.pal;
+  const memo = makeLibraryMemo(); // the art grids the library keeps between ticks (library.js, F3)
   const libCarts = carts.map((c, i) => ({
     id: c.id, title: c.title, code: (c.manifest && c.manifest.code) || '', blurb: c.manifest.blurb, facts: c.manifest.facts || [],
     locked: c.locked, label: c.label, ink: c.labelInk || null, tint: lib.tints[i],
@@ -258,7 +260,7 @@ export function createShell(o) {
         if (slideT >= SLIDE_SECONDS && dipT >= DIP_SECONDS) {
           // at rest: the idle clock runs, and a redraw is asked for only when what it draws has changed
           idleT += d;
-          if (idleSignature(idleT, libCarts[index], sizeTier(cols, rows)) !== drawnSig) forced = true;
+          if (idleSignature(idleT, libCarts[index], tier, memo) !== drawnSig) forced = true;
         }
         if (message) { msgT += d; if (msgT >= MESSAGE_SECONDS) { message = ''; forced = true; } }
         break;
@@ -320,8 +322,8 @@ export function createShell(o) {
     const f = fb;
     switch (screen) {
       case 'library':
-        drawLibrary(f, view(), driftmanSkin);
-        drawnSig = libCarts[index] ? idleSignature(idleT, libCarts[index], sizeTier(cols, rows)) : '';
+        drawLibrary(f, { ...view(), memo }, driftmanSkin);
+        drawnSig = libCarts[index] ? idleSignature(idleT, libCarts[index], sizeTier(cols, rows), memo) : '';
         if (enterT < LIBRARY_FADE_SECONDS) {
           const p = ramp(enterT, 0, LIBRARY_FADE_SECONDS), thr = dissolveThresholds(cols * rows);
           for (let i = 0; i < f.glyphs.length; i++) if (p < thr[i]) { f.glyphs[i] = 32; f.shades[i] = 0; }
@@ -370,7 +372,7 @@ export function createShell(o) {
   }
 
   function resize(c, r) {
-    cols = c; rows = r;
+    cols = c; rows = r; tier = sizeTier(c, r);
     fb = newFrame(c, r); fb2 = newFrame(c, r); blank = newFrame(c, r);
     if (runtime) runtime.resize(c, r);
     forced = true;
