@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { runCaptureCartridges, cartridgeCaptureNames, CART_MOMENTS, EJECT_MOMENTS, MODE_CAPTURE_NAMES, CAPTURE_NAMES, FIGHT_MOMENTS, CUTSCENE_MOMENTS, HINT_MOMENT } from '../tools/capture.mjs';
+import { runCaptureCartridges, cartridgeCaptureNames, nightDriveCaptureNames, CART_MOMENTS, EJECT_MOMENTS, MODE_CAPTURE_NAMES, CAPTURE_NAMES, FIGHT_MOMENTS, CUTSCENE_MOMENTS, HINT_MOMENT } from '../tools/capture.mjs';
 import { discoverCartridges, INSTALL_DIR } from '../src/cartridge/loader.js';
 import { isAllowedGlyph } from '../src/glyphs.js';
 import { INSERT_END } from '../src/shell/insert.js';
@@ -16,6 +16,17 @@ import { makeRoot } from './helpers-shell.js';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'drift-tools-cart-'));
 const blocks = (text) => text.split(/=== [^\n]*\n/).slice(1);
+// Night Drive's own set (cart-night-drive-*), written out by hand: 8 tracks x (2, 20, 40 s + the later moments) x 2 sizes, then the
+// tape-deck menu, the help panel and the console takeover at both sizes. The later moments are where each story moves.
+const ND_IDS = ['onramp', 'skyline', 'sundown', 'coast', 'redlight', 'diner', 'caller', 'overdrive'];
+const ND_LATER = { sundown: [75], redlight: [62], diner: [25], caller: [29, 70], overdrive: [64] };
+const ND_TAGS = ['', '-80x24'];
+const ndSecs = (id) => [...(id === 'diner' || id === 'onramp' ? [2, 21, 40] : [2, 20, 40]), ...(ND_LATER[id] || [])]; // the diner's (and the on-ramp's at 80x24) 2 s and 20 s pictures are identical, so their middle moment is 21 s
+const ND_WANT = [];
+for (const tag of ND_TAGS) {
+  for (const id of ND_IDS) for (const sec of ndSecs(id)) ND_WANT.push(`cart-night-drive-scene-${id}${tag}-t${sec}.txt`);
+  for (const what of ['menu', 'help', 'console']) ND_WANT.push(`cart-night-drive-${what}-${tag ? '80x24' : '120x40'}.txt`);
+}
 const CAPTURE_TOOL = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'tools', 'capture.mjs');
 // the size a capture file is drawn at, from its name
 const sizeOf = (name) => { const m = /(\d+)x(\d+)(?:-t\d+)?\.txt$/.exec(name); return m ? [+m[1], +m[2]] : [120, 40]; };
@@ -45,6 +56,7 @@ test('cartridge captures: the names list is the files written - library at 120x4
     for (const id of ['thornwell', 'tallow', 'cinderhorn', 'reach', 'highcandle', 'lampwarden']) for (const sec of [2, 20, 40]) want.push(`cart-delza-scene-${id}-t${sec}.txt`);
     for (const m of FIGHT_MOMENTS) want.push(`cart-delza-fight-t${ms(m)}.txt`);
     for (const m of CUTSCENE_MOMENTS) want.push(`cart-delza-cutscene-t${ms(m)}.txt`);
+    want.push(...ND_WANT);
     assert.equal(FIGHT_MOMENTS.length, 5);
     assert.equal(CUTSCENE_MOMENTS.length, 4);
     assert.deepEqual(cartridgeCaptureNames().sort(), want.slice().sort());
@@ -159,9 +171,108 @@ test('cartridge captures: Delza\'s set shows what it says - the Journal, the hel
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// the cart-* files of a captures folder, and whether they are exactly the files the tool writes
+const cartFiles = (dir) => fs.readdirSync(dir).filter((n) => n.startsWith('cart-')).sort();
+const folderMatches = (dir) => { try { assert.deepEqual(cartFiles(dir), cartridgeCaptureNames().sort()); return true; } catch { return false; } };
+
 test('the committed captures folder holds exactly the cartridge files the tool writes (nothing stale, nothing missing)', () => {
-  const have = fs.readdirSync(new URL('../captures/', import.meta.url)).filter((n) => n.startsWith('cart-')).sort();
+  const have = cartFiles(new URL('../captures/', import.meta.url));
   assert.deepEqual(have, cartridgeCaptureNames().sort());
+});
+
+test('the exact-match check bites both ways on Night Drive\'s files: a missing one fails, a stale extra one fails (negative controls on a temp copy)', () => {
+  const dir = tmp();
+  try {
+    const src = new URL('../captures/', import.meta.url);
+    for (const f of cartFiles(src)) fs.copyFileSync(new URL(f, src), path.join(dir, f));
+    assert.ok(folderMatches(dir), 'control: the untouched copy matches');
+    const some = 'cart-night-drive-scene-caller-t29.txt';
+    assert.ok(fs.existsSync(path.join(dir, some)));
+    fs.rmSync(path.join(dir, some));
+    assert.ok(!folderMatches(dir), 'a missing Night Drive file fails');
+    fs.copyFileSync(new URL(some, src), path.join(dir, some));
+    assert.ok(folderMatches(dir), 'restored: matches again');
+    fs.writeFileSync(path.join(dir, 'cart-night-drive-scene-caller-t31.txt'), 'x');
+    assert.ok(!folderMatches(dir), 'a stale extra Night Drive file fails');
+    fs.rmSync(path.join(dir, 'cart-night-drive-scene-caller-t31.txt'));
+    fs.writeFileSync(path.join(dir, 'cart-night-drive-console-100x30.txt'), 'x');
+    assert.ok(!folderMatches(dir), 'a stale extra Night Drive size fails');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('nightDriveCaptureNames: the hand-written list, exported like Delza\'s; in cartridgeCaptureNames only when Night Drive is installed, unlocked and runs in the shell', () => {
+  assert.deepEqual(nightDriveCaptureNames().sort(), ND_WANT.slice().sort());
+  assert.equal(ND_WANT.length, 2 * (8 * 3 + 6 + 3), 'per size: 24 + 6 later moments + menu, help, console');
+  const all = cartridgeCaptureNames();
+  for (const n of ND_WANT) assert.ok(all.includes(n), n);
+  // a root without Night Drive (the fixture root) has none of its files
+  const root = makeRoot();
+  try {
+    assert.ok(!cartridgeCaptureNames({ dirs: [{ dir: root, trusted: true }] }).some((n) => n.startsWith('cart-night-drive')), 'no Night Drive files without the cartridge');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('cartridge captures: Night Drive\'s set shows what it says - every track moving, the later story moments, the tape-deck menu, the reskinned help, the console takeover', async () => {
+  const dir = tmp();
+  try {
+    await runCaptureCartridges({ outDir: dir });
+    const read = (n) => fs.readFileSync(path.join(dir, n), 'utf8');
+    const body = (n) => blocks(read(n))[0];
+    const nd = JSON.parse(fs.readFileSync(new URL('../cartridges/night-drive/manifest.json', import.meta.url), 'utf8'));
+    const skin = JSON.parse(fs.readFileSync(new URL('../cartridges/night-drive/skin.json', import.meta.url), 'utf8'));
+    // (b) every scene moment is its own picture, at both sizes, and none is blank or a wash of one shade
+    const seen = new Map();
+    for (const tag of ND_TAGS) {
+      for (const id of ND_IDS) {
+        const secs = ndSecs(id);
+        const bodies = secs.map((s) => body(`cart-night-drive-scene-${id}${tag}-t${s}.txt`));
+        assert.equal(new Set(bodies).size, secs.length, `${id}${tag}: the moments differ`);
+        bodies.forEach((b, k) => {
+          assert.ok(new Set(b.replace(/\s/g, '')).size >= 5, `${id}${tag} t${secs[k]}: more than a wash of one shade`);
+          assert.ok(!seen.has(b), `${id}${tag} t${secs[k]} is the same picture as ${seen.get(b)}`);
+          seen.set(b, `${id}${tag} t${secs[k]}`);
+        });
+      }
+    }
+    assert.equal(seen.size, 2 * (8 * 3 + 6), 'no two scene captures are the same picture');
+    for (const id of ND_IDS) for (const sec of ndSecs(id)) {
+      assert.notEqual(body(`cart-night-drive-scene-${id}-t${sec}.txt`), body(`cart-night-drive-scene-${id}-80x24-t${sec}.txt`), `${id} t${sec}: 80x24 is not the 120x40 picture`);
+    }
+    // (c) the story moments
+    for (const tag of ND_TAGS) {
+      // the card is the box drawn with the skin's frame glyphs; the radio dial below it has its own ▼ (the tuning needle), which is not the arrow
+      const card = (n) => { const rows = body(n).split('\n'); return rows.slice(rows.findIndex((r) => r.includes('┏')), rows.findIndex((r) => r.includes('┗')) + 1).join('\n'); };
+      const c29 = card(`cart-night-drive-scene-caller${tag}-t29.txt`), c70 = card(`cart-night-drive-scene-caller${tag}-t70.txt`);
+      assert.ok(c29.includes('CALLER') && c29.includes('Danny') && c29.includes('▼'), `caller${tag} t29: Danny's card whole, with the arrow`);
+      assert.ok(c70.replace(/\s+/g, ' ').includes('The tape clicks over') && !c70.includes('▼'), `caller${tag} t70: the narrator card, no arrow`);
+      assert.ok(body(`cart-night-drive-scene-caller${tag}-t70.txt`).includes('▼'), `caller${tag} t70: the dial needle is still drawn, so the card box is what has no arrow`);
+      assert.notEqual(body(`cart-night-drive-scene-redlight${tag}-t62.txt`), body(`cart-night-drive-scene-redlight${tag}-t2.txt`), `redlight${tag}: t62 is not t2`);
+    }
+    // the diner capture sits at the bottom of a dip: the flicker schedule (seed 1) says so
+    const diner = await import('../cartridges/night-drive/scenes/diner.js');
+    assert.equal(diner.flickerShade(ND_LATER.diner[0], 1), 1, 'the diner moment is mid-dip');
+    // the tape-deck menu: title, prompt, all nine entries, the * on the playing track and the cursor on another
+    assert.equal(nd.menu.length, 9);
+    for (const sz of ['120x40', '80x24']) {
+      const m = body(`cart-night-drive-menu-${sz}.txt`);
+      assert.ok(m.includes(skin.menu.title) && m.includes(skin.menu.prompt), `menu ${sz}: title and prompt`);
+      for (const e of nd.menu) assert.ok(m.includes(e.label), `menu ${sz}: ${e.label}`);
+      const rows = m.split('\n');
+      const playing = rows.find((r) => r.includes(nd.menu[0].label)), cursor = rows.find((r) => r.includes(nd.menu[1].label));
+      assert.ok(playing.includes('*') && !playing.includes(skin.menu.cursor), `menu ${sz}: the * is on the playing track`);
+      assert.ok(cursor.includes(skin.menu.cursor) && !cursor.includes('*'), `menu ${sz}: the cursor is on another track`);
+      // the help panel in the skin's own words
+      assert.ok(body(`cart-night-drive-help-${sz}.txt`).includes(skin.help.title), `help ${sz}: ${skin.help.title}`);
+    }
+    // the console takeover, by glyph: the skin's frame, grille, stripe and title (the compact 80x24 console has no stripe bar)
+    for (const sz of ['120x40', '80x24']) {
+      const k = body(`cart-night-drive-console-${sz}.txt`);
+      for (const ch of new Set([...skin.console.frame])) assert.ok(k.includes(ch), `console ${sz}: the skin's frame glyph ${ch}`);
+      assert.ok(k.includes(skin.console.grille.repeat(3)), `console ${sz}: the grille`);
+      assert.ok(k.includes(skin.frame.title), `console ${sz}: the title text`);
+      if (sz === '120x40') assert.ok(k.includes(skin.console.stripe), `console ${sz}: the equaliser stripe`);
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('cartridge captures: a cartridge that runs in the shell also gets eject files at the matching fractions of the 1.6 s eject (fixture root)', async () => {

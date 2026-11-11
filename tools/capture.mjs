@@ -1,4 +1,5 @@
-// Headless frame capture: node tools/capture.mjs [--out captures] [--cartridges]   (--cartridges: only the cartridge console files)
+// Headless frame capture: node tools/capture.mjs [--out captures] [--cartridges]   (--cartridges: only the cartridge console files,
+// which include Delza's cart-delza-* set and Night Drive's cart-night-drive-* set; see the DRIFT-4 and DRIFT-5 blocks below)
 // Writes, for each of the 5 scenes and a cross-fade, at 120x40 and 240x67:
 //   <name>-<cols>x<rows>.txt   glyph characters only
 //   <name>-<cols>x<rows>.ansi  same frames with truecolor SGR (Claude orange)
@@ -28,6 +29,7 @@ import { BOOT_END } from '../src/shell/boot.js';
 import { EJECT_SECONDS, resetFirstInsertHint } from '../src/shell/shell.js';
 import { TURN, HIT_AT, CONTACT_AT } from '../cartridges/delza/scenes/cinderhorn.js';
 import { LINES, STARTS, TYPE_CPS, DISSOLVE, FLUTTER_STEP } from '../cartridges/delza/scenes/lampwarden.js';
+import { flickerShade } from '../cartridges/night-drive/scenes/diner.js';
 
 export const CAPTURE_NAMES = [...SCENES.map((s) => s.id), 'crossfade'];
 const SIZES = [[120, 40], [240, 67]];
@@ -193,6 +195,7 @@ const ms = (sec) => Math.round(sec * 1000);
 const installed = (dirs) => discoverCartridges({ dirs: dirs || CART_DIRS() }).cartridges;
 const isShellRun = (c) => c.manifest && c.manifest.runtime !== 'classic';
 const hasDelza = (c) => c.id === 'delza' && !c.locked && isShellRun(c);
+const hasNightDrive = (c) => c.id === 'night-drive' && !c.locked && isShellRun(c);
 
 export function cartridgeCaptureNames({ dirs } = {}) {
   const names = ['cart-library-240x67.txt', 'cart-library-list-60x14.txt', 'cart-help-classic-120x40.txt'];
@@ -206,6 +209,7 @@ export function cartridgeCaptureNames({ dirs } = {}) {
     }
   }
   if (installed(dirs).some(hasDelza)) names.push(...delzaCaptureNames());
+  if (installed(dirs).some(hasNightDrive)) names.push(...nightDriveCaptureNames());
   return names;
 }
 
@@ -240,6 +244,41 @@ export function delzaCaptureNames() {
   for (const id of DELZA_SCENE_IDS) for (const sec of DELZA_SCENE_TIMES) names.push(`cart-delza-scene-${id}-t${sec}.txt`);
   for (const m of FIGHT_MOMENTS) names.push(`cart-delza-fight-t${ms(m)}.txt`);
   for (const m of CUTSCENE_MOMENTS) names.push(`cart-delza-cutscene-t${ms(m)}.txt`);
+  return names;
+}
+
+// ---- Night Drive's own captures (cart-night-drive-*.txt), through the real app on the fake terminal at the shipped defaults:
+//   cart-night-drive-scene-<id>-t<s>.txt          every track at 2, 20 and 40 s of scene time (120x40; the diner and the on-ramp at 2, 21 and 40), chosen from the tape-deck
+//   cart-night-drive-scene-<id>-80x24-t<s>.txt    menu with the keys a person uses; the same on the compact console (the size suffix
+//                                                 sits before the time, as in cart-boot-<id>-80x24-t<ms>.txt)
+//   later moments, where each story moves (both sizes): sundown t75; redlight t62 (the light went green at about 60.1 s); diner t25
+//                                                 (the bottom of a flicker dip, computed from the scene's own schedule); caller t29
+//                                                 (Danny's card whole, with the arrow) and t70 (the narrator's card); overdrive t64
+//                                                 (the far end is open, the city shows inside it; the freeway follows at 66 s)
+//   cart-night-drive-menu-<size>.txt              the tape deck open over the running track: the * on the playing track, the cursor on the next
+//   cart-night-drive-help-<size>.txt              the reskinned help panel (h) while a track plays
+//   cart-night-drive-console-<size>.txt           the console takeover, 3.4 s after Enter: the skin's frame, grille, stripe and title.
+//                                                 The console is only on screen while the tape goes in and boots, never while a track
+//                                                 plays, so this is that moment (the compact 80x24 console has no stripe bar).
+// Scene time is counted from the scene's first frame: the tick(0) after the last key of the pick (the scene's own params.t0), then 1/18 s
+// ticks to the second. Every file is one frame under an "=== ..." header. Sizes are 120x40 and 80x24, as the generic files.
+export const NIGHT_DRIVE_ID = 'night-drive';
+export const ND_SCENE_IDS = ['onramp', 'skyline', 'sundown', 'coast', 'redlight', 'diner', 'caller', 'overdrive'];
+export const ND_SCENE_TIMES = [2, 20, 40];
+export const ND_CONSOLE_MOMENT = 3.4;
+const DINER_DIP_T = Array.from({ length: 10 }, (_, i) => 24 + i).find((s) => flickerShade(s, 1) === 1); // the first whole second from 24 s at the bottom of a dip (25)
+export const ND_LATER_TIMES = { sundown: [75], redlight: [62], diner: [DINER_DIP_T], caller: [29, 70], overdrive: [64] };
+// the diner (both sizes) and the on-ramp at 80x24 draw the same picture at 2 s and at 20 s (every motion in them repeats within
+// 18 s), so the middle moment of those two tracks is 21 s at both sizes
+export const ND_BASE_TIMES = { diner: [2, 21, 40], onramp: [2, 21, 40] };
+const ndTimes = (id) => [...(ND_BASE_TIMES[id] || ND_SCENE_TIMES), ...(ND_LATER_TIMES[id] || [])].sort((a, b) => a - b); // the clock only runs forward
+export function nightDriveCaptureNames() {
+  const names = [];
+  for (const [cols, rows] of CART_SIZES) {
+    const tag = sizeTag(cols, rows);
+    for (const id of ND_SCENE_IDS) for (const sec of ndTimes(id)) names.push(`cart-night-drive-scene-${id}${tag}-t${sec}.txt`);
+    for (const what of ['menu', 'help', 'console']) names.push(`cart-night-drive-${what}-${cols}x${rows}.txt`);
+  }
   return names;
 }
 
@@ -281,18 +320,18 @@ async function withCartApp({ seed, cols, rows, dirs, id }, fn) {
   }
 }
 
-// Delza's scenes at scene-local times: a fresh app with the boot skipped, the scene chosen from the Journal menu with the
+// A cartridge's scenes (Delza's by default) at scene-local times: a fresh app with the boot skipped, the scene chosen from its menu with the
 // keys a person uses (Enter, Down to the entry, Enter), then a clock that counts from the first frame of that scene (the
 // scene's own params.t0), so `sec` is exactly the scene time. Returns [{ sec, text }] for each of `times`.
-async function sceneShots({ seed, cols, rows, dirs, sceneId, times }) {
-  const cart = installed(dirs).find(hasDelza);
-  const { app, dir } = cartApp(seed, cols, rows, dirs, { screen: 'cartridge', cartridge: DELZA_ID, skipBoot: true });
+async function sceneShots({ seed, cols, rows, dirs, sceneId, times, cartId = DELZA_ID, has = hasDelza }) {
+  const cart = installed(dirs).find(has);
+  const { app, dir } = cartApp(seed, cols, rows, dirs, { screen: 'cartridge', cartridge: cartId, skipBoot: true });
   const out = [];
   try {
     for (let i = 0; i < 200 && app.getState().shell.screen !== 'running'; i++) { app.tick(0); await settle(); }
-    if (app.getState().shell.screen !== 'running') throw new Error('capture: ' + DELZA_ID + ' did not start');
+    if (app.getState().shell.screen !== 'running') throw new Error('capture: ' + cartId + ' did not start');
     const at = cart.manifest.menu.findIndex((e) => e.scene === sceneId);
-    if (at < 0) throw new Error('capture: no Journal entry for ' + sceneId);
+    if (at < 0) throw new Error('capture: no menu entry for ' + sceneId);
     if (at > 0) { // the first scene is already playing; the others are chosen
       app.handleKey('\r');
       for (let i = 0; i < at; i++) app.handleKey('\x1b[B');
@@ -311,6 +350,31 @@ async function sceneShots({ seed, cols, rows, dirs, sceneId, times }) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
   return out;
+}
+
+// Night Drive with a track playing: the tape deck open (Enter, then Down: the cursor is on the track after the playing one), settled for
+// 1.5 s, then closed again and the help panel (h) over the running track. Returns { menu, help } as screenshots.
+async function ndPanelShots({ seed, cols, rows, dirs }) {
+  const { app, dir } = cartApp(seed, cols, rows, dirs, { screen: 'cartridge', cartridge: NIGHT_DRIVE_ID, skipBoot: true });
+  try {
+    for (let i = 0; i < 200 && app.getState().shell.screen !== 'running'; i++) { app.tick(0); await settle(); }
+    if (app.getState().shell.screen !== 'running') throw new Error('capture: ' + NIGHT_DRIVE_ID + ' did not start');
+    let t = 0;
+    const step = async (to) => { while (t < to - 1e-9) { const d = Math.min(CART_DT, to - t); app.tick(d); t += d; } await settle(); };
+    await step(10);
+    app.handleKey('\r');
+    app.handleKey('\x1b[B');
+    await step(11.5);
+    const menu = shotText(app);
+    app.handleKey('\x1b');
+    await step(13);
+    app.handleKey('h');
+    app.tick(0);
+    return { menu, help: shotText(app) };
+  } finally {
+    app.quit(0);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 export async function runCaptureCartridges({ outDir, seed = 1, dirs = CART_DIRS() }) {
@@ -404,6 +468,26 @@ export async function runCaptureCartridges({ outDir, seed = 1, dirs = CART_DIRS(
     }
     for (const sh of await sceneShots({ seed, cols: 120, rows: 40, dirs, sceneId: 'lampwarden', times: CUTSCENE_MOMENTS })) {
       put(`cart-delza-cutscene-t${ms(sh.sec)}.txt`, `=== cut scene t=${sh.sec}s of scene time 120x40 delza/lampwarden\n${sh.text}\n`);
+    }
+  }
+
+  // Night Drive's own set: every track at its moments, then the tape deck, the help panel and the console takeover
+  if (found.some(hasNightDrive)) {
+    for (const [cols, rows] of CART_SIZES) {
+      const tag = sizeTag(cols, rows);
+      for (const id of ND_SCENE_IDS) {
+        for (const sh of await sceneShots({ seed, cols, rows, dirs, sceneId: id, times: ndTimes(id), cartId: NIGHT_DRIVE_ID, has: hasNightDrive })) {
+          put(`cart-night-drive-scene-${id}${tag}-t${sh.sec}.txt`, `=== scene t=${sh.sec}s of scene time ${cols}x${rows} night-drive/${id}\n${sh.text}\n`);
+        }
+      }
+      const panels = await ndPanelShots({ seed, cols, rows, dirs });
+      put(`cart-night-drive-menu-${cols}x${rows}.txt`, `=== tape deck ${cols}x${rows} open over the running track (the * is on the playing one, the cursor on the next) night-drive\n${panels.menu}\n`);
+      put(`cart-night-drive-help-${cols}x${rows}.txt`, `=== help ${cols}x${rows} while a track plays night-drive\n${panels.help}\n`);
+      await withCartApp({ seed, cols, rows, dirs, id: NIGHT_DRIVE_ID }, async (app, step) => {
+        app.handleKey('\r');
+        await step(ND_CONSOLE_MOMENT);
+        put(`cart-night-drive-console-${cols}x${rows}.txt`, `=== console takeover ${cols}x${rows} ${ND_CONSOLE_MOMENT}s after Enter (the skin's frame, grille, stripe and title; the console is only on screen while the tape goes in) night-drive\n${shotText(app)}\n`);
+      });
     }
   }
   return written;

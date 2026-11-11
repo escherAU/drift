@@ -594,6 +594,13 @@ scene time, reached by choosing the chapter in the Journal); `fight-t<ms>` (five
 cursor walking to the stag's charge landing); and `cutscene-t<ms>` (four text states of the Lampwarden). Her eject files are the
 usual `cart-eject-delza-...`. A test fails if the folder holds a `cart-*` file the tool no longer writes.
 
+Night Drive adds `cart-night-drive-*.txt`: `scene-<id>-t<s>` for each of its eight tracks (`-80x24` before the time for the compact
+console) at 2, 20 and 40 s of scene time (the diner and the on-ramp at 2, 21 and 40), chosen from the tape deck, plus the later moments
+where the story moves (sundown 75 s, redlight 62 s, diner 25 s mid flicker dip, caller 29 s and 70 s, overdrive 64 s); `menu-120x40` and
+`-80x24` (the tape deck open over the playing track, the `*` on it and the cursor on the next); `help-120x40` and `-80x24` (the
+reskinned help panel); and `console-120x40` and `-80x24` (the console takeover as the tape boots, the only time it is on screen).
+Sixty-six files in all, on top of the generic library, insert, boot and eject files it already had.
+
 `captures/*.ansi` are git-ignored (large) except the calm scenes' and the crossfade's; regenerate with the
 capture command and view with `type captures\sunburst-120x40.ansi` in a truecolor terminal.
 
