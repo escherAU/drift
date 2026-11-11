@@ -320,9 +320,52 @@ function exactChars(v, name, n) {
   return null;
 }
 
+export const CONSOLE_INK_KEYS = Object.freeze(['frame', 'grille', 'stripe', 'led', 'bar']);
+export const TITLE_STYLES = Object.freeze(['block', 'spaced', 'plain']);
+
+// skin.console: how the cartridge restyles the Driftman console itself. Every field is optional; a missing one
+// keeps the console's own look. Ink values are brightness levels 0 to 3 of the cartridge's label tint (the library
+// palette has them already); title colours are palette indexes of the skin. `idx` is the skin's palette-index check.
+function validateConsole(c, idx) {
+  if (!isObj(c)) return fail('console must be an object');
+  const k = unknownKey(c, ['frame', 'grille', 'stripe', 'ink', 'title'], 'console');
+  if (k) return fail(k);
+  const o = {};
+  if (c.frame !== undefined) { const e = exactChars(c.frame, 'console.frame', 8); if (e) return fail(e); o.frame = c.frame; }
+  if (c.grille !== undefined) { const e = exactChars(c.grille, 'console.grille', 1); if (e) return fail(e); o.grille = c.grille; }
+  if (c.stripe !== undefined) { const e = strErr(c.stripe, 'console.stripe', 24); if (e) return fail(e); o.stripe = c.stripe; }
+  if (c.ink !== undefined) {
+    if (!isObj(c.ink)) return fail('console.ink must be an object');
+    const ik = unknownKey(c.ink, CONSOLE_INK_KEYS, 'console.ink');
+    if (ik) return fail(ik);
+    o.ink = {};
+    for (const key of CONSOLE_INK_KEYS) {
+      if (c.ink[key] === undefined) continue;
+      if (!Number.isInteger(c.ink[key]) || c.ink[key] < 0 || c.ink[key] > 3) return fail(`console.ink.${key} must be 0 to 3`);
+      o.ink[key] = c.ink[key];
+    }
+  }
+  if (c.title !== undefined) {
+    const t = c.title;
+    if (!isObj(t)) return fail('console.title must be an object');
+    const tk = unknownKey(t, ['style', 'ornament', 'colour', 'ornamentColour'], 'console.title');
+    if (tk) return fail(tk);
+    o.title = {};
+    if (t.style !== undefined) { if (!TITLE_STYLES.includes(t.style)) return fail(`console.title.style must be one of ${TITLE_STYLES.join(', ')}`); o.title.style = t.style; }
+    if (t.ornament !== undefined) { const e = strErr(t.ornament, 'console.title.ornament', 40); if (e) return fail(e); o.title.ornament = t.ornament; }
+    for (const key of ['colour', 'ornamentColour']) {
+      if (t[key] === undefined) continue;
+      const e = idx(t[key], `console.title.${key}`);
+      if (e) return fail(e);
+      o.title[key] = t[key];
+    }
+  }
+  return { ok: true, console: o };
+}
+
 export function validateSkin(obj) {
   if (!isObj(obj)) return fail('skin.json must hold an object');
-  const uk = unknownKey(obj, ['palette', 'frame', 'menu', 'help', 'boot', 'insert', 'wording', 'seasons'], '');
+  const uk = unknownKey(obj, ['palette', 'frame', 'console', 'menu', 'help', 'boot', 'insert', 'wording', 'seasons'], '');
   if (uk) return fail(uk);
   const out = {};
 
@@ -364,6 +407,11 @@ export function validateSkin(obj) {
     if (f.title !== undefined) { const e = strErr(f.title, 'frame.title', 30); if (e) return fail(e); o.title = f.title; }
     if (f.colour !== undefined) { const e = idx(f.colour, 'frame.colour'); if (e) return fail(e); o.colour = f.colour; }
     out.frame = o;
+  }
+  if (obj.console !== undefined) {
+    const r = validateConsole(obj.console, idx);
+    if (!r.ok) return r;
+    out.console = r.console;
   }
   if (obj.menu !== undefined) {
     const m = obj.menu;

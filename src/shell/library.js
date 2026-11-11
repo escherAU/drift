@@ -231,8 +231,39 @@ export function consoleStyle(skin, overrides = {}) {
   const ui = skin.palette.ui;
   return {
     box: SLOT_BOX, shade: DRIFTMAN_COLOURS.housing, bar: ui.head, led: 'off', ledShade: DRIFTMAN_COLOURS.housing,
-    openShade: DRIFTMAN_COLOURS.dark, link: false, grille: 0x2592, stripe: null, ...overrides,
+    openShade: DRIFTMAN_COLOURS.dark, link: false, grille: 0x2592, grilleShade: null, stripe: null, stripeShade: null, ...overrides,
   };
+}
+
+const cpOfChar = (ch) => ch.codePointAt(0);
+const up = (level) => Math.min(3, level + 1); // the takeover band is one level brighter than what it leaves behind
+
+// The console style a skin takes over the console with, and the style of the band that sweeps it in (one level up).
+// Pure. cartSkin = the cartridge's validated skin (or null), tint = the library palette index of its level 0,
+// classic = the Classic cartridge (its takeover is a one-shade shimmer only), consoleSkin = skin.console (the console
+// block; defaults to cartSkin.console), ui = the console's ui colours (the band's title text).
+//   box       console.frame, else frame.glyphs, else the bezel
+//   shades    frame = tint + (ink.frame ?? 2), title bar = tint + (ink.bar ?? 3)
+//   LED       tint + ink.led only when ink.led is given; otherwise it stays the accent colour
+//   grille, stripe, and their shades: only when the block gives them (else the console keeps today's)
+// -> { style, band }    both are console style overrides (see consoleStyle)
+export function takeoverStyle(cartSkin, tint, classic, consoleSkin, ui) {
+  if (classic) return { style: {}, band: { shade: DRIFTMAN_COLOURS.dim, bar: ui.head } };
+  const cs = consoleSkin || (cartSkin && cartSkin.console) || {};
+  const ink = cs.ink || {};
+  const box = cs.frame || (cartSkin && cartSkin.frame && cartSkin.frame.glyphs) || SLOT_BOX;
+  const fl = ink.frame === undefined ? 2 : ink.frame;
+  const bl = ink.bar === undefined ? 3 : ink.bar;
+  const style = { box, shade: tint + fl, bar: tint + bl };
+  const band = { box, shade: tint + up(fl), bar: ui.head };
+  if (cs.grille) style.grille = band.grille = cpOfChar(cs.grille);
+  if (cs.stripe) style.stripe = band.stripe = cs.stripe;
+  for (const [key, field] of [['grille', 'grilleShade'], ['stripe', 'stripeShade'], ['led', 'ledShade']]) {
+    if (ink[key] === undefined) continue;
+    style[field] = tint + ink[key];
+    band[field] = tint + up(ink[key]);
+  }
+  return { style, band };
 }
 
 const frameChars = (st) => ((st.box && st.box !== SLOT_BOX) ? [...st.box].map(cpOf) : [...ROUND_BOX].map(cpOf));
@@ -338,7 +369,7 @@ export function consoleGrid(sel, o = {}) {
       if (ch === ' ') continue;
       gPut(G, PANEL_X + 1 + c, 5 + r, cpOf(ch), ch === '●' ? ui.text : DRIFTMAN_COLOURS.housing);
     }
-    gRun(G, PANEL_X + 14, 5 + r, st.grille, 13, sh);
+    gRun(G, PANEL_X + 14, 5 + r, st.grille, 13, st.grilleShade === null || st.grilleShade === undefined ? sh : st.grilleShade);
   }
   const pos = wrapIdx(o.dial === undefined ? (o.index || 0) : o.dial, DIAL_POSITIONS);
   for (const [r, c, ch] of POINTER[pos]) gPut(G, PANEL_X + 1 + c, 5 + r, cpOf(ch), DRIFTMAN_COLOURS.amber);
@@ -350,8 +381,10 @@ export function consoleGrid(sel, o = {}) {
   else { gPut(G, 0, 14, 0x255e, sh); gRun(G, 1, 14, 0x2550, 82, sh); gPut(G, 83, 14, 0x2561, sh); }
   gPut(G, 0, 15, FR[7], sh); gPut(G, 83, 15, FR[3], sh);
   gText(G, 3, 15, TITLE_TEXT, st.bar);
-  const stripe = [...(st.stripe || ('═'.repeat(30) + '╱╱╱╱'))].slice(0, 34);
-  gText(G, 31, 15, stripe.join(''), sh);
+  // the rule on the band row: today's glyphs, or the skin's stripe tiled across the same 34 cells
+  const tile = st.stripe ? [...st.stripe] : null;
+  const stripe = tile ? Array.from({ length: 34 }, (_, i) => tile[i % tile.length]) : [...('═'.repeat(30) + '╱╱╱╱')];
+  gText(G, 31, 15, stripe.join(''), st.stripeShade === null || st.stripeShade === undefined ? sh : st.stripeShade);
   gText(G, 68, 15, 'MODEL DM-2000', ui.dim);
   gPut(G, 0, 16, FR[6], sh); gRun(G, 1, 16, FR[5], 82, sh); gPut(G, 83, 16, FR[4], sh);
   gRun(G, 3, 17, 0x2580, 6, sh); gRun(G, 75, 17, 0x2580, 6, sh);

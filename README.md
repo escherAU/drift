@@ -251,12 +251,33 @@ Driftman 2000; a cartridge with no `skin.json` uses the Driftman 2000's whole lo
 |---|---|
 | `palette` (required) | `hue` `#RRGGBB`; `colours` up to 48 extra fixed colours (indexes 16 and up); `bg` the background, which must be dark (WCAG relative luminance 0.05 or less, else "background too light"); `ui` `{ text, dim, head, accent }`, palette indexes for the console's own text (defaults 15, 7, 15, 15) |
 | `frame` | `show` `never`, `menu` or `always` (when the frame is drawn around the scene); `glyphs` 8 characters; `title` up to 30; `colour` a palette index |
+| `console` | restyles the Driftman 2000 itself once the cartridge is in (see below); every field optional |
 | `menu` | `layout` `list`, `slots` or `grid`; `anchor` `center`, `left` or `bottom`; `cursor` 1 character; `title` up to 40; `box` 8 characters |
 | `help` | `title` up to 30; `box` 8 characters |
 | `boot` | `lines` up to 8 typed lines of up to 60 characters, typed after the console's own two (`DRIFTMAN 2000 · CORE 2.0`, `MEMORY 64K ..... OK`); the screen has room for six lines in all and 40 columns (so four of yours, up to 40 characters), and text after a run of dots and a space is drawn in the accent colour; `art` true to draw `boot.txt`; `seconds` 0.5 to 10, how long the typed lines take (0.25 s a line; the default 1.5 s is six lines) |
 | `insert` | `text` up to 40: the caption of the insert animation |
 | `wording` | `keys` `{ <key id>: "label" }` re-words help rows, ids from the key tables (up to 28 characters each); `menuHint` up to 60 |
 | `seasons` | 1 to 4 of `{ name, hue }` (`name` up to 16 characters, `hue` `#RRGGBB`); the `c` key walks the skin's own hue, then each season, then back. The name is checked but not shown yet |
+
+**Console block** (`skin.console`; the console takes this look behind the 6-column band when the cartridge is inserted, and gives it back on eject. A field you leave out keeps the console's own look, so a skin without the block draws exactly as before; Classic never changes).
+
+| field | meaning |
+|---|---|
+| `frame` | exactly 8 characters (same order as `frame.glyphs`): the console's border and screen bezel. Wins over `frame.glyphs` for the console |
+| `grille` | exactly 1 character: the speaker grille (default `▒`) |
+| `stripe` | 1 to 24 characters, tiled across the rule on the console's name band (default `═` with a short `╱╱╱╱` run) |
+| `ink` | brightness levels 0 to 3 of the cartridge's label colour (`labelHue`), whole numbers, for `frame` (default 2), `grille`, `stripe`, `led` (the CART light; default the accent colour) and `bar` (the name text; default 3). No new colours: the library palette already holds the four levels |
+| `title` | the boot's title card: `style` `block` (big letters, default), `spaced` (plain capitals, single-spaced) or `plain` (plain capitals); `ornament` up to 40 characters on the row under the title, revealed with it and left out when there is no room; `colour` and `ornamentColour` are palette indexes of the skin (defaults the head and dim colours) |
+
+Every glyph must be on the allow-list and one cell wide. Unknown fields inside `console`, `ink` and `title` are errors.
+
+```json
+"console": {
+  "frame": "┏━┓┃┛━┗┃", "grille": "═", "stripe": "▁▂▃▄▅▆▇█",
+  "ink": { "frame": 2, "grille": 1, "stripe": 2, "led": 3, "bar": 3 },
+  "title": { "style": "spaced", "ornament": "── ◆ ──", "colour": 15, "ornamentColour": 7 }
+}
+```
 
 The 8-character `glyphs` and `box` strings are the corners and edges in the order
 top-left, top, top-right, right, bottom-right, bottom, bottom-left, left (for example

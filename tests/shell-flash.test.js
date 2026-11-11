@@ -359,3 +359,52 @@ for (const [cols, rows] of SIZES) {
     assert.ok(worst <= FLASH_FRACTION, `${cols}x${rows}: worst cursor step ${(worst * 100).toFixed(1)}%`);
   });
 }
+
+// ---- DRIFT-4 B1: a cartridge whose skin restyles the console (frame, grille, stripe, every ink at the brightest level 3,
+// a spaced title with an ornament): insert, boot and eject stay under the limit and every brightness change is a ramp.
+const CONSOLE_INK3 = {
+  frame: '┏━┓┃┛━┗┃', grille: '═', stripe: '▁▂▃▄▅▆▇█',
+  ink: { frame: 3, grille: 3, stripe: 3, led: 3, bar: 3 },
+  title: { style: 'spaced', ornament: '── ◆ ──', ornamentColour: 12 },
+};
+function consoleSkinRoot() {
+  const root = makeRoot();
+  const sp = path.join(root, 'fixture', 'skin.json');
+  const sk = JSON.parse(fs.readFileSync(sp, 'utf8'));
+  sk.console = CONSOLE_INK3;
+  fs.writeFileSync(sp, JSON.stringify(sk));
+  return root;
+}
+
+for (const [cols, rows] of SIZES) {
+  test(`flash ${cols}x${rows}: a console skin with every ink at level 3 - insert, boot and eject under the limit, every brightness change a ramp`, async (t) => {
+    const c = mkShell({ startScreen: { screen: 'library' }, cols, rows, root: consoleSkinRoot() });
+    c.app.start();
+    c.goto('fixture');
+    const r = withCols(recorder(c), cols);
+    r.run(0.5);
+    r.press('\r');
+    await c.settle();
+    r.run(INSERT_END + 0.05);
+    assert.equal(c.sh().screen, 'boot');
+    assert.ok(c.text().includes('┏') || c.text().includes('━'), 'the skin\'s console frame is on the screen at the end of the insert');
+    r.run(BOOT_END - INSERT_END + 0.3);
+    await c.settle();
+    r.run(1);
+    assert.equal(c.sh().screen, 'running');
+    const insertBoot = assertSafe(r, `console skin ${cols}x${rows}`);
+    assertRamps(r, `console skin ${cols}x${rows}`);
+    c.key('\x1b');
+    c.tick(1);
+    const r2 = withCols(recorder(c), cols);
+    r2.run(0.5);
+    r2.press('e');
+    r2.run(2.2);
+    assert.equal(c.sh().screen, 'library');
+    r2.run(1);
+    const eject = assertSafe(r2, `console skin eject ${cols}x${rows}`);
+    assertRamps(r2, `console skin eject ${cols}x${rows}`);
+    t.diagnostic(`${cols}x${rows}: insert+boot worst ${(insertBoot.worst * 100).toFixed(1)}%, eject worst ${(eject.worst * 100).toFixed(1)}%`);
+    c.done();
+  });
+}

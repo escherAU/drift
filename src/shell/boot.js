@@ -132,16 +132,25 @@ export function mergeBootPalette(cartPal, libPal, tint) {
 
 const FILL = [0x258f, 0x258e, 0x258d, 0x258c, 0x258b, 0x258a, 0x2589, 0x2588]; // eighths: left bar 1/8 .. full
 
-// HOOK (schema item 1, title.ornament): the ornament row drawn under the title card. A skin without the field has none.
+// The ornament row drawn under the title card: console.title.ornament, else the older hook fields. A skin without one has none.
 export function titleOrnament(skin) {
-  const o = (skin.menu && skin.menu.ornament) || (skin.frame && skin.frame.ornament) || (skin.title && skin.title.ornament) || null;
+  const ct = skin.console && skin.console.title;
+  const o = (ct && ct.ornament) || (skin.menu && skin.menu.ornament) || (skin.frame && skin.frame.ornament) || (skin.title && skin.title.ornament) || null;
   return typeof o === 'string' && o ? o : null;
 }
 
 // The title in big block capitals, revealed left to right: `reveal` (0..1) is the fraction of its columns shown.
-// Returns { top, bottom, left, width } of what it drew (the ornament and the label go round it).
-function titleCard(f, title, shade, reveal) {
+// style 'spaced' sets the capitals as plain text with a single space between letters, 'plain' as plain centred text
+// (spaced falls back to plain when it does not fit); 'block' (default) is the big letters, and falls back to plain
+// text when they do not fit. Returns { top, bottom, left, width } of what it drew (the ornament and the label go round it).
+function titleCard(f, title, shade, reveal, style = 'block') {
   const text = String(title || '').toUpperCase();
+  if (style === 'spaced' || style === 'plain') {
+    const shown = style === 'spaced' && lenOf(text) * 2 - 1 <= f.cols - 2 ? [...text].join(' ') : [...text].slice(0, Math.max(0, f.cols - 2)).join('');
+    const w = lenOf(shown), x0 = centerX(f.cols, w), y = Math.floor(f.rows / 2);
+    putText(f, x0, y, [...shown].slice(0, Math.ceil(w * Math.max(0, Math.min(1, reveal)))).join(''), shade);
+    return { top: y, bottom: y, left: x0, width: w };
+  }
   for (const sx of [2, 1]) {
     const cells = [];
     let w = 0;
@@ -304,11 +313,12 @@ export function drawBoot(frame, args, consoleSkin) {
 
   // ---- step 11: the title card, revealed left to right
   const reveal = ramp(T, P.zoomEnd, P.zoomEnd + REVEAL_SECONDS);
-  const tc = titleCard(f, args.title, ui.head, reveal);
+  const ct = (sk.console && sk.console.title) || {};
+  const tc = titleCard(f, args.title, ct.colour === undefined ? ui.head : ct.colour, reveal, ct.style);
   const orn = titleOrnament(sk);
   if (orn && tc.bottom + 2 < f.rows - 1) {
-    const n = Math.ceil(lenOf(orn) * reveal);
-    putCentered(f, tc.bottom + 2, [...orn].slice(0, n).join(''), ui.dim, f.cols - 2);
+    const o = [...orn].slice(0, Math.max(0, f.cols - 2)).join(''); // set at its final place, then revealed left to right
+    putText(f, centerX(f.cols, lenOf(o)), tc.bottom + 2, [...o].slice(0, Math.ceil(lenOf(o) * reveal)).join(''), ct.ornamentColour === undefined ? ui.dim : ct.ornamentColour);
   }
   const art = sk.boot && sk.boot.art && args.bootArt ? args.bootArt : null;
   if (art) drawAbove(f, art, tc.top, ui.dim, reveal, f.cols - 2);

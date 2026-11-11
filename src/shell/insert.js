@@ -20,7 +20,7 @@
 // Eject (shell.js) plays this backwards. Every brightness change is a one-shade step or a dissolve; the background
 // never changes.
 import { clearFrame, putCentered, ramp, sizeTier, drawTooSmall } from './ui.js';
-import { drawShelf, shelfLayout, SLOT_BOX, CONSOLE_W, MINI_W } from './library.js';
+import { drawShelf, shelfLayout, takeoverStyle, CONSOLE_W, MINI_W } from './library.js';
 import { DRIFTMAN_COLOURS } from './driftman.js';
 
 export const INSERT_LIFT_END = 0.15;
@@ -48,13 +48,11 @@ export function spreadAt(t) {
 }
 
 // The console style the takeover swaps in behind the band, and the band's own style (one shade brighter).
-// ONE small pure function: schema item 1 replaces it with takeoverStyle(), which also swaps the grille and the stripe.
+// ONE small pure function: takeoverStyle() (library.js) does the work. It reads the skin's console block (the frame,
+// grille, stripe and the ink levels), so eject, which reuses drawInsert backwards, reverses it for free.
 //   -> { style, band }    both are console style overrides (see consoleStyle in library.js)
 export function sweepStyle(item, ui) {
-  if (item.classic) return { style: {}, band: { shade: DRIFTMAN_COLOURS.dim, bar: ui.head } };
-  const box = (item.cartSkin && item.cartSkin.frame && item.cartSkin.frame.glyphs) || SLOT_BOX;
-  const tint = item.cartridge.tint;
-  return { style: { box, shade: tint + 2, bar: tint + 3 }, band: { box, shade: tint + 3, bar: ui.head } };
+  return takeoverStyle(item.cartSkin || null, item.cartridge.tint, !!item.classic, item.cartSkin && item.cartSkin.console, ui);
 }
 
 export function drawInsert(frame, args, skin) {
