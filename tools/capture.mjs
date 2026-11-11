@@ -22,6 +22,7 @@ import { makePalette, presetRGB } from '../src/color.js';
 import artist, { timeline } from '../src/scenes/artist.js';
 import { PIECES } from '../src/art/gallery.js';
 import { buildPlan, pieceToText } from '../src/art/engine.js';
+import { discoverCartridges, INSTALL_DIR } from '../src/cartridge/loader.js';
 
 export const CAPTURE_NAMES = [...SCENES.map((s) => s.id), 'crossfade'];
 const SIZES = [[120, 40], [240, 67]];
@@ -160,6 +161,70 @@ export function runCaptureGallery({ outDir, seed = 1 }) {
   return written;
 }
 
+// ---- DRIFT-4: the cartridge console, plain text at 120x40, from the install cartridges only
+// (so the files do not depend on what a user has in %APPDATA%). Its own list of names; K3 above is untouched.
+//   cart-library-<id>.txt   the library with the cursor on that cartridge (locked ones too)
+//   cart-insert-<id>.txt    the insert animation at INSERT_MOMENTS seconds after Enter (unlocked ones)
+//   cart-boot-<id>.txt      the boot screen at BOOT_MOMENTS seconds into the boot (unlocked ones)
+// Driven through the real app on a fake terminal, with a fake clock.
+const CART_COLS = 120, CART_ROWS = 40;
+const CART_DT = 1 / 18;
+export const INSERT_MOMENTS = [0.3, 0.75, 1.2, 1.5];
+export const BOOT_MOMENTS = [0.3, 0.9, 1.5, 2.4, 3.0];
+const CART_DIRS = () => [{ dir: INSTALL_DIR, trusted: true }];
+
+export function cartridgeCaptureNames() {
+  const found = discoverCartridges({ dirs: CART_DIRS() }).cartridges;
+  return found.flatMap((c) => [`cart-library-${c.id}.txt`, ...(c.locked ? [] : [`cart-insert-${c.id}.txt`, `cart-boot-${c.id}.txt`])]);
+}
+
+function cartApp(seed) {
+  const stdin = new EventEmitter();
+  Object.assign(stdin, { isTTY: true, setRawMode() { return stdin; }, resume() { return stdin; }, pause() { return stdin; }, unref() {}, ref() {}, setEncoding() { return stdin; } });
+  const stdout = new EventEmitter();
+  Object.assign(stdout, { isTTY: true, columns: CART_COLS, rows: CART_ROWS, write(_s, cb) { if (typeof cb === 'function') cb(); return true; } });
+  const proc = new EventEmitter();
+  proc.exit = () => {};
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-capture-cart-'));
+  const app = createApp({
+    stdin, stdout, stderr: { write() { return true; } }, proc, env: { COLORTERM: 'truecolor' },
+    configPath: path.join(dir, 'config.json'), dirs: CART_DIRS(), autoLoop: false, seed, startScreen: { screen: 'library' },
+  });
+  app.start();
+  return { app, dir };
+}
+
+const shotText = (app) => frameToText(app.screenshot());
+
+export async function runCaptureCartridges({ outDir, seed = 1 }) {
+  fs.mkdirSync(outDir, { recursive: true });
+  const written = [];
+  const put = (name, text) => { const f = path.join(outDir, name); fs.writeFileSync(f, text); written.push(f); };
+  const found = discoverCartridges({ dirs: CART_DIRS() }).cartridges;
+  const settle = () => new Promise((r) => setTimeout(r, 20));
+  for (const c of found) {
+    const { app, dir } = cartApp(seed);
+    try {
+      app.tick(0.05);
+      for (let i = 0; i < found.length + 1 && app.getState().shell.cartridge !== c.id; i++) { app.handleKey('\x1b[C'); app.tick(0.5); }
+      app.tick(0.5);
+      put(`cart-library-${c.id}.txt`, `=== library ${CART_COLS}x${CART_ROWS} cursor on ${c.id}${c.locked ? ' (locked)' : ''}\n${shotText(app)}\n`);
+      if (c.locked) continue;
+      app.handleKey('\r');
+      let t = 0, ins = '', boot = '';
+      const step = async (to) => { while (t < to - 1e-9) { const d = Math.min(CART_DT, to - t); app.tick(d); t += d; } await settle(); };
+      for (const m of INSERT_MOMENTS) { await step(m); ins += `=== insert t=${m}s ${CART_COLS}x${CART_ROWS} ${c.id}\n${shotText(app)}\n`; }
+      for (const m of BOOT_MOMENTS) { await step(INSERT_MOMENTS[INSERT_MOMENTS.length - 1] + m); boot += `=== boot t=${m}s ${CART_COLS}x${CART_ROWS} ${c.id}\n${shotText(app)}\n`; }
+      put(`cart-insert-${c.id}.txt`, ins);
+      put(`cart-boot-${c.id}.txt`, boot);
+    } finally {
+      app.quit(0);
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  return written;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const i = process.argv.indexOf('--out');
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -167,5 +232,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const files = runCapture({ outDir: out });
   const more = runCaptureModes({ outDir: out });
   const art = runCaptureGallery({ outDir: out });
-  console.log(`wrote ${files.length} calm files, ${more.length} mode files and ${art.length} gallery files to ${out}`);
+  const carts = await runCaptureCartridges({ outDir: out });
+  console.log(`wrote ${files.length} calm files, ${more.length} mode files, ${art.length} gallery files and ${carts.length} cartridge files to ${out}`);
 }

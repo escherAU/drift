@@ -1,0 +1,41 @@
+=== library 120x40 cursor on arcade (locked)
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                               D R I F T M A N   2 0 0 0                                                
+                                          ════════════════════════════════════                                          
+                                                                                                                        
+                                                                                                                        
+                    ┌──────────────────────┐                                                                            
+                    │                      │    ╔══════════════════════╗    ╔══════════════════════╗                    
+                    │        D R I F T     │    ║                      ║    ║                      ║                    
+                    │        classic       │◀   ║        ARCADE        ║   ▶║     LAST FANTASY     ║                    
+                    │                      │    ║                      ║    ║                      ║                    
+                    │   ░▒▓██▓▒░ ░▒▓██▓▒░  │    ║      ●  ●  ●  ●      ║    ║    · · · · · · ·     ║                    
+                    │                      │    ║                      ║    ║                      ║                    
+                    └──────────────────────┘    ╚══════════════════════╝    ╚══════════════════════╝                    
+                                             ╔════════════════════════════╗                                             
+                                             ║░░░░░░░░░░░░░░░░░░░░░░░░░░░░║                                             
+                                             ╚═══════════CART══○══════════╝                                             
+                                                                                                                        
+                                               Arcade  [DM-03]  (locked)                                                
+                                         Coins, bright lights and high scores.                                          
+                                                                                                                        
+                                                                                                                        
+                                                     Genre: arcade                                                      
+                                                    Players: 1 to 2                                                     
+                                                  Status: coming soon                                                   
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                        ○ ● ○ ○                                                         
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                   left/right choose   Enter insert   h help   q quit                                   
