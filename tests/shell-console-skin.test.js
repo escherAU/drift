@@ -171,7 +171,7 @@ const digests = () => ({
 });
 const GOLDEN = {
   insertSkinned: 'bb7474c93f67454444eec5ca6031b3759a49acbb',
-  insertClassic: 'dec167ddde275142d30ad5e91a0efa9594be7d3e',
+  insertClassic: '54d028d23be6d9a8499d8e4900d3711e2bd76fe9',
   boot: 'e25276f4631c8574cfe955a3a91e07d3b5788e0d',
 };
 

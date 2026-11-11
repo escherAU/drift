@@ -51,7 +51,17 @@ test('validateManifest: field checks (version, labelHue, text length and glyphs,
   assert.match(ok({ format: 0 }).reason, /whole number/);
   assert.match(ok({ format: 99 }).reason, /needs a newer Drift/);
   assert.match(ok({ runtime: 'native' }).reason, /'runtime' must be/);
-  assert.match(ok({ locked: false, code: 'DM-01' }).reason, /unknown field 'code'/);
+  // code and facts are allowed on unlocked manifests too (a Classic-runtime one may carry them)
+  const withCode = ok({ code: 'DM-01', facts: ['4 modes'] });
+  assert.equal(withCode.ok, true);
+  assert.equal(withCode.manifest.code, 'DM-01');
+  assert.deepEqual(withCode.manifest.facts, ['4 modes']);
+  assert.match(ok({ code: 'DM-1' }).reason, /exactly 5 characters/);
+  assert.match(ok({ facts: ['x'.repeat(41)] }).reason, /facts\[0\] is 41 characters, max 40/);
+  assert.match(ok({ facts: Array(7).fill('x') }).reason, /at most 6/);
+  const cl = validateManifest({ format: 1, id: 'classic', title: 'Drift Classic', version: '1.0.0', author: 'Drift', blurb: 'b', runtime: 'classic', code: 'DM-00', facts: ['a'] }, { trusted: true });
+  assert.equal(cl.ok, true);
+  assert.equal(cl.manifest.code, 'DM-00');
 });
 
 test('validateManifest: the result is a normalised copy (defaults filled, extras impossible)', () => {

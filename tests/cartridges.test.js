@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isAllowedGlyph, REMOVED_FOR_FONT } from '../src/glyphs.js';
-import { INSTALL_DIR } from '../src/cartridge/loader.js';
+import { INSTALL_DIR, discoverCartridges } from '../src/cartridge/loader.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'src');
@@ -224,4 +224,12 @@ test('no module under src/ (or bin/) imports node:https, node:net, node:http or 
   assert.ok(files.length > 30, `scanned ${files.length} files`);
   assert.ok(files.some((f) => rel(f) === 'src/cartridge/loader.js') && files.some((f) => rel(f) === 'src/app.js'), 'the scan reaches the new and the old modules');
   for (const f of files) assert.deepEqual(networkImports(fs.readFileSync(f, 'utf8')), [], rel(f));
+});
+
+test('every installed cartridge has a unique shelf code of the form DM-nn', () => {
+  const found = discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] }).cartridges;
+  assert.ok(found.length >= 4);
+  const codes = found.map((c) => c.manifest.code);
+  for (const [i, code] of codes.entries()) assert.match(String(code), /^DM-\d\d$/, found[i].id);
+  assert.equal(new Set(codes).size, codes.length, `codes are unique: ${codes.join(' ')}`);
 });

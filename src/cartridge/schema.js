@@ -49,7 +49,7 @@ export const SCENE_KINDS = Object.freeze(['cells', 'sim', 'field', 'text', 'buil
 export const CODE_KINDS = Object.freeze(['cells', 'sim', 'field']);
 export const MENU_ACTIONS = Object.freeze(['eject']);
 
-const OPEN_KEYS = ['format', 'id', 'title', 'version', 'author', 'blurb', 'runtime', 'locked', 'labelHue', 'scenes', 'programs', 'start', 'menu', 'chapters'];
+const OPEN_KEYS = ['format', 'id', 'title', 'version', 'author', 'blurb', 'runtime', 'locked', 'labelHue', 'scenes', 'programs', 'start', 'menu', 'chapters', 'code', 'facts'];
 const LOCKED_KEYS = ['format', 'id', 'title', 'version', 'author', 'blurb', 'locked', 'code', 'facts', 'labelHue'];
 
 const fail = (reason) => ({ ok: false, reason });
@@ -242,18 +242,19 @@ export function validateManifest(obj, { trusted = false } = {}) {
   const out = { format: obj.format, id: obj.id, title: obj.title, version: obj.version, author: obj.author, blurb: obj.blurb };
   if (obj.labelHue !== undefined) out.labelHue = obj.labelHue;
 
+  if (obj.code !== undefined) {
+    if (typeof obj.code !== 'string' || !CODE_RE.test(obj.code)) return fail("'code' must be exactly 5 characters, capitals, digits or hyphen (like DM-01)");
+    out.code = obj.code;
+  }
+  if (obj.facts !== undefined) {
+    if (!Array.isArray(obj.facts) || obj.facts.length > LIMITS.facts) return fail(`'facts' must list at most ${LIMITS.facts} lines`);
+    for (let i = 0; i < obj.facts.length; i++) { const e = strErr(obj.facts[i], `facts[${i}]`, LIMITS.factChars); if (e) return fail(e); }
+    out.facts = obj.facts.slice();
+  }
+
   if (locked) {
     if (obj.id === 'classic') return fail("id 'classic' is reserved for the Drift Classic cartridge");
     out.locked = true;
-    if (obj.code !== undefined) {
-      if (typeof obj.code !== 'string' || !CODE_RE.test(obj.code)) return fail("'code' must be exactly 5 characters, capitals, digits or hyphen (like DM-01)");
-      out.code = obj.code;
-    }
-    if (obj.facts !== undefined) {
-      if (!Array.isArray(obj.facts) || obj.facts.length > LIMITS.facts) return fail(`'facts' must list at most ${LIMITS.facts} lines`);
-      for (let i = 0; i < obj.facts.length; i++) { const e = strErr(obj.facts[i], `facts[${i}]`, LIMITS.factChars); if (e) return fail(e); }
-      out.facts = obj.facts.slice();
-    }
     return { ok: true, manifest: out };
   }
 

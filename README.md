@@ -234,8 +234,8 @@ and never stops the others; at most 50 cartridges are read.
 | `blurb` | yes | up to 60 characters |
 | `runtime` | unless `locked` | `"cartridge"`; `"classic"` is only for the install folder's `classic` |
 | `locked` | no | `true` makes a coming-soon card: it can then hold only `format`, `id`, `title`, `version`, `author`, `blurb`, `labelHue`, `code` and `facts`, and cannot be inserted |
-| `code` | locked only | exactly 5 characters, capitals, digits or hyphen (like `DM-01`): the shelf code shown beside the title |
-| `facts` | locked only | up to 6 lines of up to 40 characters, listed under the blurb when the window is roomy |
+| `code` | any | exactly 5 characters, capitals, digits or hyphen (like `DM-01`): the shelf code shown beside the title |
+| `facts` | any | up to 6 lines of up to 40 characters, listed under the blurb when the window is roomy |
 | `labelHue` | no | `#RRGGBB`: the tint of the library card |
 | `scenes` | yes (1 to 16) | list of `{ id, kind, title?, ref? }`. `id` follows the id rule; `kind` is `cells`, `sim`, `field` (code, install only), `text` (a `scenes/<id>.txt` file) or `builtin`; `title` up to 30 characters; `ref` (builtin only) names a Classic **calm** or **experimental** scene, such as `sand` or `plasma` |
 | `programs` | yes (1 to 8) | list of `{ id, title?, transition, scenes, sceneSeconds?, fadeSeconds? }`: `transition` is `dissolve` or `crossfade`; `scenes` lists scene ids (1 to 16); `sceneSeconds` 20 to 3600 (default 180); `fadeSeconds` 5 to 60 (default 15, crossfade only, and shorter than `sceneSeconds`). A `crossfade` program holds only `field` scenes and calm builtins; a `dissolve` program holds `cells`, `sim`, `text` and experimental builtins |

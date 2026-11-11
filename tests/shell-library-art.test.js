@@ -96,5 +96,7 @@ test('install manifests: reconciled codes, the designer copy where the schema al
   assert.equal(m('last-fantasy').code, 'DM-04');
   assert.equal(m('night-drive').blurb, 'Neon highway, endless dusk, and a car that never needs fuel.');
   assert.ok(!/sword/i.test(JSON.stringify(m('last-fantasy'))), 'no sword in the Last Fantasy manifest');
-  assert.equal(m('classic').code, undefined, 'the schema does not allow code on a playable cartridge yet (schema item 2)');
+  assert.equal(m('classic').code, 'DM-00');
+  assert.deepEqual(m('classic').facts, ['4 modes · 21 scenes · the original']);
+  assert.ok([...m('classic').blurb].length <= 60);
 });

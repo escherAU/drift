@@ -4,7 +4,9 @@
   "title": "Drift Classic",
   "version": "1.0.0",
   "author": "Drift",
-  "blurb": "The original calm screensaver, and its other modes.",
+  "blurb": "Today's Drift, as you know it. Calm by default, 4 modes.",
   "runtime": "classic",
+  "code": "DM-00",
+  "facts": ["4 modes · 21 scenes · the original"],
   "labelHue": "#D97757"
 }
