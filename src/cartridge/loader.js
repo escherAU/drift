@@ -49,11 +49,13 @@ function contained(realDir, file, label) {
   return real;
 }
 
-// Any .js/.mjs/.cjs file below dir (bounded depth and count), without following links.
+// Any .js/.mjs/.cjs file below dir (bounded depth and count), without following links. Anything it
+// cannot fully inspect (too deep, too many entries, a folder it cannot read) counts as code: refuse
+// rather than guess.
 function hasCodeFile(dir, depth = 0, budget = { n: 2000 }) {
-  if (depth > 6) return false;
+  if (depth > 6) return true;
   let ents;
-  try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return false; }
+  try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return true; }
   for (const e of ents) {
     if (budget.n-- <= 0) return true; // too much to inspect: refuse rather than guess
     if (CODE_EXT.test(e.name)) return true;

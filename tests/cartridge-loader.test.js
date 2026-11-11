@@ -604,3 +604,43 @@ test('lib files: the same folder in the user folder is skipped - user cartridges
   const files = { 'manifest.json': dataManifest('c1'), 'label.txt': LABEL, 'lib/x.js': 'export const X = 1;\n' };
   expectSkip(files, /user cartridges cannot contain code/);
 });
+
+test('code-file walk: a .js buried 8 folders deep is refused and reported', () => {
+  const files = base('c1', { 'a/b/c/d/e/f/g/h/evil.js': 'export default 1;\n' });
+  const reason = expectSkip(files, /user cartridges cannot contain code/);
+  assert.equal(reason, CODE_REASON);
+});
+
+test('code-file walk: a .js one folder deep inside a hidden folder is refused', () => {
+  expectSkip(base('c1', { '.hidden/evil.mjs': 'export default 1;\n' }), /user cartridges cannot contain code/);
+  expectSkip(base('c2', { '.hidden/evil.cjs': 'module.exports = 1;\n' }), /user cartridges cannot contain code/, { id: 'c2' });
+});
+
+test('code-file walk: a data-only cartridge with 3 levels of non-code subfolders still loads', () => {
+  const { r } = one(base('c1', { 'notes/a/b/readme.txt': 'plain text\n', 'notes/a/data.json': '{}' }));
+  assert.equal(r.errors.length, 0, JSON.stringify(r.errors));
+  assert.equal(r.cartridges.length, 1);
+});
+
+test('code-file walk: a folder that cannot be read is refused, not waved through', () => {
+  // chmod does not make a folder unreadable on Windows, so the failure is injected into readdirSync.
+  const root = tmpRoot();
+  const cart = writeCart(root, 'c1', base('c1', { 'sub/x.txt': 'x\n' }));
+  const bad = path.join(cart, 'sub');
+  const real = fs.readdirSync;
+  fs.readdirSync = (p, ...rest) => {
+    if (path.resolve(String(p)) === bad) { const e = new Error('EACCES: permission denied'); e.code = 'EACCES'; throw e; }
+    return real.call(fs, p, ...rest);
+  };
+  let r;
+  try { r = discover(root, false); } finally { fs.readdirSync = real; }
+  assert.equal(r.cartridges.length, 0);
+  assert.equal(r.errors.length, 1, JSON.stringify(r.errors));
+  assert.equal(r.errors[0].reason, CODE_REASON);
+});
+
+test('code-file walk: more than 2000 entries is refused (budget case)', () => {
+  const files = base('c1');
+  for (let i = 0; i < 2100; i++) files[`many/f${i}.txt`] = '';
+  expectSkip(files, /user cartridges cannot contain code/);
+});

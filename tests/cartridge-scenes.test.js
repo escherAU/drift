@@ -6,8 +6,8 @@
 // cartridge (never across), and for field scenes the calm contract, the slowness bound and the 7.5%
 // crossfade check on adjacent program pairs.
 //
-// Today the install folder holds Classic and three locked cartridges, none of which has scenes, so the
-// install loop registers nothing but discovery. The checks themselves are proven live by running the
+// Today the install folder holds Classic, Delza (which has scenes) and three locked cartridges (which
+// have none), so the install loop registers the checks for Delza's scenes. The checks themselves are proven live by running the
 // same registration over a temporary trusted fixture cartridge (field, cells, sim, text, builtin), and by
 // controls that each broken scene makes a check fail.
 import test from 'node:test';
