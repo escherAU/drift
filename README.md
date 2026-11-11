@@ -196,9 +196,12 @@ never rebind a key.
 | every screen | `q`, Ctrl+C | quit (Ctrl+C exits 130); the terminal is restored exactly |
 
 Insert, boot and the error card take any key except `q` as "skip". The timeline is: insert
-animation 1.5 s, boot (typed lines, a progress bar that waits for the scenes to finish loading,
-the title card), then the menu opens over the first program. If loading fails the console shows
-the reason for 4 s and returns to the library.
+animation 1.5 s (the cartridge lifts, the neighbours slide away, it drops into the slot, the
+console takes on the cartridge's skin behind a 6-column band), then the boot, drawn on the
+console's own screen (a line opens into the screen, boot lines type out, a progress bar that
+waits for the scenes to finish loading, the screen zooms to fill the terminal, the title card),
+then the menu opens over the first program. If loading fails the console shows the reason for
+4 s and returns to the library. Ejecting plays the insert backwards in 1.6 s.
 
 ### What a cartridge is: the folder format
 
@@ -250,7 +253,7 @@ Driftman 2000; a cartridge with no `skin.json` uses the Driftman 2000's whole lo
 | `frame` | `show` `never`, `menu` or `always` (when the frame is drawn around the scene); `glyphs` 8 characters; `title` up to 30; `colour` a palette index |
 | `menu` | `layout` `list`, `slots` or `grid`; `anchor` `center`, `left` or `bottom`; `cursor` 1 character; `title` up to 40; `box` 8 characters |
 | `help` | `title` up to 30; `box` 8 characters |
-| `boot` | `lines` up to 8 typed lines of up to 60 characters; `art` true to draw `boot.txt`; `seconds` 0.5 to 10, how long the typed lines take |
+| `boot` | `lines` up to 8 typed lines of up to 60 characters, typed after the console's own two (`DRIFTMAN 2000 · CORE 2.0`, `MEMORY 64K ..... OK`); the screen has room for six lines in all and 40 columns (so four of yours, up to 40 characters), and text after a run of dots and a space is drawn in the accent colour; `art` true to draw `boot.txt`; `seconds` 0.5 to 10, how long the typed lines take (0.25 s a line; the default 1.5 s is six lines) |
 | `insert` | `text` up to 40: the caption of the insert animation |
 | `wording` | `keys` `{ <key id>: "label" }` re-words help rows, ids from the key tables (up to 28 characters each); `menuHint` up to 60 |
 | `seasons` | 1 to 4 of `{ name, hue }` (`name` up to 16 characters, `hue` `#RRGGBB`); the `c` key walks the skin's own hue, then each season, then back. The name is checked but not shown yet |

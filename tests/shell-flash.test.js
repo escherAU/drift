@@ -7,7 +7,7 @@
 //   - an idle library for 60 s stays within the limit and draws next to nothing
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FLASH_FRACTION, changedFraction, snap } from './helpers-flash.js';
+import { FLASH_FRACTION, changedFraction, snap, lstarTable, brightnessJumps, SHADE_STEP_LSTAR } from './helpers-flash.js';
 import { mkShell, DT, FPS } from './helpers-shell.js';
 import { INSERT_END } from '../src/shell/insert.js';
 import { BOOT_END } from '../src/shell/boot.js';
@@ -20,7 +20,7 @@ function recorder(c) {
   const keySteps = new Set();
   const screens = [];
   let last = null;
-  const grab = () => { const s = c.app.screenshot(); if (s) { frames.push(snap(s)); screens.push(c.sh() ? c.sh().screen : 'classic'); } };
+  const grab = () => { const s = c.app.screenshot(); if (s) { frames.push({ ...snap(s), L: lstarTable(s.palette) }); screens.push(c.sh() ? c.sh().screen : 'classic'); } };
   return {
     frames, keySteps, screens,
     press(k) { c.key(k); keySteps.add(frames.length); },
@@ -184,3 +184,121 @@ for (const [cols, rows] of [...SIZES, [240, 67]]) {
     t.diagnostic(`motion ${cols}x${rows}: worst non-key step ${(worst * 100).toFixed(1)}% at frame ${worstAt}; worst slide step ${(Math.max(...slideSteps) * 100).toFixed(1)}%; worst idle step ${(Math.max(...idleSteps) * 100).toFixed(2)}%`);
   });
 }
+
+// ---- A3: insert, boot and eject (designer section 3), through the real app at 18 fps.
+// Two rules on every step that does not carry a key press:
+//   1. no step changes more than FLASH_FRACTION of the cells (assertSafe, above)
+//   2. brightness ramps: no cell that keeps its glyph moves by more than one shade step (SHADE_STEP_LSTAR, see
+//      helpers-flash.js) between consecutive frames. Cells that appear, disappear or change glyph are dissolves
+//      and wipes and are bounded by rule 1.
+function assertRamps(r, label) {
+  const bad = [];
+  let worstBoot = 0;
+  for (let k = 1; k < r.frames.length; k++) {
+    if (r.keySteps.has(k)) continue;
+    const jumps = brightnessJumps(r.frames[k - 1], r.frames[k], r.cols);
+    // In the boot the edge of the zoom crosses cells that hold the same glyph (a vertical edge over a vertical bar):
+    // a few of them change by more than a step as it passes (the designer: the biggest change in any one frame is the
+    // moving edge of the zoom). Allow 1% of the cells there. Everywhere else two cells: the library's prompt cursor
+    // starts its fade (amber to silver 3) on the first beat after the library comes back.
+    const room = r.screens[k] === 'boot' ? Math.ceil(r.frames[k].g.length * 0.01) : 2;
+    if (r.screens[k] === 'boot') worstBoot = Math.max(worstBoot, jumps.length);
+    if (jumps.length > room) bad.push(`frame ${k} (${r.screens[k - 1]}>${r.screens[k]}): ${jumps.length} cells (room ${room}), first ${JSON.stringify(jumps[0])}`);
+  }
+  assert.deepEqual(bad.slice(0, 4), [], `${label}: cells jumping by more than ${SHADE_STEP_LSTAR} L* in one frame`);
+  return worstBoot;
+}
+
+const withCols = (r, cols) => { r.cols = cols; return r; };
+
+// (sampled at three phases of the 18 fps clock, so the bounds are not tuned on one set of frames)
+for (const [cols, rows, phase] of [...SIZES, [240, 67]].flatMap(([w, h]) => [0, 0.021, 0.043].map((p) => [w, h, p]))) {
+  test(`flash ${cols}x${rows} (phase +${phase} s): insert, boot and the dissolve into the menu - every step under the limit, every brightness change a ramp`, async (t) => {
+    const c = mkShell({ startScreen: { screen: 'library' }, cols, rows });
+    c.app.start();
+    c.goto('fixture');
+    const r = withCols(recorder(c), cols);
+    r.run(0.5 + phase);
+    r.press('\r');
+    c.tick(phase);
+    await c.settle();
+    const first = r.frames.length;
+    r.run(INSERT_END + 0.05);
+    assert.equal(c.sh().screen, 'boot');
+    r.run(BOOT_END - INSERT_END + 0.3);
+    await c.settle();
+    r.run(1);
+    assert.equal(c.sh().screen, 'running');
+    const { worst, worstAt } = assertSafe(r, `A3 ${cols}x${rows}`);
+    assertRamps(r, `A3 ${cols}x${rows}`);
+    // the insert and the boot are real animations: many frames, none of them a flash
+    const screens = r.screens.slice(first);
+    assert.ok(screens.filter((s) => s === 'insert').length >= 26, 'the insert has its 27 frames');
+    assert.ok(screens.filter((s) => s === 'boot').length >= 70, 'the boot has its 77 frames');
+    // the biggest step in the insert and in the boot, apart from the key press, is well inside the limit
+    const steps = r.stepFractions();
+    const inScreen = (name) => Math.max(...steps.filter((f, k) => r.screens[k + 1] === name && r.screens[k] === name && !r.keySteps.has(k + 1)));
+    assert.ok(inScreen('insert') <= 0.2, `insert worst ${(inScreen('insert') * 100).toFixed(1)}%`);
+    assert.ok(inScreen('boot') <= 0.2, `boot worst ${(inScreen('boot') * 100).toFixed(1)}%`);
+    t.diagnostic(`${cols}x${rows}: insert worst ${(inScreen('insert') * 100).toFixed(1)}%, boot worst ${(inScreen('boot') * 100).toFixed(1)}%, overall non-key worst ${(worst * 100).toFixed(1)}% at frame ${worstAt}`);
+    c.done();
+  });
+}
+
+for (const [cols, rows] of SIZES) {
+  test(`flash ${cols}x${rows}: eject (the insert backwards, 1.6 s) under the limit with every brightness change a ramp, and the library after it`, async (t) => {
+    const c = mkShell({ startScreen: { screen: 'library' }, cols, rows });
+    c.app.start();
+    c.goto('fixture');
+    c.key('\r');
+    await c.settle();
+    c.tick(INSERT_END + BOOT_END + 0.5);
+    await c.settle();
+    c.tick(1);
+    assert.equal(c.sh().screen, 'running');
+    c.key('\x1b'); // close the menu
+    c.tick(1);
+    const r = withCols(recorder(c), cols);
+    r.run(0.5);
+    r.press('e');
+    r.run(2.2);
+    assert.equal(c.sh().screen, 'library');
+    r.run(1);
+    const { worst, worstAt } = assertSafe(r, `eject ${cols}x${rows}`);
+    assertRamps(r, `eject ${cols}x${rows}`);
+    const steps = r.stepFractions();
+    const ej = Math.max(...steps.filter((f, k) => r.screens[k + 1] === 'eject' && r.screens[k] === 'eject'));
+    assert.ok(ej <= 0.2, `eject worst ${(ej * 100).toFixed(1)}%`);
+    t.diagnostic(`${cols}x${rows}: eject worst ${(ej * 100).toFixed(1)}%, overall non-key worst ${(worst * 100).toFixed(1)}% at frame ${worstAt}`);
+    c.done();
+  });
+}
+
+for (const [cols, rows] of SIZES) {
+  test(`flash ${cols}x${rows}: the Classic cartridge - insert, boot and the hand-back to its scene stay under the limit (no key step excused except Enter)`, (t) => {
+    const c = mkShell({ startScreen: { screen: 'library' }, cols, rows, config: { mode: 'calm' } });
+    c.app.start();
+    c.tick(0.3);
+    const r = withCols(recorder(c), cols);
+    r.run(0.5);
+    r.press('\r');
+    r.run(INSERT_END + 4.4);
+    assert.equal(c.sh(), null, 'back on the Classic path');
+    r.run(2);
+    const { worst, worstAt } = assertSafe(r, `classic ${cols}x${rows}`);
+    assertRamps(r, `classic ${cols}x${rows}`);
+    t.diagnostic(`${cols}x${rows}: Classic non-key worst ${(worst * 100).toFixed(1)}% at frame ${worstAt} (${r.screens[worstAt - 1]} > ${r.screens[worstAt]})`);
+    c.done();
+  });
+}
+
+test('flash helper: brightnessJumps sees a two-step jump, accepts one step, ignores appearing cells and a palette swap that keeps the colours', () => {
+  const pal = { sgr: ['\x1b[38;2;20;20;20m', '\x1b[38;2;93;100;116m', '\x1b[38;2;139;147;161m', '\x1b[38;2;200;204;212m'] };
+  const L = lstarTable(pal);
+  const frame = (g, c) => ({ g: Uint16Array.from(g), c: Uint8Array.from(c), L });
+  const a = frame([65, 65, 65, 32], [1, 1, 1, 0]);
+  assert.equal(brightnessJumps(a, frame([65, 65, 65, 32], [2, 1, 3, 0]), 4).length, 1, 'graphite -> silver is two steps; graphite -> dim is one');
+  assert.equal(brightnessJumps(a, frame([66, 65, 65, 66], [3, 1, 1, 3]), 4).length, 0, 'a new glyph and a cell that appears are dissolves, not ramps');
+  const swapped = { g: a.g, c: Uint8Array.from([2, 2, 2, 0]), L: lstarTable({ sgr: ['', '', '\x1b[38;2;93;100;116m'] }) };
+  assert.equal(brightnessJumps(a, swapped, 4).length, 0, 'another palette index with the same colour is no change');
+});

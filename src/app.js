@@ -470,7 +470,7 @@ export function createApp(o) {
     handleKey,
     actions: ACTIONS,
     // a copy of the last frame drawn (help panel included), for tests and captures
-    screenshot: () => (lastFrame ? { cols, rows, glyphs: lastFrame.glyphs.slice(), shades: lastFrame.shades.slice() } : null),
+    screenshot: () => (lastFrame ? { cols, rows, glyphs: lastFrame.glyphs.slice(), shades: lastFrame.shades.slice(), palette: lastFrame.palette } : null),
     getState: () => ({
       t, speed: SPEEDS[speedIdx], paused, colour: cfg.colour, cols, rows,
       sceneIndex: sched(shown.mode).cur, fading: sched(shown.mode).fading, running,
