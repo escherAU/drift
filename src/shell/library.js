@@ -10,9 +10,13 @@
 //                    tint: palette index of the cartridge's 4 brightness levels (tint+0 dim .. tint+3 bright) }],
 //     index   the cartridge under the cursor
 //     prev    the cursor's previous position (for the ramp)
-//     slide   0..1 ramp since the last cursor move (the new cartridge brightens, the old one dims)
+//     slide   0..1 progress since the last cursor move: the whole shelf slides 34 columns with an ease-out
+//             (slideOffset), the new cartridge brightens and the old one dims
+//     dir     +1 / -1: the way the last move went (optional; worked out from prev and index)
+//     type    0..1 how much of the console screen text is typed so far (optional, default 1 = all)
+//     dial    the TUNE dial's step count (optional, default index; one notch per cursor step)
 //     message text shown near the bottom ('' = none)
-//     dip     0 or 1: rows the selected cartridge is pressed down (the locked "dip and spring back")
+//     dip     0 or 1: rows the selected cartridge is pressed down (the locked "dip and spring back"; dipAt)
 //     tier    'full' | 'compact' | 'list' | 'tiny'   (optional; worked out from the frame size)
 //   }
 //
@@ -226,6 +230,8 @@ function ledRow(G, x, y, st, ui, fade = 0) {
   gText(G, x + 20, y, ' LINK', ui.dim, fade);
 }
 
+const SCREEN_W = 44; // the text area of the console screen
+
 // the screen's 9 interior rows: [{ text, shade, x }] by row (x = column inside the 44-wide text area)
 function screenRows(sel, n, ui) {
   const rows = [];
@@ -274,8 +280,11 @@ export function consoleGrid(sel, o = {}) {
     }
   }
   const rows = screenRows(sel, n, ui);
+  const reveal = o.type === undefined ? Infinity : Math.ceil(Math.max(0, Math.min(1, o.type)) * SCREEN_W);
   for (let j = 0; j < 9; j++) {
-    for (const seg of rows[j] || []) gText(G, BEZEL_X + 2 + seg.x, 4 + j, seg.text, seg.shade, 1);
+    for (const seg of rows[j] || []) {
+      if (reveal - seg.x > 0) gText(G, BEZEL_X + 2 + seg.x, 4 + j, seg.text, seg.shade, 1, reveal - seg.x);
+    }
   }
   // the panel
   ledRow(G, PANEL_X, 3, st, ui);
@@ -287,7 +296,7 @@ export function consoleGrid(sel, o = {}) {
     }
     gRun(G, PANEL_X + 14, 5 + r, st.grille, 13, sh);
   }
-  const pos = wrapIdx(o.index || 0, DIAL_POSITIONS);
+  const pos = wrapIdx(o.dial === undefined ? (o.index || 0) : o.dial, DIAL_POSITIONS);
   for (const [r, c, ch] of POINTER[pos]) gPut(G, PANEL_X + 1 + c, 5 + r, cpOf(ch), DRIFTMAN_COLOURS.amber);
   gText(G, PANEL_X + 3, 10, 'TUNE', ui.dim);
   gText(G, PANEL_X + 3, 12, '[ EJECT ]', ui.dim);
@@ -353,6 +362,28 @@ export function shelfLayout(cols, rows, tier) {
     full: true, xl, y0, dotsY: y0, messageY: y0 + 1, spineY: y0 + 2, shelfY: y0 + 12, cartTop, cartX, consoleTop,
     consoleX: cartX - 27, deskY: consoleTop + CONSOLE_H, hintY: consoleTop + CONSOLE_H + (xl ? 2 : 0), step: NEIGHBOUR_STEP,
   };
+}
+
+// Ease-out: fast first, settling softly (1 - (1 - p)^2).
+export function slideEase(p) {
+  const x = p <= 0 ? 0 : p >= 1 ? 1 : p;
+  return 1 - (1 - x) * (1 - x);
+}
+
+// Columns the shelf is still displaced at slide progress p (0..1); dir +1 = the cursor moved right, so the
+// shelf starts one step to the right and slides left onto its settled layout. Exactly 0 at p = 1.
+export function slideOffset(p, dir) {
+  const d = dir < 0 ? -1 : 1;
+  const o = Math.round(NEIGHBOUR_STEP * (1 - slideEase(p)));
+  return o === 0 ? 0 : d * o;
+}
+
+// The way the cursor last moved: view.dir, else the shorter way round from prev to index.
+export function slideDir(view) {
+  if (view.dir === 1 || view.dir === -1) return view.dir;
+  const n = view.cartridges.length;
+  if (n < 2 || view.prev === view.index) return 1;
+  return wrapIdx(view.index - view.prev, n) <= n / 2 ? 1 : -1;
 }
 
 // The brightness level (0-3) of cartridge i given the ramp.
@@ -491,30 +522,35 @@ export function drawShelf(f, view, skin, o = {}) {
   const cartAt = (i, selected) => cartridgeGrid(view.cartridges[i], { selected, level: levelOf(view, i), ui });
 
   // the console, then the takeover band over it
-  const makeConsole = (style) => (L.full ? consoleGrid(sel, { st: style, ui, n, index: view.index }) : miniGrid({ st: style, ui }));
+  const makeConsole = (style) => (L.full ? consoleGrid(sel, { st: style, ui, n, index: view.index, dial: view.dial, type: view.type }) : miniGrid({ st: style, ui }));
   const cx = L.full ? L.consoleX : L.miniX, cy = L.full ? L.consoleTop : L.miniTop;
   blit(f, makeConsole(st), cx, cy, { fadeP });
   if (o.sweep && o.sweep.x > 0) blit(f, makeConsole(consoleStyle(skin, o.sweep.style)), cx, cy, { fadeP, clipX1: Math.min(f.cols, Math.floor(o.sweep.x)) });
 
   if (L.full) {
+    // while the shelf slides it is displaced by `shift` columns; the cartridges beyond the settled cluster
+    // (two whole neighbours each side) are clipped to it so nothing pops in or out when the slide ends
+    const sliding = view.slide !== undefined && view.slide < 1 && view.prev !== view.index;
+    const shift = sliding ? slideOffset(view.slide, slideDir(view)) : 0;
+    const win0 = L.cartX - 2 * L.step, win1 = L.cartX + CART_W + 2 * L.step;
     if (n > 1) {
       // neighbours: each cartridge at most once, nearest first, the right side winning a tie; slivers at the edges
       const seen = new Set([view.index]);
-      const maxR = 2;
+      const maxR = shift ? 3 : 2;
       for (let r = 1; r <= maxR; r++) {
         for (const side of [1, -1]) {
           const idx = wrapIdx(view.index + side * r, n);
           if (seen.has(idx)) continue;
           seen.add(idx);
-          const x = L.cartX + side * r * L.step;
-          const visible = Math.min(x + CART_W, f.cols) - Math.max(x, 0);
-          if (visible < 3) continue;
-          blit(f, cartAt(idx, false), x, L.cartTop, { fadeP, all: true });
+          const x = L.cartX + side * r * L.step + shift;
+          const visible = Math.min(x + CART_W, f.cols, win1) - Math.max(x, 0, win0);
+          if (visible < (shift ? 1 : 3)) continue;
+          blit(f, cartAt(idx, false), x, L.cartTop, { fadeP, all: true, clipX0: win0, clipX1: win1 });
         }
       }
       if (L.xl) drawSpines(f, view, ui, L, fadeP, cartAt);
     }
-    blit(f, cartAt(view.index, true), L.cartX, L.cartTop + offset, { clipY: L.consoleTop + 2 });
+    blit(f, cartAt(view.index, true), L.cartX + shift, L.cartTop + offset, { clipY: L.consoleTop + 2 });
     if (L.xl) {
       const dw = Math.min(f.cols, CONSOLE_W + 16), dx = centerX(f.cols, dw);
       for (let i = 0; i < dw; i++) put(f, dx + i, L.deskY, 0x2594, DRIFTMAN_COLOURS.housing);

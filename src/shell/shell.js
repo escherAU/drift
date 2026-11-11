@@ -27,7 +27,8 @@ import { newFrame, clearFrame, ramp, sizeTier, dissolveThresholds } from './ui.j
 export const ERROR_SECONDS = 4;
 export const EJECT_SECONDS = 1.6;
 export const LOCKED_MESSAGE = 'This cartridge isn\'t ready yet. Pick another with ◀ ▶.';
-export const SLIDE_SECONDS = 0.3;
+export const SLIDE_SECONDS = 0.36; // the carousel slide (34 columns, ease-out)
+export const TYPE_SECONDS = 0.3; // the console screen retypes left to right
 export const DIP_SECONDS = 0.3;
 export const LIBRARY_FADE_SECONDS = 0.3; // the library dissolves in when opened from Classic (a hard cut would flash)
 export const MESSAGE_SECONDS = 5;
@@ -64,6 +65,7 @@ export function createShell(o) {
   let st = 0; // seconds in the current screen
   let index = Math.max(0, carts.findIndex((c) => c.id === o.lastCartridge));
   let prev = index, slideT = SLIDE_SECONDS, message = '', msgT = 0, dipT = DIP_SECONDS;
+  let lastDir = 1, dial = index, queued = 0; // the way the last move went, the TUNE dial's step count, one waiting key press (+1 / -1)
   let helpOpen = false; // library help (the runtime keeps its own)
   let enterT = o.from === 'classic' ? 0 : LIBRARY_FADE_SECONDS; // seconds since the library was opened from Classic
   let from = o.from === undefined ? null : o.from;
@@ -89,12 +91,12 @@ export function createShell(o) {
   const palette = () => (screen === 'boot' || screen === 'error' || (screen === 'running') ? bootPal : libPal);
 
   const view = () => ({
-    cartridges: libCarts, index, prev, slide: Math.min(1, slideT / SLIDE_SECONDS), message,
+    cartridges: libCarts, index, prev, slide: Math.min(1, slideT / SLIDE_SECONDS), dir: lastDir, dial, type: Math.min(1, slideT / TYPE_SECONDS), message,
     dip: dipT < DIP_SECONDS / 2 ? 1 : 0, tier: sizeTier(cols, rows),
   });
 
   function resetLibrary(newFrom) {
-    screen = 'library'; st = 0; helpOpen = false; message = ''; slideT = SLIDE_SECONDS; dipT = DIP_SECONDS; prev = index;
+    screen = 'library'; st = 0; helpOpen = false; message = ''; slideT = SLIDE_SECONDS; dipT = DIP_SECONDS; prev = index; queued = 0;
     runtime = null; load = { status: 'none', scenes: null, error: null }; cart = null; entry = null; skipped = false;
     if (newFrom !== undefined) from = newFrom;
     forced = true;
@@ -103,7 +105,7 @@ export function createShell(o) {
   // ---- screen changes
 
   function enterInsert(i) {
-    index = i; prev = i;
+    index = i; prev = i; queued = 0;
     cart = carts[i]; entry = libCarts[i];
     classic = cart.runtime === 'classic';
     skipped = false; menuOnArrive = true;
@@ -174,9 +176,21 @@ export function createShell(o) {
 
   // ---- key handlers (names match SHELL_KEYMAP actions)
 
+  // One step of the cursor. While the shelf is still sliding one more press waits (and runs when the slide
+  // ends); a third is dropped.
+  function moveCursor(dir) {
+    if (carts.length < 2) return;
+    if (slideT < SLIDE_SECONDS) { if (!queued) queued = dir; return; }
+    startMove(dir, 0);
+  }
+  function startMove(dir, carry) {
+    prev = index; index = (index + carts.length + dir) % carts.length;
+    lastDir = dir; dial += dir; slideT = carry; message = '';
+  }
+
   const actions = {
-    libPrev() { if (carts.length > 1) { prev = index; index = (index + carts.length - 1) % carts.length; slideT = 0; message = ''; } },
-    libNext() { if (carts.length > 1) { prev = index; index = (index + 1) % carts.length; slideT = 0; message = ''; } },
+    libPrev() { moveCursor(-1); },
+    libNext() { moveCursor(1); },
     libInsert() {
       if (!carts.length) return;
       if (carts[index].locked) { dipT = 0; message = LOCKED_MESSAGE; msgT = 0; return; }
@@ -226,7 +240,10 @@ export function createShell(o) {
       case 'library':
         if (enterT < LIBRARY_FADE_SECONDS) { enterT += d; forced = true; }
         if (helpOpen) break;
-        if (slideT < SLIDE_SECONDS) { slideT += d; forced = true; }
+        if (slideT < SLIDE_SECONDS) {
+          slideT += d; forced = true;
+          if (slideT >= SLIDE_SECONDS && queued) { const q = queued; queued = 0; startMove(q, slideT - SLIDE_SECONDS); }
+        }
         if (dipT < DIP_SECONDS) { dipT += d; forced = true; }
         if (message) { msgT += d; if (msgT >= MESSAGE_SECONDS) { message = ''; forced = true; } }
         break;
@@ -267,7 +284,7 @@ export function createShell(o) {
   // ---- drawing
 
   function insertItem() {
-    return { cartridge: entry, view: { ...view(), index: libCarts.indexOf(entry), prev: libCarts.indexOf(entry), slide: 1, dip: 0, message: '' }, cartSkin: cart.skin, classic };
+    return { cartridge: entry, view: { ...view(), index: libCarts.indexOf(entry), prev: libCarts.indexOf(entry), slide: 1, type: 1, dip: 0, message: '' }, cartSkin: cart.skin, classic };
   }
 
   function helpInfo(forScreen) {

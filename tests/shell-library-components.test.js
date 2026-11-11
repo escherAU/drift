@@ -9,7 +9,7 @@ import { isAllowedGlyph } from '../src/glyphs.js';
 import { driftmanSkin } from '../src/shell/driftman.js';
 import {
   cartridgeGrid, consoleGrid, miniGrid, spineGrid, consoleStyle, gridRows, drawLibrary, shelfLayout, isExtraLarge,
-  CART_W, CART_H, CONSOLE_W, CONSOLE_H, MINI_W, MINI_H, SPINE_W, SPINE_H, SOON_STRIP, DIAL_POSITIONS, XL_COLS, XL_ROWS, LIBRARY_HINT,
+  slideOffset, CART_W, CART_H, CONSOLE_W, CONSOLE_H, MINI_W, MINI_H, SPINE_W, SPINE_H, SOON_STRIP, DIAL_POSITIONS, XL_COLS, XL_ROWS, LIBRARY_HINT,
 } from '../src/shell/library.js';
 import { LOCKED_MESSAGE } from '../src/shell/shell.js';
 import { newFrame, sizeTier } from '../src/shell/ui.js';
@@ -417,7 +417,9 @@ test('the brightness ramp: the cursor cartridge brightens and the previous one d
   const tintAt = (slide) => {
     const f = draw(120, 40, view(5, 4, { prev: 0, slide }));
     // label shade of a cell in the middle of each cartridge's art (row 8 of the frame = label row 5)
-    const cell = (x) => f.shades[10 * 120 + x];
+    // (the shelf is displaced while it slides: 5 cartridges, 0 -> 4 is the short way left, so dir -1)
+    const shift = slideOffset(slide, -1);
+    const cell = (x) => f.shades[10 * 120 + x + shift];
     return [cell(45 + 3 + 11), cell(79 + 3 + 11)];
   };
   const steps = [0, 0.25, 0.5, 0.75, 1].map(tintAt);
