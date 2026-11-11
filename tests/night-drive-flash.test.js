@@ -2,7 +2,8 @@
 // Every list is read from the manifest or the module exports, so slice 3's scenes join automatically.
 //   - (a) Overdrive, every frame of the full 90 s through the cell composer, at 1x and 4x, at the shipped, breakpoint and just-above-console sizes:
 //         STRICTLY under 30% of the cells changing (no spaced-flash allowance, no first-frame exemption); a control without the ring guard exceeds 30%
-//   - (b) the dissolves is NOT in this file: it fails on Sundown Grid at 4x (see the DRIFT-5 report); it returns when that scene is calmed
+//   - (b) the dissolves: every consecutive pair of the tape's manifest order (the wrap, last -> first, included) at 120x40, 80x24 and 41x11, at 1x and 4x,
+//         through a two-scene Scheduler with the tape's real hold and a 2 s fade: the worst frame of the whole run is STRICTLY under 30%
 //   - (c) ramps: in every scene, no cell that keeps its (non-blank) glyph moves more than one shade step (28 L*) in a frame; a control proves it bites
 //   - (d) bright solid coverage: no frame has more than 25% of the screen as bright solid blocks (█ or ▓ at L* 60 or more); the background is the one
 //         #0D0820 (blank cells are glyph 32 in colour 0, every palette entry carries the one background, the shell frames keep one); a control that fills 40% fails
@@ -15,6 +16,7 @@ import path from 'node:path';
 import overdrive, { createOverdrive, LAYOUTS } from '../cartridges/night-drive/scenes/overdrive.js';
 import { discoverCartridges, loadScenes, INSTALL_DIR } from '../src/cartridge/loader.js';
 import { createCellComposer } from '../src/cells.js';
+import { Scheduler } from '../src/compose.js';
 import { makeSkinPalette } from '../src/cartridge/palette.js';
 import { parseHex } from '../src/color.js';
 import { FLASH_FRACTION, changedFraction, lstarTable, brightnessJumps } from './helpers-flash.js';
@@ -36,6 +38,12 @@ const SCENES = loaded.scenes; // manifest order, each { id, kind, scene }
 const SKIN = JSON.parse(fs.readFileSync(path.join(INSTALL_DIR, 'night-drive', 'skin.json'), 'utf8'));
 const PALETTE = makeSkinPalette(cart.skin, 'truecolor', 'night-drive');
 const LTAB = lstarTable(PALETTE);
+const byId = (id) => SCENES.find((s) => s.id === id);
+const TAPE = manifest.programs.find((p) => p.id === manifest.start) || manifest.programs[0];
+const ORDER = TAPE.scenes; // the tape's order
+const HOLD = TAPE.sceneSeconds; // 90
+const FADE = 2;
+const nextOf = (i) => (i + 1) % ORDER.length;
 
 // ---- (a) Overdrive's share of changed cells, every frame
 
@@ -75,6 +83,55 @@ test('flash (a) overdrive: all 90 s through the composer at 1x and 4x, every fra
   console.log('TABLE flash (a)\n  ' + rows.join('\n  '));
   assert.deepEqual(bad, [], 'frames at or over 30%');
   assert.ok(off.worst > FLASH_FRACTION, `the control (no ring guard) changed only ${pct(off.worst)} at ${off.where.toFixed(2)} s at 120x40 4x: the check would not notice a missing guard`);
+});
+
+// ---- (b) the dissolves
+
+const pairCache = new Map();
+// A -> B through a two-scene composer under a Scheduler with the tape's real hold, to the end of the dissolve plus 2 s.
+// The worst frame is taken over the WHOLE run (the sims' real phases, the dissolve window and the tail).
+function pairRun(idA, idB, w, h, speed) {
+  const key = `${idA}>${idB} ${w}x${h} ${speed}x`;
+  if (pairCache.has(key)) return pairCache.get(key);
+  const cc = createCellComposer({ scenes: [byId(idA).scene, byId(idB).scene], cols: w, rows: h, seed: 1 });
+  const sched = new Scheduler({ count: 2, durationSec: HOLD, fadeSec: FADE, start: 0 });
+  const total = Math.ceil(((HOLD + FADE + 2) * FPS) / speed);
+  let pg = null, pc = null, worst = 0, where = 0;
+  for (let k = 0; k <= total; k++) {
+    sched.advance(speed / FPS);
+    const t = (k * speed) / FPS;
+    const f = cc.frame(sched.state(), t);
+    if (pg) {
+      const x = changedFraction(f.glyphs, pg, f.shades, pc);
+      if (x > worst) { worst = x; where = t; }
+    } else { pg = new Uint16Array(f.glyphs.length); pc = new Uint8Array(f.glyphs.length); }
+    pg.set(f.glyphs); pc.set(f.shades);
+  }
+  const r = { key, worst, where };
+  pairCache.set(key, r);
+  return r;
+}
+
+test('flash (b) dissolves: every consecutive pair of the tape in manifest order, the wrap (last -> first) included, stays under 30% over the whole run, at 1x and 4x, at 120x40, 80x24 and 41x11', () => {
+  // The pairs come from the manifest's tape order, so slice 3 joins by itself: today redlight -> overdrive is a pair, and when slice 3 puts
+  // caller before overdrive the pair re-points to caller -> overdrive (and the wrap, overdrive -> onramp, becomes the new last -> first).
+  assert.ok(ORDER.length >= 2, 'the tape has at least two scenes');
+  assert.ok(ORDER.includes('overdrive'), 'overdrive is on the tape');
+  const pairs = [];
+  for (let k = 0; k < ORDER.length; k++) pairs.push([ORDER[k], ORDER[nextOf(k)]]);
+  assert.deepEqual(pairs[pairs.length - 1], [ORDER[ORDER.length - 1], ORDER[0]], 'the wrap is a pair');
+  const rows = [], bad = [];
+  for (const [a, b] of pairs) {
+    for (const [w, h] of [[120, 40], [80, 24], [41, 11]]) {
+      for (const speed of [1, 4]) {
+        const r = pairRun(a, b, w, h, speed);
+        rows.push(`${r.key} worst ${pct(r.worst)} at ${r.where.toFixed(2)} s`);
+        if (!(r.worst < FLASH_FRACTION)) bad.push(rows[rows.length - 1]);
+      }
+    }
+  }
+  console.log('TABLE flash (b)\n  ' + rows.join('\n  '));
+  assert.deepEqual(bad, [], 'a frame of a dissolve at or over 30%');
 });
 
 // ---- (c) and (d): one pass over a scene alone gives both
