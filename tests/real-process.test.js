@@ -20,7 +20,10 @@ function pidAlive(pid) {
 
 // Spawn bin/drift.js; `drive(child, out)` is called once the first frame has
 // been seen (or after 1.5 s) so it can send input. Always killed on timeout.
-function run({ env = {}, drive, waitForFrame = true, args = [] }) {
+// Optional: `waitFor` (a string) holds the drive back until that text has been written to stdout (no 1.5 s kick; if
+// it never shows, the kill timer fires and the arm fails as timedOut), and `timeoutMs` raises the kill timer for a
+// cartridge boot (5.8 s) that the default 10 s cap would squeeze.
+function run({ env = {}, drive, waitForFrame = true, args = [], timeoutMs = TIMEOUT_MS, waitFor = null }) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [BIN, ...args], {
       env: { ...process.env, DRIFT_CONFIG: path.join(CFG_DIR, 'config.json'), DRIFT_TEST_COLS: '60', DRIFT_TEST_ROWS: '20', ...env },
@@ -32,14 +35,16 @@ function run({ env = {}, drive, waitForFrame = true, args = [] }) {
     const doDrive = () => { if (!driven) { driven = true; if (drive) drive(child); } };
     child.stdout.on('data', (d) => {
       chunks.push(d);
-      if (waitForFrame && Buffer.concat(chunks).toString('utf8').includes('\x1b[2J')) doDrive();
+      if (waitFor !== null) { if (Buffer.concat(chunks).toString('utf8').includes(waitFor)) doDrive(); }
+      else if (waitForFrame && Buffer.concat(chunks).toString('utf8').includes('\x1b[2J')) doDrive();
     });
     child.stderr.on('data', (d) => errChunks.push(d));
     child.stdin.on('error', () => {});
-    const kick = setTimeout(doDrive, 1500);
-    const killer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, TIMEOUT_MS);
+    const kick = waitFor !== null ? null : setTimeout(doDrive, 1500);
+    const killer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, timeoutMs);
     child.on('close', (code) => {
-      clearTimeout(kick); clearTimeout(killer);
+      if (kick) clearTimeout(kick);
+      clearTimeout(killer);
       resolve({
         code, timedOut, pid: child.pid, gone: !pidAlive(child.pid),
         stdout: Buffer.concat(chunks).toString('utf8'), stderr: Buffer.concat(errChunks).toString('utf8'),
@@ -156,6 +161,57 @@ test('real process (cartridge d): --cartridge nope exits 2 with a plain "drift:"
   assert.ok(!r.stderr.includes('\x1b'), 'no ESC byte on stderr');
   assert.ok(!r.stdout.includes('\x1b'), 'no ESC byte on stdout');
   t.diagnostic('(cart d) stderr: ' + show(r.stderr) + ' stdout: ' + show(r.stdout));
+});
+
+// ---- Delza, the first real code cartridge (DRIFT-4 part C). Each arm has its own config folder so the library
+// cursor starts on Classic whatever an earlier arm inserted. The Journal menu is waited for by its first entry
+// (it shows at about 6 s: the insert is 1.5 s, the boot runs to 5.8 s); the kill timer is 20 s.
+// Quitting from the library itself is (library a) above; quitting from inside the running cartridge is (delza a).
+const DELZA_TIMEOUT = 20000;
+const freshConfig = () => {
+  const dir = fs.mkdtempSync(path.join(CFG_DIR, 'cfg-'));
+  return { file: path.join(dir, 'config.json'), env: { DRIFT_CONFIG: path.join(dir, 'config.json') } };
+};
+
+test('real process (delza a): --cartridge delza boots to the Journal menu, then q from inside the cartridge: exit 0', async (t) => {
+  const cfg = freshConfig();
+  const r = await run({ args: ['--cartridge', 'delza'], env: { ...FORCE, ...cfg.env }, waitFor: 'THORNWELL', timeoutMs: DELZA_TIMEOUT, drive: (c) => c.stdin.write('q') });
+  assertRestored(r, t, '(delza a) q');
+  assert.equal(r.code, 0);
+  assert.ok(r.stdout.includes('THORNWELL'), 'the Journal menu was drawn before the q');
+});
+
+test('real process (delza b): --cartridge delza then byte 0x03 from inside the running cartridge: exit 130', async (t) => {
+  const cfg = freshConfig();
+  const r = await run({ args: ['--cartridge', 'delza'], env: { ...FORCE, ...cfg.env }, waitFor: 'THORNWELL', timeoutMs: DELZA_TIMEOUT, drive: (c) => c.stdin.write(Buffer.from([0x03])) });
+  assertRestored(r, t, '(delza b) 0x03');
+  assert.equal(r.code, 130);
+});
+
+test('real process (delza c): --library, right arrow twice to Delza, Enter, then q mid-insert: exit 0, Delza was the one inserted', async (t) => {
+  const cfg = freshConfig();
+  const r = await run({
+    args: ['--library'], env: { ...FORCE, ...cfg.env }, timeoutMs: DELZA_TIMEOUT,
+    drive: (c) => {
+      // the shelf is Classic, Arcade, Delza: let each slide (0.36 s) finish before the next key
+      c.stdin.write('\x1b[C');
+      setTimeout(() => c.stdin.write('\x1b[C'), 600);
+      setTimeout(() => c.stdin.write('\r'), 1300);
+      setTimeout(() => c.stdin.write('q'), 1650); // 350 ms into the 1.5 s insert
+    },
+  });
+  assertRestored(r, t, '(delza c) mid-insert');
+  assert.equal(r.code, 0);
+  assert.equal(JSON.parse(fs.readFileSync(cfg.file, 'utf8')).lastCartridge, 'delza', 'the Enter inserted Delza, not another cartridge');
+});
+
+test('real process (delza d): --cartridge delza with a thrown error after the Journal menu is up restores the terminal and exits non-zero', async (t) => {
+  const cfg = freshConfig();
+  const r = await run({ args: ['--cartridge', 'delza'], env: { ...FORCE, ...cfg.env, DRIFT_TEST_THROW_AFTER_MS: '7000' }, waitForFrame: false, timeoutMs: DELZA_TIMEOUT });
+  assertRestored(r, t, '(delza d) throw');
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr, /DRIFT_TEST_THROW/);
+  assert.ok(r.stdout.includes('THORNWELL'), 'the throw came after the Journal menu was drawn (a running cartridge, not the insert)');
 });
 
 test.after(() => fs.rmSync(CFG_DIR, { recursive: true, force: true }));
