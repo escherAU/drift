@@ -19,7 +19,8 @@ const blocks = (text) => text.split(/=== [^\n]*\n/).slice(1);
 // Night Drive's own set (cart-night-drive-*), written out by hand: 8 tracks x (2, 20, 40 s + the later moments) x 2 sizes, then the
 // tape-deck menu, the help panel and the console takeover at both sizes. The later moments are where each story moves.
 const ND_IDS = ['onramp', 'skyline', 'sundown', 'coast', 'redlight', 'diner', 'caller', 'overdrive'];
-const ND_LATER = { sundown: [75], redlight: [62], diner: [25], caller: [29, 70], overdrive: [64] };
+// redlight: 9 = the wiper mid-stroke, 11 = just before the next sweep, 61 = the rain near the lamp is green, 62 = the buildings have begun to slide
+const ND_LATER = { sundown: [75], redlight: [9, 11, 61, 62], diner: [25], caller: [29, 70], overdrive: [64] };
 const ND_TAGS = ['', '-80x24'];
 const ndSecs = (id) => [...(id === 'diner' || id === 'onramp' ? [2, 21, 40] : [2, 20, 40]), ...(ND_LATER[id] || [])]; // the diner's (and the on-ramp's at 80x24) 2 s and 20 s pictures are identical, so their middle moment is 21 s
 const ND_WANT = [];
@@ -202,7 +203,7 @@ test('the exact-match check bites both ways on Night Drive\'s files: a missing o
 
 test('nightDriveCaptureNames: the hand-written list, exported like Delza\'s; in cartridgeCaptureNames only when Night Drive is installed, unlocked and runs in the shell', () => {
   assert.deepEqual(nightDriveCaptureNames().sort(), ND_WANT.slice().sort());
-  assert.equal(ND_WANT.length, 2 * (8 * 3 + 6 + 3), 'per size: 24 + 6 later moments + menu, help, console');
+  assert.equal(ND_WANT.length, 2 * (8 * 3 + 9 + 3), 'per size: 24 + 9 later moments + menu, help, console');
   const all = cartridgeCaptureNames();
   for (const n of ND_WANT) assert.ok(all.includes(n), n);
   // a root without Night Drive (the fixture root) has none of its files
@@ -234,7 +235,7 @@ test('cartridge captures: Night Drive\'s set shows what it says - every track mo
         });
       }
     }
-    assert.equal(seen.size, 2 * (8 * 3 + 6), 'no two scene captures are the same picture');
+    assert.equal(seen.size, 2 * (8 * 3 + 9), 'no two scene captures are the same picture');
     for (const id of ND_IDS) for (const sec of ndSecs(id)) {
       assert.notEqual(body(`cart-night-drive-scene-${id}-t${sec}.txt`), body(`cart-night-drive-scene-${id}-80x24-t${sec}.txt`), `${id} t${sec}: 80x24 is not the 120x40 picture`);
     }
@@ -247,6 +248,50 @@ test('cartridge captures: Night Drive\'s set shows what it says - every track mo
       assert.ok(c70.replace(/\s+/g, ' ').includes('The tape clicks over') && !c70.includes('▼'), `caller${tag} t70: the narrator card, no arrow`);
       assert.ok(body(`cart-night-drive-scene-caller${tag}-t70.txt`).includes('▼'), `caller${tag} t70: the dial needle is still drawn, so the card box is what has no arrow`);
       assert.notEqual(body(`cart-night-drive-scene-redlight${tag}-t62.txt`), body(`cart-night-drive-scene-redlight${tag}-t2.txt`), `redlight${tag}: t62 is not t2`);
+    }
+    // Red Light's wiper and green moments (owner change request): t9 mid-stroke, t11 just before the next sweep, t61 with the rain near the lamp green.
+    // The seconds are worked out here from the wiper's exported constants, not read from the tool.
+    {
+      const rl = await import('../cartridges/night-drive/scenes/redlight.js');
+      const rainLib = await import('../cartridges/night-drive/lib/rain.js');
+      const down = await import('../cartridges/night-drive/lib/downpour.js');
+      const dash = await import('../cartridges/night-drive/lib/dash.js');
+      const phase = (t) => (t * 30) % rainLib.CYCLE;
+      const [tMid, tBefore, tGreen] = ND_LATER.redlight;
+      const p1 = phase(tMid) - rainLib.SWEEP_AT;
+      assert.ok(p1 >= 6 && p1 <= 12, `t${tMid} is ${p1} steps into the sweep, on its way up (the blade is mid-stroke)`);
+      const p0 = rainLib.SWEEP_AT - phase(tBefore);
+      assert.ok(p0 >= 1 && p0 <= 6, `t${tBefore} is ${p0} steps before the next sweep`);
+      assert.ok(tGreen * 30 >= down.RAIN_GREEN_BY && (tGreen - 1) * 30 < down.RAIN_GREEN_BY, `t${tGreen} is the first whole second after the rain near the lamp is all green (step ${down.RAIN_GREEN_BY})`);
+      const RAIN = new Set(['╲', '*', '×', '·', '°', "'", ',']);
+      for (const [tag, w, h] of [['', 120, 40], ['-80x24', 80, 24]]) {
+        const g = rl.geometry(w, h);
+        const rows = (t) => body(`cart-night-drive-scene-redlight${tag}-t${t}.txt`).split('\n');
+        const cellsOf = (pred) => { const out = []; for (let y = g.gTop; y < g.hoodTop; y++) for (let x = 0; x < w; x++) if (dash.onGlass(g, x, y) && pred(x, y)) out.push([x, y]); return out; };
+        const share = (r, cells) => cells.filter(([x, y]) => RAIN.has([...r[y]][x])).length / cells.length;
+        const armGlyph = (s) => (s > 0.5 ? '╱' : s >= -0.5 ? '│' : '\\');
+        // mid-stroke: the arm is where the step says (a step either side allowed), the swath behind it is clear, spray is in the air
+        const mid = rows(tMid), s9 = [30 * tMid - 1, 30 * tMid, 30 * tMid + 1].map((n) => rainLib.slopeAt(g, n));
+        const cur = s9[1];
+        const armOk = s9.some((s) => [...mid[g.py - 3]][g.px + Math.round(s * 3)] === armGlyph(s));
+        assert.ok(armOk, `redlight${tag} t${tMid}: the arm is on its way up (${cur.toFixed(2)} columns a row)`);
+        assert.notEqual([...mid[g.py - 3]][g.px + Math.round(g.sRest * 3)], '╱', `redlight${tag} t${tMid}: the arm has left its rest position`);
+        const swath = cellsOf((x, y) => rainLib.inBand(g, x, y, Math.max(...s9) + 0.5, g.sRest - 0.3) && !dash.inZone(g, x, y));
+        const others = cellsOf((x, y) => !rainLib.inBand(g, x, y, Math.min(...s9) - 0.3, g.sRest + 0.5) && !dash.inZone(g, x, y));
+        assert.ok(swath.length > 100 && others.length > 100, `redlight${tag}: ${swath.length} swath cells, ${others.length} others`);
+        assert.ok(share(mid, others) >= 0.1, `redlight${tag} t${tMid}: the glass outside the swath is wet (${(100 * share(mid, others)).toFixed(0)}%)`);
+        assert.ok(share(mid, swath) <= 0.2 * share(mid, others), `redlight${tag} t${tMid}: the swath behind the blade is clear (${(100 * share(mid, swath)).toFixed(1)}% against ${(100 * share(mid, others)).toFixed(1)}%)`);
+        assert.ok(mid.join('').split('').filter((ch) => ch === '*' || ch === '×').length >= 3, `redlight${tag} t${tMid}: spray in the air`);
+        // just before the next sweep: the arm is parked, the same swath is full of rain
+        const before = rows(tBefore);
+        for (let r = 1; r <= 4; r++) assert.equal([...before[g.py - r]][g.px + Math.round(g.sRest * r)], '╱', `redlight${tag} t${tBefore}: the arm is parked (row ${r})`);
+        assert.ok(share(before, swath) >= 0.1 && share(before, swath) >= 3 * share(mid, swath), `redlight${tag} t${tBefore}: the swath is wet again (${(100 * share(before, swath)).toFixed(0)}%)`);
+        // the green moment: the rain near the lamp is back (it goes dark while the light changes) and far rain is there too
+        const near = cellsOf((x, y) => down.tintLevel(g, x, y) > 0 && !dash.inZone(g, x, y)), far = cellsOf((x, y) => down.tintLevel(g, x, y) === 0);
+        const green = rows(tGreen);
+        assert.ok(share(green, near) >= 0.05 && share(green, far) >= 0.1, `redlight${tag} t${tGreen}: rain near the lamp ${(100 * share(green, near)).toFixed(1)}% and far ${(100 * share(green, far)).toFixed(1)}%`);
+        assert.ok(near.length > 150, `redlight${tag}: ${near.length} cells of glass near the lamp`);
+      }
     }
     // the diner capture sits at the bottom of a dip: the flicker schedule (seed 1) says so
     const diner = await import('../cartridges/night-drive/scenes/diner.js');

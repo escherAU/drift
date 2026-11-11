@@ -1,32 +1,57 @@
-// Red Light, Rain: the drops on the glass and the wiper that clears them. The state is plain data (a list of drops and a grid of which
-// cells hold one); the sim's step count and seed decide everything in it.
+// Red Light, Rain: the water on the glass and the wiper that knocks it off. The state is plain data (the water on the glass, the spray
+// the blade throws, a grid of which cells hold water and a grid of when each cell was last wiped); the step count and the seed decide
+// everything in it. The rain in the air (lib/downpour.js) has no state; the wiper dries the cells it crosses for a moment.
 //
-//   landing   a drop every 2 to 7 steps, 4.25 on average (about 6.7 a second), placed by a low-discrepancy sequence so the rain covers the glass evenly
-//             (a rejected cell is skipped), never on the light, its glow and its reflections
-//   life      a drop stays 14 to 22 s, unless the wiper takes it first
-//   trickle   about 3 in 10 drops send a trickle down 0.1 to 0.7 s after landing: a ╎ under the drop that steps down a row every 0.5 to 1.5 s
-//             for 2 to 6 rows and is gone (the drop stays)
-//   wiper     a cycle of 126 steps (4.2 s): still for 90, then 36 steps (1.2 s) up and back. The arm is a line of ╱ from the pivot,
-//             swinging from SREST to STOP columns per row (past upright, to the left); every drop the line crosses is cleared
+//   landing   the downpour lays water on the glass at LAND_RATE a cell a step (about 8 a step at 120x40), placed by a low-discrepancy
+//             sequence so it covers the glass evenly; never on the light, its glow and its reflections, nor on a cell the blade has just
+//             dried. A drop lives 18 to 33 steps (0.6 to 1.1 s). Because it lands that fast, the glass refills within a second of a sweep.
+//   runs      about 1 drop in 4.5 is a runner: it slides down and to the right with the wind, a cell every 3 to 5 steps for 3 to 9 cells,
+//             leaving a short trail of ╲ behind it
+//   wiper     a cycle of 72 steps (2.4 s): still for 44, then 28 steps (0.93 s) up and back. The arm is a line of ╱ from the pivot, swinging
+//             from SREST to STOP columns per row (past upright, to the left). Every cell the blade crosses is dried: the water on it is
+//             gone, the rain in the air shows nothing there for 12 to 19 steps, and the blade throws spray off its leading edge
+//   spray     short-lived particles (6 to 11 steps) thrown from the blade along its sweep and up: * then x then a degree sign
 import { rnd } from '../../../src/scenes/simrng.js';
 import { put } from './canvas.js';
 import { onGlass, inZone } from './dash.js';
 import { ICE } from './palette.js';
+import { SLANT, SPARK, refillDelay, shownColour, drawStreaks, makeSlots } from './downpour.js';
 
 const cp = (ch) => ch.codePointAt(0);
-const DROP_GLYPHS = Object.freeze(['·', '°', "'", ','].map(cp));
-const TRICKLE = cp('╎');
-const ARM = cp('╱'), ARM_UP = cp('│'), ARM_LEFT = cp('╲');
+export const DROP_GLYPHS = Object.freeze(['·', '°', "'", ','].map(cp));
+export const CROSS = cp('×'); // the second beat of the spray
+export const DEGREE = cp('°');
+const ARM = cp('╱'), ARM_UP = cp('│'), ARM_LEFT = cp('\\'); // the arm leans right, is upright, then leans left at the top (a back slash, not the rain's ╲)
 
-export const CYCLE = 126;
-export const SWEEP_AT = 90;
-export const SWEEP_LEN = 36;
-export const MAX_DROPS = 400;
+export const CYCLE = 72; // steps: 2.4 s
+export const SWEEP_AT = 44; // the blade starts to move at this step of the cycle
+export const SWEEP_LEN = 28; // steps: 0.93 s, up and back
+export const LAND_RATE = 0.0050; // landings per glass cell per step
+export const RUN_SHARE = 0.22; // of the landings that run
+export const DROP_TTL = [18, 16]; // lives 18 to 33 steps
+export const SPRAY_LIFE = [6, 6]; // 6 to 11 steps
+export const SPRAY_PER_STEP = 2; // sprayed off the leading edge each step of a sweep, whatever the blade meets
+export const CAP_SHARE = 0.4; // water on the glass never covers more than this share of the glass
+export const SPRAY_SHARE = 0.02; // nor the spray more than this share
 const PHI1 = 0.7548776662466927, PHI2 = 0.5698402909980532;
 
-export function rainInit(s, g) {
-  s.drops = [];
+export function glassArea(g) {
+  let n = 0;
+  for (let y = g.gTop; y < g.hoodTop; y++) for (let x = 0; x < g.W; x++) if (onGlass(g, x, y)) n++;
+  return n;
+}
+export const waterCap = (g) => Math.max(40, Math.ceil(CAP_SHARE * glassArea(g)));
+export const sprayCap = (g) => Math.max(8, Math.ceil(SPRAY_SHARE * glassArea(g)));
+
+export function rainInit(s, g, maxLen) {
+  s.area = glassArea(g);
+  s.maxLen = maxLen;
+  s.slots = makeSlots(g, s.seed, maxLen, s.area);
+  s.drops = []; // the water on the glass: { x, y, kind (0 drop, 1 runner, 2 trail), ttl, gl, wait, rows, step }
+  s.spray = []; // { x, y, vx, vy, age, life }
   s.occ = new Uint8Array(g.W * g.H);
+  s.wipe = new Int32Array(g.W * g.H).fill(-1000000);
+  s.land = 0; // the landing accumulator
   s.nextLand = 6;
   s.k = 0;
   s.o0 = rnd(s);
@@ -60,7 +85,7 @@ function onArm(g, x, y) {
   return onGlass(g, x, y) || (y >= g.hoodTop && y < g.py && x >= g.pw[g.hoodTop] && x < g.W - g.pw[g.hoodTop]);
 }
 
-// The wiper: a line of ╱ from its pivot, leaning right at rest. At the top of the sweep it has passed upright (│) and leans left (╲).
+// The wiper: a line of ╱ from its pivot, leaning right at rest. At the top of the sweep it has passed upright (│) and leans left (a back slash).
 export function drawWiper(cv, g, n) {
   const s = slopeAt(g, n);
   put(cv, g.px, g.py, ARM, ICE[0]);
@@ -72,7 +97,7 @@ export function drawWiper(cv, g, n) {
   }
 }
 
-// ---- the drops
+// ---- the water on the glass
 
 // Is the cell one the parked arm lies on? (Nothing lands or runs there: it would be hidden until the first sweep.)
 function underArm(g, x, y) {
@@ -83,60 +108,113 @@ function underArm(g, x, y) {
 // The wire and the crossing's rows are drawn in front of the rain, so nothing lands or runs there.
 const onCrossing = (g, y) => y === g.wireRow || (y >= g.pedRow && y <= g.zebraRow);
 
-function land(s, g) {
+// May water be on this cell at step n?
+function free(s, g, x, y, n) {
+  return onGlass(g, x, y) && y < g.hoodTop && !inZone(g, x, y) && !onCrossing(g, y) && !s.occ[y * g.W + x] && !underArm(g, x, y) && n - s.wipe[y * g.W + x] >= refillDelay(s.seed, x, y);
+}
+
+function land(s, g, n) {
   const W = g.W, gw = W - 6, gh = g.hoodTop - g.gTop;
-  for (let tries = 0; tries < 12; tries++) {
+  for (let tries = 0; tries < 8; tries++) {
     const k = s.k++;
     const jit = (rnd(s) - 0.5) * 0.02;
     const u = (((s.o0 + k * PHI1 + jit) % 1) + 1) % 1, v = (((s.o1 + k * PHI2) % 1) + 1) % 1;
     const x = 3 + Math.floor(u * gw), y = g.gTop + Math.floor(v * gh);
-    if (!onGlass(g, x, y) || inZone(g, x, y) || onCrossing(g, y) || s.occ[y * W + x] || underArm(g, x, y)) continue;
+    if (!free(s, g, x, y, n)) continue;
     const r1 = rnd(s), r2 = rnd(s), r3 = rnd(s), r4 = rnd(s);
-    s.drops.push({ x, y, ttl: 420 + Math.floor(r1 * 240), tr: r2 < 0.32 ? 3 + Math.floor(r3 * 18) : -1, t: 0, wait: 0, rows: 0, gl: DROP_GLYPHS[Math.floor(r4 * 4)] });
+    const run = r2 < RUN_SHARE;
+    s.drops.push({ x, y, kind: run ? 1 : 0, ttl: DROP_TTL[0] + Math.floor(r1 * DROP_TTL[1]), gl: DROP_GLYPHS[Math.floor(r4 * 4)], wait: run ? 3 + Math.floor(r3 * 3) : 0, rows: run ? 3 + Math.floor(r3 * 7) : 0, step: 0 });
     s.occ[y * W + x] = 1;
     return;
   }
 }
 
+function spawnSpray(s, g, x, y, dir) {
+  if (s.spray.length >= sprayCap(g)) return;
+  const r1 = rnd(s), r2 = rnd(s), r3 = rnd(s);
+  s.spray.push({ x, y, vx: dir * (0.45 + 0.5 * r1), vy: -(0.2 + 0.4 * r2), age: 0, life: SPRAY_LIFE[0] + Math.floor(r3 * SPRAY_LIFE[1]) });
+}
+
+// Dry the cells between two slopes of the arm: the water on them goes, the rain in the air shows nothing there for a moment,
+// and the blade throws spray off its leading edge.
+function wipeBand(s, g, lo, hi, n, dir) {
+  const W = g.W;
+  for (let y = g.gTop; y < g.hoodTop; y++) {
+    const dy = g.py - y;
+    const xa = Math.max(g.pw[y], Math.floor(g.px + lo * dy - 1)), xb = Math.min(W - 1 - g.pw[y], Math.ceil(g.px + hi * dy + 1));
+    for (let x = xa; x <= xb; x++) if (inBand(g, x, y, lo, hi)) s.wipe[y * W + x] = n;
+  }
+  const hit = [];
+  let j = 0;
+  for (let i = 0; i < s.drops.length; i++) {
+    const d = s.drops[i];
+    if (inBand(g, d.x, d.y, lo, hi)) { s.occ[d.y * W + d.x] = 0; hit.push(d); } else s.drops[j++] = d;
+  }
+  s.drops.length = j;
+  for (const d of hit) if (d.kind !== 2 && rnd(s) < 0.8) spawnSpray(s, g, d.x, d.y, dir);
+  const s1 = dir < 0 ? lo : hi, rows = Math.floor(g.len / Math.sqrt(s1 * s1 + 4));
+  for (let i = 0; i < SPRAY_PER_STEP; i++) {
+    const r = 1 + Math.floor(rnd(s) * Math.max(1, Math.min(rows, g.py - g.gTop - 1)));
+    const x = g.px + Math.round(s1 * r), y = g.py - r;
+    if (onGlass(g, x, y)) spawnSpray(s, g, x, y, dir);
+  }
+}
+
 export function rainStep(s, g) {
   const n = s.steps, W = g.W;
-  if (n >= s.nextLand) { land(s, g); s.nextLand = n + 2 + Math.floor(rnd(s) * 5) + (rnd(s) < 0.25 ? 1 : 0); }
   const s0 = slopeAt(g, n - 1), s1 = slopeAt(g, n);
-  const sweeping = s0 !== s1, lo = Math.min(s0, s1), hi = Math.max(s0, s1);
+  if (s0 !== s1 && !s.noWiper) wipeBand(s, g, Math.min(s0, s1), Math.max(s0, s1), n, s1 < s0 ? -1 : 1);
+  // the downpour lands
+  s.land += LAND_RATE * s.area;
+  while (s.land >= 1) { s.land -= 1; land(s, g, n); }
+  // the water ages, and the runners run
   let j = 0;
-  const born = [];
+  const trails = [];
   for (let i = 0; i < s.drops.length; i++) {
     const d = s.drops[i];
     let dead = false;
-    if (d.t) {
+    if (d.kind === 1) {
       if (--d.wait <= 0) {
-        if (d.rows <= 0) dead = true;
+        if (d.rows <= 0) { d.kind = 0; d.ttl = 8; }
         else {
-          const ny = d.y + 1;
-          s.occ[d.y * W + d.x] = 0;
-          if (ny >= g.hoodTop || inZone(g, d.x, ny) || onCrossing(g, ny) || !onGlass(g, d.x, ny) || s.occ[ny * W + d.x] || underArm(g, d.x, ny)) dead = true;
-          else { d.y = ny; s.occ[ny * W + d.x] = 1; d.rows--; d.wait = 15 + Math.floor(rnd(s) * 31); }
+          const nx = d.x + (++d.step % 4 === 0 ? 0 : 1), ny = d.y + 1;
+          if (nx >= W || !free(s, g, nx, ny, n)) dead = true;
+          else {
+            trails.push({ x: d.x, y: d.y, kind: 2, ttl: 10 + (d.x * 7 + d.y * 3 + n) % 10, gl: SLANT, wait: 0, rows: 0, step: 0 }); // the cell it leaves stays occupied
+            d.x = nx; d.y = ny; d.rows--; d.wait = 3 + (d.x + d.y + n) % 3;
+            s.occ[ny * W + nx] = 1;
+          }
         }
       }
-    } else {
-      d.ttl--;
-      if (d.tr > 0 && --d.tr === 0) born.push(d); // a trickle starts to run from this drop, which stays where it is
-      if (d.ttl <= 0) dead = true;
-    }
-    if (!dead && sweeping && inBand(g, d.x, d.y, lo, hi)) dead = true;
-    if (dead) { s.occ[d.y * W + d.x] = 0; d.ttl = -1; } else s.drops[j++] = d;
+    } else if (--d.ttl <= 0) dead = true;
+    if (dead) s.occ[d.y * W + d.x] = 0; else s.drops[j++] = d;
   }
   s.drops.length = j;
-  for (const d of born) { // a new trickle, one row under its drop, if that cell is free glass
-    const ny = d.y + 1;
-    if (d.ttl < 0 || ny >= g.hoodTop || inZone(g, d.x, ny) || onCrossing(g, ny) || !onGlass(g, d.x, ny) || s.occ[ny * W + d.x] || underArm(g, d.x, ny)) continue;
-    const wait = 15 + Math.floor(rnd(s) * 31), rows = 2 + Math.floor(rnd(s) * 5);
-    s.drops.push({ x: d.x, y: ny, ttl: 0, tr: -1, t: 1, wait, rows, gl: 0 });
-    s.occ[ny * W + d.x] = 1;
+  for (const t of trails) s.drops.push(t);
+  const cap = waterCap(g);
+  while (s.drops.length > cap) { const d = s.drops.shift(); s.occ[d.y * W + d.x] = 0; }
+  // the spray flies
+  j = 0;
+  for (let i = 0; i < s.spray.length; i++) {
+    const p = s.spray[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.05;
+    if (++p.age < p.life) s.spray[j++] = p;
   }
-  while (s.drops.length > MAX_DROPS) { const d = s.drops.shift(); s.occ[d.y * W + d.x] = 0; }
+  s.spray.length = j;
 }
 
-export function drawRain(cv, s) {
-  for (const d of s.drops) put(cv, d.x, d.y, d.t ? TRICKLE : d.gl, d.t ? ICE[0] : ICE[1]);
+// The water on the glass, then the spray, drawn over the rain in the air.
+export function drawRain(cv, s, n) {
+  drawStreaks(cv, s, n, put);
+  for (const d of s.drops) {
+    const col = shownColour(s, d.x, d.y, n, d.kind === 2 ? 0 : 1);
+    if (col >= 0) put(cv, d.x, d.y, d.gl, col);
+  }
+  for (const p of s.spray) {
+    const x = Math.floor(p.x), y = Math.floor(p.y);
+    if (!onGlass(s.g, x, y)) continue;
+    const star = p.age < 3, col = shownColour(s, x, y, n, star ? 2 : 1);
+    if (col >= 0) put(cv, x, y, star ? SPARK : p.age < 7 ? CROSS : DEGREE, col);
+  }
 }
+

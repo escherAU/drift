@@ -4,7 +4,7 @@ import { rnd } from '../../../src/scenes/simrng.js';
 import { put } from './canvas.js';
 import { hash } from './hash.js';
 import { inZone } from './dash.js';
-import { FAR, MAG, SUN, VIOLET } from './palette.js';
+import { FAR, MAG, TANG, CORAL } from './palette.js';
 import { REFLECTIONS, reflColour } from './bokeh.js';
 
 const cp = (ch) => ch.codePointAt(0);
@@ -42,14 +42,14 @@ export function drawBuildings(cv, g, s) {
       if (inZone(g, x, y)) continue; // the light hangs in a gap
       const k = u - s.bs[u];
       const lit = r % 2 === 1 && r < ht - 1 && k % 3 === 1 && hash(s.bs[u], u, r) % 100 < 30;
-      put(cv, x, y, lit ? cp('▪') : cp('█'), lit ? SUN[0] : FAR);
+      put(cv, x, y, lit ? cp('▪') : cp('▚'), lit ? TANG[0] : CORAL[0]);
     }
   }
 }
 
 // The crossing: a dashed line of ═ across the street, and nobody on it between crossings.
 export function drawZebra(cv, g) {
-  for (let x = g.pedX0 - 2; x <= g.pedX0 + g.span + 2; x++) if ((x - g.pedX0 + 2) % 4 !== 3) put(cv, x, g.zebraRow, cp('═'), VIOLET[0]);
+  for (let x = g.pedX0 - 2; x <= g.pedX0 + g.span + 2; x++) if ((x - g.pedX0 + 2) % 4 !== 3) put(cv, x, g.zebraRow, cp('═'), CORAL[0]);
 }
 
 // The pedestrian: an umbrella (mag.2) over a body in far silhouette, stepping a column every 0.4 s and swapping its legs on each step.

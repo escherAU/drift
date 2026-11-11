@@ -23,8 +23,8 @@ import { FAR } from '../lib/palette.js';
 
 // Breakpoints, widest first; a window gets the first layout it is at least as big as.
 export const LAYOUTS = Object.freeze([
-  Object.freeze({ name: 'full', minCols: 100, minRows: 32, mirror: true, bokehRx: 7.5, bokehRy: 3.5, bokehHalfH: 3, glassTop: 4, dashRows: 9, reflRows: 6, bMin: 4, bMax: 6, pedSpan: 76, lenFrac: 0.9, sRest: 5, sTop: -1.2 }),
-  Object.freeze({ name: 'compact', minCols: 0, minRows: 0, mirror: false, bokehRx: 4.5, bokehRy: 2.5, bokehHalfH: 2, glassTop: 1, dashRows: 2, reflRows: 4, bMin: 3, bMax: 4, pedSpan: 48, lenFrac: 0.9, sRest: 5, sTop: -1.2 }),
+  Object.freeze({ name: 'full', minCols: 100, minRows: 32, mirror: true, bokehRx: 7.5, bokehRy: 3.5, bokehHalfH: 3, glassTop: 4, dashRows: 9, reflRows: 6, bMin: 4, bMax: 6, pedSpan: 76, lenFrac: 0.9, sRest: 5, sTop: -1.2, tintRx: 15, tintRy: 6, maxLen: 8 }),
+  Object.freeze({ name: 'compact', minCols: 0, minRows: 0, mirror: false, bokehRx: 4.5, bokehRy: 2.5, bokehHalfH: 2, glassTop: 1, dashRows: 2, reflRows: 4, bMin: 3, bMax: 4, pedSpan: 48, lenFrac: 0.9, sRest: 5, sTop: -1.2, tintRx: 10, tintRy: 4.5, maxLen: 6 }),
 ]);
 export function layoutFor(w, h) {
   return LAYOUTS.find((l) => w >= l.minCols && h >= l.minRows) || LAYOUTS[LAYOUTS.length - 1];
@@ -53,7 +53,7 @@ function init(w, h, seed) {
   const b = makeBuildings(s, L);
   s.bh = b.h;
   s.bs = b.st;
-  rainInit(s, s.g);
+  rainInit(s, s.g, L.maxLen);
   return s;
 }
 
@@ -70,7 +70,7 @@ function draw(s, params) {
   const g = s.g, n = s.steps, L = layoutFor(s.w, s.h);
   // outside, back to front
   drawBuildings(cv, g, s);
-  drawRain(cv, s);
+  drawRain(cv, s, n);
   // the wire, and the light hanging from it
   const wy = g.ly - L.bokehHalfH, wr = L.mirror ? 28 : 20;
   for (let x = g.cx - wr; x <= g.cx + wr; x++) if (Math.abs(x - g.cx) > Math.floor(L.bokehRx * 0.5)) put(cv, x, wy, '─'.codePointAt(0), FAR);

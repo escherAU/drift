@@ -25,6 +25,7 @@ export function geometry(W, H, L) {
     zone: [cx - zx, cx + zx, ly - L.bokehHalfH, bb + 4 + L.reflRows], // the light, the street under it and the reflections
     wireRow: ly - L.bokehHalfH, pedRow: bb + 1, zebraRow: bb + 4, reflTop: bb + 5, reflRows: L.reflRows,
     span: L.pedSpan, pedX0: cx - Math.floor(L.pedSpan / 2),
+    tint: [cx, ly, L.tintRx, L.tintRy], // the rain near the lamp turns green: inside this ellipse, and in the ring around it
     px: cx - 26, py: pivotY, len: Math.round(W * L.lenFrac), sRest: L.sRest, sTop: L.sTop,
   };
 }

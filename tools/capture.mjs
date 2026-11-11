@@ -30,6 +30,8 @@ import { EJECT_SECONDS, resetFirstInsertHint } from '../src/shell/shell.js';
 import { TURN, HIT_AT, CONTACT_AT } from '../cartridges/delza/scenes/cinderhorn.js';
 import { LINES, STARTS, TYPE_CPS, DISSOLVE, FLUTTER_STEP } from '../cartridges/delza/scenes/lampwarden.js';
 import { flickerShade } from '../cartridges/night-drive/scenes/diner.js';
+import { CYCLE as WIPER_CYCLE, SWEEP_AT } from '../cartridges/night-drive/lib/rain.js';
+import { RAIN_GREEN_BY } from '../cartridges/night-drive/lib/downpour.js';
 
 export const CAPTURE_NAMES = [...SCENES.map((s) => s.id), 'crossfade'];
 const SIZES = [[120, 40], [240, 67]];
@@ -251,7 +253,7 @@ export function delzaCaptureNames() {
 //   cart-night-drive-scene-<id>-t<s>.txt          every track at 2, 20 and 40 s of scene time (120x40; the diner and the on-ramp at 2, 21 and 40), chosen from the tape-deck
 //   cart-night-drive-scene-<id>-80x24-t<s>.txt    menu with the keys a person uses; the same on the compact console (the size suffix
 //                                                 sits before the time, as in cart-boot-<id>-80x24-t<ms>.txt)
-//   later moments, where each story moves (both sizes): sundown t75; redlight t62 (the light went green at about 60.1 s); diner t25
+//   later moments, where each story moves (both sizes): sundown t75; redlight t9 (the wiper mid-stroke), t11 (just before the next sweep), t61 (the rain near the lamp has gone green, 60.1 s) and t62 (the buildings have begun to slide); diner t25
 //                                                 (the bottom of a flicker dip, computed from the scene's own schedule); caller t29
 //                                                 (Danny's card whole, with the arrow) and t70 (the narrator's card); overdrive t64
 //                                                 (the far end is open, the city shows inside it; the freeway follows at 66 s)
@@ -267,7 +269,14 @@ export const ND_SCENE_IDS = ['onramp', 'skyline', 'sundown', 'coast', 'redlight'
 export const ND_SCENE_TIMES = [2, 20, 40];
 export const ND_CONSOLE_MOMENT = 3.4;
 const DINER_DIP_T = Array.from({ length: 10 }, (_, i) => 24 + i).find((s) => flickerShade(s, 1) === 1); // the first whole second from 24 s at the bottom of a dip (25)
-export const ND_LATER_TIMES = { sundown: [75], redlight: [62], diner: [DINER_DIP_T], caller: [29, 70], overdrive: [64] };
+// Red Light's whole seconds, from the scene's own wiper constants (the sim runs 30 steps a second, a cycle is WIPER_CYCLE steps and the blade moves from step SWEEP_AT):
+// mid-stroke is the first second whose step in the cycle is 6 to 12 steps into the sweep (the blade on its way up); just before is the first later second 1 to 6 steps short of it
+const wiperStep = (sec) => (sec * 30) % WIPER_CYCLE;
+const REDLIGHT_MID_T = Array.from({ length: 30 }, (_, i) => 5 + i).find((s) => { const p = wiperStep(s) - SWEEP_AT; return p >= 6 && p <= 12; });
+const REDLIGHT_BEFORE_T = Array.from({ length: 30 }, (_, i) => REDLIGHT_MID_T + 1 + i).find((s) => { const p = SWEEP_AT - wiperStep(s); return p >= 1 && p <= 6; });
+const REDLIGHT_GREEN_T = Math.ceil(RAIN_GREEN_BY / 30); // the first whole second after the rain near the lamp is all green
+export const REDLIGHT_MOMENTS = Object.freeze({ mid: REDLIGHT_MID_T, before: REDLIGHT_BEFORE_T, green: REDLIGHT_GREEN_T, slide: 62 });
+export const ND_LATER_TIMES = { sundown: [75], redlight: [REDLIGHT_MID_T, REDLIGHT_BEFORE_T, REDLIGHT_GREEN_T, 62], diner: [DINER_DIP_T], caller: [29, 70], overdrive: [64] };
 // the diner (both sizes) and the on-ramp at 80x24 draw the same picture at 2 s and at 20 s (every motion in them repeats within
 // 18 s), so the middle moment of those two tracks is 21 s at both sizes
 export const ND_BASE_TIMES = { diner: [2, 21, 40], onramp: [2, 21, 40] };
