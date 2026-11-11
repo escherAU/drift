@@ -1,4 +1,4 @@
-// Headless frame capture: node tools/capture.mjs [--out captures]
+// Headless frame capture: node tools/capture.mjs [--out captures] [--cartridges]   (--cartridges: only the cartridge console files)
 // Writes, for each of the 5 scenes and a cross-fade, at 120x40 and 240x67:
 //   <name>-<cols>x<rows>.txt   glyph characters only
 //   <name>-<cols>x<rows>.ansi  same frames with truecolor SGR (Claude orange)
@@ -23,6 +23,9 @@ import artist, { timeline } from '../src/scenes/artist.js';
 import { PIECES } from '../src/art/gallery.js';
 import { buildPlan, pieceToText } from '../src/art/engine.js';
 import { discoverCartridges, INSTALL_DIR } from '../src/cartridge/loader.js';
+import { INSERT_END } from '../src/shell/insert.js';
+import { BOOT_END } from '../src/shell/boot.js';
+import { EJECT_SECONDS } from '../src/shell/shell.js';
 
 export const CAPTURE_NAMES = [...SCENES.map((s) => s.id), 'crossfade'];
 const SIZES = [[120, 40], [240, 67]];
@@ -161,66 +164,140 @@ export function runCaptureGallery({ outDir, seed = 1 }) {
   return written;
 }
 
-// ---- DRIFT-4: the cartridge console, plain text at 120x40, from the install cartridges only
-// (so the files do not depend on what a user has in %APPDATA%). Its own list of names; K3 above is untouched.
-//   cart-library-<id>.txt   the library with the cursor on that cartridge (locked ones too)
-//   cart-insert-<id>.txt    the insert animation at INSERT_MOMENTS seconds after Enter (unlocked ones)
-//   cart-boot-<id>.txt      the boot screen at BOOT_MOMENTS seconds into the boot (unlocked ones)
-// Driven through the real app on a fake terminal, with a fake clock.
-const CART_COLS = 120, CART_ROWS = 40;
+// ---- DRIFT-4: the cartridge console, plain text, from the install cartridges only (so the files do not depend
+// on what a user has in %APPDATA%). Its own list of names; K3 above is untouched. Every file starts with an
+// "=== ..." header line and holds exactly one frame.
+//   cart-library-<id>-120x40.txt, cart-library-<id>-80x24.txt
+//                          the library with the cursor on that cartridge (every installed one, locked too)
+//   cart-library-240x67.txt        the extra-large library, Classic selected
+//   cart-library-list-60x14.txt    the text-list tier, Classic selected
+//   cart-insert-<id>-t<ms>.txt     the insert animation <ms> after Enter (120x40; before INSERT_END, 1.5 s)
+//   cart-boot-<id>-t<ms>.txt       the boot screen <ms> after Enter (120x40; from INSERT_END on)
+//   cart-insert-<id>-80x24-t<ms>.txt, cart-boot-<id>-80x24-t<ms>.txt   the same on the compact console
+//   cart-eject-<id>[-80x24]-t<ms>.txt   a cartridge that RUNS in the shell (not Classic, which has no eject) ejecting,
+//                          <ms> after `e`, at the same fractions of EJECT_SECONDS as the insert moments are of INSERT_END
+//   cart-help-classic-120x40.txt   the help panel (h) while Classic runs, after the console has handed back to it
+// Unlocked cartridges only get insert/boot/eject. Driven through the real app on a fake terminal, with a fake clock.
 const CART_DT = 1 / 18;
-export const INSERT_MOMENTS = [0.3, 0.75, 1.2, 1.5];
-export const BOOT_MOMENTS = [0.3, 0.9, 1.5, 2.4, 3.0];
+const CART_SIZES = [[120, 40], [80, 24]];
+// seconds after Enter: the insert is over at INSERT_END (1.5 s), the boot runs on to about 5.8 s
+export const CART_MOMENTS = [0.4, 0.9, 1.25, 1.6, 2.5, 3.6, 4.2, 5.0, 5.6];
+export const EJECT_MOMENTS = CART_MOMENTS.filter((m) => m < INSERT_END).map((m) => (m / INSERT_END) * EJECT_SECONDS);
 const CART_DIRS = () => [{ dir: INSTALL_DIR, trusted: true }];
+const sizeTag = (cols, rows) => (cols === 120 && rows === 40 ? '' : `-${cols}x${rows}`);
+const ms = (sec) => Math.round(sec * 1000);
 
-export function cartridgeCaptureNames() {
-  const found = discoverCartridges({ dirs: CART_DIRS() }).cartridges;
-  return found.flatMap((c) => [`cart-library-${c.id}.txt`, ...(c.locked ? [] : [`cart-insert-${c.id}.txt`, `cart-boot-${c.id}.txt`])]);
+const installed = (dirs) => discoverCartridges({ dirs: dirs || CART_DIRS() }).cartridges;
+const isShellRun = (c) => c.manifest && c.manifest.runtime !== 'classic';
+
+export function cartridgeCaptureNames({ dirs } = {}) {
+  const names = ['cart-library-240x67.txt', 'cart-library-list-60x14.txt', 'cart-help-classic-120x40.txt'];
+  for (const c of installed(dirs)) {
+    for (const [cols, rows] of CART_SIZES) {
+      names.push(`cart-library-${c.id}-${cols}x${rows}.txt`);
+      if (c.locked) continue;
+      const tag = sizeTag(cols, rows);
+      for (const m of CART_MOMENTS) names.push(`cart-${m < INSERT_END ? 'insert' : 'boot'}-${c.id}${tag}-t${ms(m)}.txt`);
+      if (isShellRun(c)) for (const m of EJECT_MOMENTS) names.push(`cart-eject-${c.id}${tag}-t${ms(m)}.txt`);
+    }
+  }
+  return names;
 }
 
-function cartApp(seed) {
+function cartApp(seed, cols, rows, dirs) {
   const stdin = new EventEmitter();
   Object.assign(stdin, { isTTY: true, setRawMode() { return stdin; }, resume() { return stdin; }, pause() { return stdin; }, unref() {}, ref() {}, setEncoding() { return stdin; } });
   const stdout = new EventEmitter();
-  Object.assign(stdout, { isTTY: true, columns: CART_COLS, rows: CART_ROWS, write(_s, cb) { if (typeof cb === 'function') cb(); return true; } });
+  Object.assign(stdout, { isTTY: true, columns: cols, rows, write(_s, cb) { if (typeof cb === 'function') cb(); return true; } });
   const proc = new EventEmitter();
   proc.exit = () => {};
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-capture-cart-'));
   const app = createApp({
     stdin, stdout, stderr: { write() { return true; } }, proc, env: { COLORTERM: 'truecolor' },
-    configPath: path.join(dir, 'config.json'), dirs: CART_DIRS(), autoLoop: false, seed, startScreen: { screen: 'library' },
+    configPath: path.join(dir, 'config.json'), dirs, autoLoop: false, seed, startScreen: { screen: 'library' },
   });
   app.start();
   return { app, dir };
 }
 
 const shotText = (app) => frameToText(app.screenshot());
+const settle = () => new Promise((r) => setTimeout(r, 20));
 
-export async function runCaptureCartridges({ outDir, seed = 1 }) {
+// a fresh app at cols x rows with the library cursor on `id` (at most one lap of the arrow key); fn(app, step)
+// gets a clock that advances in 1/18 s ticks to an absolute time and then lets pending scene imports settle
+async function withCartApp({ seed, cols, rows, dirs, id }, fn) {
+  const { app, dir } = cartApp(seed, cols, rows, dirs);
+  try {
+    app.tick(0.05);
+    const n = installed(dirs).length;
+    for (let i = 0; i < n + 1 && app.getState().shell.cartridge !== id; i++) { app.handleKey('\x1b[C'); app.tick(0.5); }
+    app.tick(0.5);
+    let t = 0;
+    const step = async (to) => { while (t < to - 1e-9) { const d = Math.min(CART_DT, to - t); app.tick(d); t += d; } await settle(); };
+    const restart = () => { t = 0; };
+    return await fn(app, step, restart);
+  } finally {
+    app.quit(0);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export async function runCaptureCartridges({ outDir, seed = 1, dirs = CART_DIRS() }) {
   fs.mkdirSync(outDir, { recursive: true });
   const written = [];
   const put = (name, text) => { const f = path.join(outDir, name); fs.writeFileSync(f, text); written.push(f); };
-  const found = discoverCartridges({ dirs: CART_DIRS() }).cartridges;
-  const settle = () => new Promise((r) => setTimeout(r, 20));
+  const found = installed(dirs);
+  const classicId = (found.find((c) => !isShellRun(c)) || found[0] || {}).id;
+
+  // the library, per cartridge and size, then the two single-purpose sizes
   for (const c of found) {
-    const { app, dir } = cartApp(seed);
-    try {
-      app.tick(0.05);
-      for (let i = 0; i < found.length + 1 && app.getState().shell.cartridge !== c.id; i++) { app.handleKey('\x1b[C'); app.tick(0.5); }
-      app.tick(0.5);
-      put(`cart-library-${c.id}.txt`, `=== library ${CART_COLS}x${CART_ROWS} cursor on ${c.id}${c.locked ? ' (locked)' : ''}\n${shotText(app)}\n`);
-      if (c.locked) continue;
-      app.handleKey('\r');
-      let t = 0, ins = '', boot = '';
-      const step = async (to) => { while (t < to - 1e-9) { const d = Math.min(CART_DT, to - t); app.tick(d); t += d; } await settle(); };
-      for (const m of INSERT_MOMENTS) { await step(m); ins += `=== insert t=${m}s ${CART_COLS}x${CART_ROWS} ${c.id}\n${shotText(app)}\n`; }
-      for (const m of BOOT_MOMENTS) { await step(INSERT_MOMENTS[INSERT_MOMENTS.length - 1] + m); boot += `=== boot t=${m}s ${CART_COLS}x${CART_ROWS} ${c.id}\n${shotText(app)}\n`; }
-      put(`cart-insert-${c.id}.txt`, ins);
-      put(`cart-boot-${c.id}.txt`, boot);
-    } finally {
-      app.quit(0);
-      fs.rmSync(dir, { recursive: true, force: true });
+    for (const [cols, rows] of CART_SIZES) {
+      await withCartApp({ seed, cols, rows, dirs, id: c.id }, (app) => {
+        put(`cart-library-${c.id}-${cols}x${rows}.txt`, `=== library ${cols}x${rows} cursor on ${c.id}${c.locked ? ' (locked)' : ''}\n${shotText(app)}\n`);
+      });
     }
+  }
+  for (const [name, cols, rows, what] of [['cart-library-240x67.txt', 240, 67, 'extra-large'], ['cart-library-list-60x14.txt', 60, 14, 'text-list tier']]) {
+    await withCartApp({ seed, cols, rows, dirs, id: classicId }, (app) => {
+      put(name, `=== library ${cols}x${rows} (${what}) cursor on ${classicId}\n${shotText(app)}\n`);
+    });
+  }
+
+  // insert and boot (and eject) for each unlocked cartridge at both sizes; one run per size, frames at the moments
+  for (const c of found.filter((x) => !x.locked)) {
+    for (const [cols, rows] of CART_SIZES) {
+      const tag = sizeTag(cols, rows);
+      await withCartApp({ seed, cols, rows, dirs, id: c.id }, async (app, step) => {
+        app.handleKey('\r');
+        for (const m of CART_MOMENTS) {
+          await step(m);
+          const kind = m < INSERT_END ? 'insert' : 'boot';
+          put(`cart-${kind}-${c.id}${tag}-t${ms(m)}.txt`, `=== ${kind} t=${m}s after Enter ${cols}x${rows} ${c.id}\n${shotText(app)}\n`);
+        }
+        if (!isShellRun(c)) return;
+        await step(BOOT_END + 1.5); // running, with the menu open over it
+        app.handleKey('\x1b'); // close the menu
+        await step(BOOT_END + 3);
+        app.handleKey('e');
+        let t = 0;
+        for (const m of EJECT_MOMENTS) {
+          while (t < m - 1e-9) { const d = Math.min(CART_DT, m - t); app.tick(d); t += d; }
+          await settle();
+          put(`cart-eject-${c.id}${tag}-t${ms(m)}.txt`, `=== eject t=${m.toFixed(3)}s after e ${cols}x${rows} ${c.id}\n${shotText(app)}\n`);
+        }
+      });
+    }
+  }
+
+  // the help panel while Classic runs: Enter on Classic, through insert and boot to the hand-back, then h
+  if (classicId) {
+    await withCartApp({ seed, cols: 120, rows: 40, dirs, id: classicId }, async (app, step) => {
+      app.handleKey('\r');
+      await step(BOOT_END + 1);
+      app.handleKey('h');
+      app.tick(0);
+      put('cart-help-classic-120x40.txt', `=== help 120x40 while ${classicId} runs (after the console handed back)\n${shotText(app)}\n`);
+    });
   }
   return written;
 }
@@ -229,6 +306,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const i = process.argv.indexOf('--out');
   const here = path.dirname(fileURLToPath(import.meta.url));
   const out = i >= 0 ? path.resolve(process.argv[i + 1]) : path.join(here, '..', 'captures');
+  if (process.argv.includes('--cartridges')) { // only the console captures (about 10 s instead of the whole set)
+    const only = await runCaptureCartridges({ outDir: out });
+    console.log('wrote ' + only.length + ' cartridge files to ' + out);
+    process.exit(0);
+  }
   const files = runCapture({ outDir: out });
   const more = runCaptureModes({ outDir: out });
   const art = runCaptureGallery({ outDir: out });

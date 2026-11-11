@@ -484,10 +484,14 @@ node tools/measure.mjs --cartridge all                            # one fresh pr
 ```
 
 The same capture command also writes the mode captures (`<mode>-<scene>-1/-2.txt`, `help-<mode>.txt`,
-`dissolve-<mode>.txt`), the artist's gallery and the cartridge console: `cart-library-<id>.txt` for every
-install cartridge (locked ones included) and `cart-insert-<id>.txt` / `cart-boot-<id>.txt` at several moments
-for each unlocked one, all 120x40 plain text. Only the install folder is captured, so the files do not
-depend on what is in your user cartridge folder.
+`dissolve-<mode>.txt`), the artist's gallery and the cartridge console (all plain text, one frame per file):
+`cart-library-<id>-120x40.txt` and `-80x24.txt` for every install cartridge (locked ones included),
+`cart-library-240x67.txt` and `cart-library-list-60x14.txt` (Classic selected), `cart-insert-<id>-t<ms>.txt` /
+`cart-boot-<id>-t<ms>.txt` at 0.4, 0.9, 1.25, 1.6, 2.5, 3.6, 4.2, 5.0 and 5.6 s after Enter (insert before 1.5 s,
+boot after; the 80x24 ones carry a `-80x24` before the time), `cart-eject-<id>-t<ms>.txt` for a cartridge that runs
+in the shell, and `cart-help-classic-120x40.txt` (the help panel while Classic runs). Only the install folder is
+captured, so the files do not depend on what is in your user cartridge folder. `node tools/capture.mjs --cartridges`
+writes only these.
 
 `captures/*.ansi` are git-ignored (large) except the calm scenes' and the crossfade's; regenerate with the
 capture command and view with `type captures\sunburst-120x40.ansi` in a truecolor terminal.
