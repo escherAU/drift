@@ -86,7 +86,7 @@ test('cartridge component, locked: dashed lines, LED off, no contacts, SOON, the
   assert.equal(rows[15], '╰┄┄┬' + '┄'.repeat(22) + '┬┄┄╯', 'tees stay');
   assert.equal(rows[17], '   ╰' + '┄'.repeat(22) + '╯   ');
   assert.equal(rows[16], '   ┆' + ' '.repeat(22) + '┆   ', 'no contacts');
-  assert.ok(!rows.join('').includes('▌'), 'no contacts anywhere');
+  assert.ok(!rows.slice(15).join('').includes('▌'), 'no contacts anywhere (the label art above may use ▌ itself: the Night Drive card does, DRIFT-5)');
   assert.equal(rows[1][25], '○', 'LED off');
   assert.equal([...rows[14]].slice(22, 27).join(''), 'SOON ');
   for (let r = 1; r <= 14; r++) { assert.equal([...rows[r]][0], '┆'); assert.equal([...rows[r]][29], '┆'); }
@@ -102,7 +102,7 @@ test('cartridge component, locked: dashed lines, LED off, no contacts, SOON, the
   assert.deepEqual([...shades], [locked.tint], 'dimmest shade of the cartridge tint');
   // a playable cartridge with the same label keeps its solid lines and brighter shades
   const play = cartridgeGrid({ ...locked, locked: false }, { selected: true, level: 3, ui });
-  assert.ok(gridRows(play).join('').includes('▌'));
+  assert.ok(gridRows(play).slice(15).join('').includes('▌'), 'the contacts are drawn on a playable one');
   assert.ok(!gridRows(play)[7].includes('COMING'));
   assert.ok(play.s.some((s) => s === locked.tint + 3));
 });

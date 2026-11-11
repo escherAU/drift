@@ -70,7 +70,7 @@ test('labels: Classic is sun over water, Last Fantasy has a beacon tower and no 
   assert.ok(lf.includes('▐█▌') && lf.includes('●'), 'a beacon tower with its light');
   assert.ok(!lf.includes('┼'), 'the sword cross-guard is gone');
   assert.ok(rawLabel('arcade')[0].includes('1P 004200') && rawLabel('arcade')[1].includes('▐█▌'), 'score line and bricks');
-  assert.ok(rawLabel('night-drive')[5].includes('╱  ╲'), 'the road');
+  assert.ok(rawLabel('night-drive')[5].includes('╱ ▐▌ ╲') && rawLabel('night-drive')[0].includes('▄▄██████▄▄'), 'the road with a car ahead on it, under the sun (DRIFT-5)');
 });
 
 test('no flagged glyph anywhere in src/shell or cartridges/ (control: the scan does see a planted one)', () => {
