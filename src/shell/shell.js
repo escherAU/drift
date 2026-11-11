@@ -18,7 +18,7 @@ import { makeSkinPalette } from '../cartridge/palette.js';
 import { loadScenes as defaultLoadScenes } from '../cartridge/loader.js';
 import { parseHex, sgrFor } from '../color.js';
 import { driftmanSkin, classicBootSkin } from './driftman.js';
-import { drawLibrary } from './library.js';
+import { drawLibrary, idleSignature } from './library.js';
 import { drawInsert, INSERT_END } from './insert.js';
 import { drawBoot, bootPhases } from './boot.js';
 import { createCartridgeRuntime, dissolveFrames } from './runtime.js';
@@ -65,6 +65,7 @@ export function createShell(o) {
   let st = 0; // seconds in the current screen
   let index = Math.max(0, carts.findIndex((c) => c.id === o.lastCartridge));
   let prev = index, slideT = SLIDE_SECONDS, message = '', msgT = 0, dipT = DIP_SECONDS;
+  let idleT = 0, drawnSig = ''; // the library's idle clock (runs while it is settled and in view) and the idle picture last drawn
   let lastDir = 1, dial = index, queued = 0; // the way the last move went, the TUNE dial's step count, one waiting key press (+1 / -1)
   let helpOpen = false; // library help (the runtime keeps its own)
   let enterT = o.from === 'classic' ? 0 : LIBRARY_FADE_SECONDS; // seconds since the library was opened from Classic
@@ -91,12 +92,12 @@ export function createShell(o) {
   const palette = () => (screen === 'boot' || screen === 'error' || (screen === 'running') ? bootPal : libPal);
 
   const view = () => ({
-    cartridges: libCarts, index, prev, slide: Math.min(1, slideT / SLIDE_SECONDS), dir: lastDir, dial, type: Math.min(1, slideT / TYPE_SECONDS), message,
+    cartridges: libCarts, index, prev, slide: Math.min(1, slideT / SLIDE_SECONDS), dir: lastDir, dial, type: Math.min(1, slideT / TYPE_SECONDS), idle: idleT, message,
     dip: dipT < DIP_SECONDS / 2 ? 1 : 0, tier: sizeTier(cols, rows),
   });
 
   function resetLibrary(newFrom) {
-    screen = 'library'; st = 0; helpOpen = false; message = ''; slideT = SLIDE_SECONDS; dipT = DIP_SECONDS; prev = index; queued = 0;
+    screen = 'library'; st = 0; helpOpen = false; message = ''; slideT = SLIDE_SECONDS; dipT = DIP_SECONDS; prev = index; queued = 0; idleT = 0; drawnSig = '';
     runtime = null; load = { status: 'none', scenes: null, error: null }; cart = null; entry = null; skipped = false;
     if (newFrom !== undefined) from = newFrom;
     forced = true;
@@ -245,6 +246,11 @@ export function createShell(o) {
           if (slideT >= SLIDE_SECONDS && queued) { const q = queued; queued = 0; startMove(q, slideT - SLIDE_SECONDS); }
         }
         if (dipT < DIP_SECONDS) { dipT += d; forced = true; }
+        if (slideT >= SLIDE_SECONDS && dipT >= DIP_SECONDS) {
+          // at rest: the idle clock runs, and a redraw is asked for only when what it draws has changed
+          idleT += d;
+          if (idleSignature(idleT, libCarts[index], sizeTier(cols, rows)) !== drawnSig) forced = true;
+        }
         if (message) { msgT += d; if (msgT >= MESSAGE_SECONDS) { message = ''; forced = true; } }
         break;
       case 'insert':
@@ -284,7 +290,7 @@ export function createShell(o) {
   // ---- drawing
 
   function insertItem() {
-    return { cartridge: entry, view: { ...view(), index: libCarts.indexOf(entry), prev: libCarts.indexOf(entry), slide: 1, type: 1, dip: 0, message: '' }, cartSkin: cart.skin, classic };
+    return { cartridge: entry, view: { ...view(), index: libCarts.indexOf(entry), prev: libCarts.indexOf(entry), slide: 1, type: 1, idle: 0, dip: 0, message: '' }, cartSkin: cart.skin, classic };
   }
 
   function helpInfo(forScreen) {
@@ -304,6 +310,7 @@ export function createShell(o) {
     switch (screen) {
       case 'library':
         drawLibrary(f, view(), driftmanSkin);
+        drawnSig = libCarts[index] ? idleSignature(idleT, libCarts[index], sizeTier(cols, rows)) : '';
         if (enterT < LIBRARY_FADE_SECONDS) {
           const p = ramp(enterT, 0, LIBRARY_FADE_SECONDS), thr = dissolveThresholds(cols * rows);
           for (let i = 0; i < f.glyphs.length; i++) if (p < thr[i]) { f.glyphs[i] = 32; f.shades[i] = 0; }

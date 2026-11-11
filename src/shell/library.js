@@ -124,7 +124,22 @@ function blit(f, G, x0, y0, o = {}) {
 
 const nameOf = (c) => String(c.title || '').toUpperCase();
 
-// o = { selected, level (1-3 brightness of label and chrome), ui }
+// The ripple: in label column `col`, up to two water glyphs swap (~ <-> ≈), starting at a row that
+// travels with the column so the swell looks like it moves. Generic: any label with those glyphs.
+const TILDE = 0x7e, WAVY = 0x2248;
+function rippleColumn(G, col) {
+  const x = 3 + col;
+  const rows = [];
+  for (let r = 0; r < LABEL_H; r++) { const cp = G.g[(3 + r) * G.w + x]; if (cp === TILDE || cp === WAVY) rows.push(3 + r); }
+  for (let k = 0; k < Math.min(2, rows.length); k++) {
+    const y = rows[(col + k) % rows.length], i = y * G.w + x;
+    G.g[i] = G.g[i] === TILDE ? WAVY : TILDE;
+  }
+}
+const waterIn = (label, col) => (label || []).slice(0, LABEL_H).some((l) => { const ch = [...l][col]; return ch === '~' || ch === '≈'; });
+export const hasWater = (label) => (label || []).some((l) => /[~≈]/.test(l));
+
+// o = { selected, level (1-3 brightness of label and chrome), ui, led (1-3, the idle breath), ripple (label column | -1) }
 // Shell and window frame take the chrome shade, the name its own, the label the cartridge's tint.
 export function cartridgeGrid(cart, o = {}) {
   const ui = o.ui || { text: 15, dim: 19, head: 15, accent: 16 };
@@ -138,7 +153,8 @@ export function cartridgeGrid(cart, o = {}) {
 
   row(0, '╭' + H.repeat(28) + '╮');
   row(1, V + '  ════' + ' '.repeat(18 + 1 + 3) + V); // the LED goes in at column 25 below
-  gPut(G, 25, 1, selected && !locked ? 0x25cf : 0x25cb, selected && !locked ? cart.tint + 3 : DRIFTMAN_COLOURS.housing);
+  const ledLevel = Math.max(1, Math.min(3, o.led || 3)); // the selected LED breathes between tint+1 and tint+3 (idle)
+  gPut(G, 25, 1, selected && !locked ? 0x25cf : 0x25cb, selected && !locked ? cart.tint + ledLevel : DRIFTMAN_COLOURS.housing);
   row(2, V + ' ┌' + H.repeat(24) + '┐ ' + V);
   for (let r = 0; r < LABEL_H; r++) row(3 + r, V + ' ' + V + ' '.repeat(LABEL_W) + V + ' ' + V);
   row(13, V + ' └' + H.repeat(24) + '┘ ' + V);
@@ -155,6 +171,7 @@ export function cartridgeGrid(cart, o = {}) {
       gPut(G, 3 + c, 3 + r, cp, cart.tint + lv);
     }
   }
+  if (selected && !locked && o.ripple >= 0 && o.ripple < LABEL_W) rippleColumn(G, o.ripple);
   if (locked) {
     for (let c = 0; c < LABEL_W; c++) gPut(G, 3 + c, 3 + 4, 32, 0); // the strip replaces row 4 whole
     gText(G, 3, 3 + 4, SOON_STRIP, ui.dim);
@@ -233,7 +250,7 @@ function ledRow(G, x, y, st, ui, fade = 0) {
 const SCREEN_W = 44; // the text area of the console screen
 
 // the screen's 9 interior rows: [{ text, shade, x }] by row (x = column inside the 44-wide text area)
-function screenRows(sel, n, ui) {
+function screenRows(sel, n, ui, cursor) {
   const rows = [];
   const locked = !!sel.locked;
   rows[0] = [{ x: 0, text: nameOf(sel), shade: sel.tint + 3 }, { x: 44 - 5, text: locked ? 'SOON ' : String(sel.code || '').padEnd(5), shade: ui.dim, right: true }];
@@ -246,12 +263,37 @@ function screenRows(sel, n, ui) {
   } else {
     const facts = (sel.facts || []).join(' · ');
     if (facts) rows[5] = [{ x: 0, text: [...facts].slice(0, 44).join(''), shade: ui.dim }];
-    rows[7] = [{ x: 0, text: '▶ Enter to insert', shade: ui.text }, { x: 17, text: '▌', shade: DRIFTMAN_COLOURS.amber }];
+    rows[7] = [{ x: 0, text: '▶ Enter to insert', shade: ui.text }, { x: 17, text: '▌', shade: cursor === undefined ? DRIFTMAN_COLOURS.amber : cursor }];
   }
   return rows;
 }
 
-// o = { st (console style), ui, n (cartridges on the shelf), index (the cursor, turns the TUNE dial) }
+// The scanline: screen row `row` is one shade brighter (text brightens, blank cells show a faint ░) and the row
+// it is leaving (`from`) dims back, cell by cell on a fixed spread so a step never repaints a whole row at once.
+// scan = { row, from, p } with p 0..1 the progress of the step (-1 = no row).
+const brighter = (shade, tint) => {
+  if (shade >= tint && shade < tint + 3) return shade + 1;
+  if (shade === DRIFTMAN_COLOURS.dim) return 15;
+  if (shade === DRIFTMAN_COLOURS.housing) return DRIFTMAN_COLOURS.dim;
+  return shade < 15 ? shade + 1 : shade;
+};
+const scanThreshold = (x) => ((x * 17) % SCREEN_W) / SCREEN_W;
+function applyScan(G, scan, tint) {
+  const doRow = (j, litAt) => {
+    if (j < 0 || j > 8) return;
+    const y = 4 + j;
+    for (let x = 0; x < SCREEN_W; x++) {
+      if (!litAt(scanThreshold(x))) continue;
+      const gx = BEZEL_X + 2 + x, i = y * G.w + gx;
+      if (G.g[i] === 32) { G.g[i] = 0x2591; G.s[i] = DRIFTMAN_COLOURS.housing; G.fl[i] = 1; } else G.s[i] = brighter(G.s[i], tint);
+    }
+  };
+  doRow(scan.row, (th) => th < scan.p);
+  if (scan.from >= 0) doRow(scan.from, (th) => th >= scan.p);
+}
+
+// o = { st (console style), ui, n (cartridges on the shelf), index (the cursor), dial (TUNE dial steps; default index),
+//       type (0..1 of the screen text typed), scan ({ row, from, p }), cursor (shade of the prompt cursor) }
 export function consoleGrid(sel, o = {}) {
   const st = o.st || {};
   const ui = o.ui || { text: 15, dim: 19, head: 15, accent: 16 };
@@ -279,13 +321,14 @@ export function consoleGrid(sel, o = {}) {
       gPut(G, BEZEL_X, y, BZ[7], sh); gPut(G, BEZEL_X + 47, y, BZ[3], sh);
     }
   }
-  const rows = screenRows(sel, n, ui);
+  const rows = screenRows(sel, n, ui, o.cursor);
   const reveal = o.type === undefined ? Infinity : Math.ceil(Math.max(0, Math.min(1, o.type)) * SCREEN_W);
   for (let j = 0; j < 9; j++) {
     for (const seg of rows[j] || []) {
       if (reveal - seg.x > 0) gText(G, BEZEL_X + 2 + seg.x, 4 + j, seg.text, seg.shade, 1, reveal - seg.x);
     }
   }
+  if (o.scan) applyScan(G, o.scan, sel.tint);
   // the panel
   ledRow(G, PANEL_X, 3, st, ui);
   for (let r = 0; r < DIAL.length; r++) {
@@ -333,6 +376,69 @@ export function miniGrid(o = {}) {
   gText(G, 19, 2, 'DRIFTMAN 2000', st.bar === undefined ? ui.head : st.bar);
   gPut(G, 0, 3, FR[6], sh); gRun(G, 1, 3, FR[5], 36, sh); gPut(G, 37, 3, FR[4], sh);
   return G;
+}
+
+// ---- idle: four small movements at rest (the clock is view.idle seconds; 0 / absent = the still picture)
+//   LED     the selected shell LED breathes tint+3, +2, +1, +2, +3 with a 4 s period
+//   ripple  one column of the selected label's water glyphs swaps ~ and ≈, moving 1 column per 0.4 s
+//   scan    a scanline on the console screen moves down 1 row per 0.5 s across the 9 rows, then rests 8 s
+//   cursor  the prompt cursor fades in and out over 2 s on a ramp of silver shades
+export const LED_PERIOD = 4;
+export const RIPPLE_STEP = 0.4;
+export const SCAN_STEP = 0.5;
+export const SCAN_ROWS = 9;
+export const SCAN_REST = 8;
+export const SCAN_FADE = 0.2; // a scan step's cross-fade, in two steps (half the row, then all of it)
+export const SCAN_CYCLE = SCAN_STEP * SCAN_ROWS + SCAN_REST;
+const SCAN_LEAD = SCAN_CYCLE - 3; // the first scan starts 3 s after the library opens
+export const CURSOR_PERIOD = 2;
+// Everything but the scan keeps one beat, the ripple's 0.4 s, so a redraw serves them all at once (the fewer
+// frames the library draws, the less it costs at rest).
+const beatOf = (idle) => Math.floor(idle / RIPPLE_STEP + 1e-6);
+const LED_BEATS = [3, 3, 2, 2, 1, 1, 2, 2, 3, 3]; // 10 beats = the 4 s period: 3, 2, 1, 2, 3
+const CURSOR_RAMP = [3, 9, 15, 9, 3]; // 5 beats = the 2 s period: dark, half, bright, half, dark
+
+export function ledLevelAt(idle) {
+  return LED_BEATS[beatOf(Math.max(0, idle)) % LED_BEATS.length];
+}
+
+export function rippleColAt(idle) {
+  return idle > 0 ? beatOf(idle) % LABEL_W : -1;
+}
+
+export function scanAt(idle) {
+  if (!(idle > 0)) return null;
+  const c = (idle + SCAN_LEAD) % SCAN_CYCLE;
+  let k = Math.floor(c / SCAN_STEP + 1e-9);
+  let s = c - k * SCAN_STEP;
+  if (s < 1e-6) { // exactly on a step: the picture is still the one the step before finished with
+    if (k === 0) return null;
+    k -= 1; s = SCAN_STEP;
+  }
+  if (k > SCAN_ROWS) return null;
+  const x = Math.min(1, s / SCAN_FADE);
+  const p = Math.ceil(x * 2 - 1e-9) / 2;
+  if (k === SCAN_ROWS) return p >= 1 ? null : { row: -1, from: SCAN_ROWS - 1, p };
+  return { row: k, from: p >= 1 || k === 0 ? -1 : k - 1, p };
+}
+
+export function cursorShadeAt(idle) {
+  if (!(idle > 0)) return DRIFTMAN_COLOURS.amber;
+  return CURSOR_RAMP[beatOf(idle) % CURSOR_RAMP.length];
+}
+
+// What the idle clock would draw for the selected cartridge, as a string: equal strings = the same picture.
+// The shell redraws only when it changes. tier: 'full' | 'compact' | other (list and tiny never animate).
+export function idleSignature(idle, sel, tier) {
+  if (!(idle > 0) || (tier !== 'full' && tier !== 'compact')) return '';
+  const parts = [];
+  if (!sel.locked) {
+    parts.push('led:' + ledLevelAt(idle));
+    if (hasWater(sel.label)) { const col = rippleColAt(idle); parts.push('rip:' + (waterIn(sel.label, col) ? col : -1)); }
+    if (tier === 'full') parts.push('cur:' + cursorShadeAt(idle));
+  }
+  if (tier === 'full') { const s = scanAt(idle); parts.push('scan:' + (s ? `${s.row},${s.from},${s.p}` : '-')); }
+  return parts.join('|');
 }
 
 // ---- layout
@@ -519,10 +625,13 @@ export function drawShelf(f, view, skin, o = {}) {
   const ctx = fadeCtx(f, fadeP);
   const st = consoleStyle(skin, o.body || {});
   const offset = (view.dip || 0) + (o.drop || 0) - (o.lift || 0);
-  const cartAt = (i, selected) => cartridgeGrid(view.cartridges[i], { selected, level: levelOf(view, i), ui });
+  const idle = view.idle > 0 ? view.idle : 0;
+  const cartAt = (i, selected) => cartridgeGrid(view.cartridges[i], {
+    selected, level: levelOf(view, i), ui, led: selected && idle ? ledLevelAt(idle) : undefined, ripple: selected && idle ? rippleColAt(idle) : -1,
+  });
 
   // the console, then the takeover band over it
-  const makeConsole = (style) => (L.full ? consoleGrid(sel, { st: style, ui, n, index: view.index, dial: view.dial, type: view.type }) : miniGrid({ st: style, ui }));
+  const makeConsole = (style) => (L.full ? consoleGrid(sel, { st: style, ui, n, index: view.index, dial: view.dial, type: view.type, scan: idle ? scanAt(idle) : null, cursor: idle ? cursorShadeAt(idle) : undefined }) : miniGrid({ st: style, ui }));
   const cx = L.full ? L.consoleX : L.miniX, cy = L.full ? L.consoleTop : L.miniTop;
   blit(f, makeConsole(st), cx, cy, { fadeP });
   if (o.sweep && o.sweep.x > 0) blit(f, makeConsole(consoleStyle(skin, o.sweep.style)), cx, cy, { fadeP, clipX1: Math.min(f.cols, Math.floor(o.sweep.x)) });

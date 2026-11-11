@@ -125,7 +125,7 @@ for (const [cols, rows] of SIZES) {
     c.done();
   });
 
-  test(`flash ${cols}x${rows}: 60 s idle in the library stays under the limit and draws next to nothing`, () => {
+  test(`flash ${cols}x${rows}: 60 s idle in the library stays under the limit and draws only the small idle movements`, () => {
     const c = mkShell({ startScreen: { screen: 'library' }, cols, rows });
     c.app.start();
     c.tick(0.5);
@@ -133,8 +133,12 @@ for (const [cols, rows] of SIZES) {
     const r = recorder(c);
     r.run(60);
     assertSafe(r, `idle ${cols}x${rows}`);
-    assert.equal(c.writes(), n, 'an idle library writes nothing at all after its first frame');
-    assert.ok(r.stepFractions().every((f) => f === 0), 'and every step is exactly zero');
+    // (A2: the idle movements - LED breath, label ripple, console scanline, prompt cursor - are the only writes)
+    const steps = r.stepFractions();
+    const moved = steps.filter((f) => f > 0).length;
+    assert.equal(c.writes() - n, moved, 'one write per visible change and none for an unchanged frame');
+    assert.ok(moved < steps.length * 0.4, `${moved} of ${steps.length} frames changed`);
+    assert.ok(Math.max(...steps) <= 0.011, `worst idle step ${(Math.max(...steps) * 100).toFixed(2)}%`);
     c.done();
   });
 }

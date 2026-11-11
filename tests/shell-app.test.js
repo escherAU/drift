@@ -147,7 +147,7 @@ test('library: Esc does nothing when the library was the start screen (and l doe
   c.tick(0.3);
   const n = c.writes();
   c.key('\x1b'); c.key('l'); c.key('L');
-  c.tick(1);
+  c.tick(DT); // one frame: the idle movements write on their own beat (0.4 s), and there is none inside this frame
   assert.equal(c.sh().screen, 'library');
   assert.equal(c.writes(), n, 'nothing written');
   c.done();
