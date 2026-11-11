@@ -290,7 +290,7 @@ test('menu: list, slots and grid layouts at every size: allowed glyphs, only the
   assert.notEqual(out.slots, out.grid);
   // grid: 22x7 tiles on a wide screen; below 100 columns it is the list
   const tile = newFrame(120, 40);
-  drawMenu(tile, { entries: ents, index: 0 }, sk('grid'));
+  drawMenu(tile, { entries: ents, index: 1 }, sk('grid')); // tile 0 is not the selected (double line) one
   const tl = frameLines(tile);
   const top = tl.findIndex((l) => l.includes('┌'));
   const x0 = tl[top].indexOf('┌');
@@ -305,13 +305,13 @@ test('menu: list, slots and grid layouts at every size: allowed glyphs, only the
   const tall = newFrame(120, 40), short = newFrame(120, 24);
   drawMenu(tall, { entries: ents, index: 0 }, sk('slots'));
   drawMenu(short, { entries: ents, index: 0 }, sk('slots'));
-  const cardTops = (f) => frameLines(f).map((l, y) => (l.includes('┌') ? y : -1)).filter((y) => y >= 0);
+  const cardTops = (f) => frameLines(f).map((l, y) => (/[┌╔]/.test(l) ? y : -1)).filter((y) => y >= 0);
   const ct = cardTops(tall);
   assert.equal(ct.length, 4);
   assert.equal(ct[1] - ct[0], 4, '4-row cards');
   assert.equal(cardTops(short).length, 0, 'no boxes in the 2-row cards');
   const sl = frameLines(short).map((l, y) => (l.includes('Wander') ? y : l.includes('Dream') ? y : -1)).filter((y) => y >= 0);
-  assert.equal(sl[1] - sl[0], 2, '2-row cards below 30 rows');
+  assert.equal(sl[1] - sl[0], 3, '2-row entries and a dashed rule between, below 30 rows');
 });
 
 test('menu: marks the playing program, the cursor glyph and hint come from the skin, an empty list draws nothing', () => {

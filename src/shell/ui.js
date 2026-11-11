@@ -62,6 +62,56 @@ export function drawBox(f, x, y, w, h, chars, shade) {
   put(f, x, y + h - 1, b[6], shade); put(f, x + w - 1, y + h - 1, b[4], shade);
 }
 
+// ---- shared by the menu and the chrome (DRIFT-4 A4)
+
+// A skin's border glyph set, else the default (tl t tr r br b bl l).
+export const boxChars = (box) => [...(box || DEFAULT_BOX)];
+
+// The single title rule: when a border's top glyph is a double or heavy line ('═' or '━') the title is set into the edge
+// between two caps, '╡ TITLE ╞' ('┥ TITLE ┝' for heavy); on any other border it is just ' TITLE ' (spaces around, no caps).
+export function titleCapsOf(box) {
+  const top = boxChars(box)[1];
+  if (top === '═') return ['╡', '╞'];
+  if (top === '━') return ['┥', '┝'];
+  return null;
+}
+
+// Set a title into the edge of a box whose top-left is (x, y) and whose width is w: starts two cells in, leaves two
+// cells of border at the far end, clips the title to fit. The spaces round it are blanks (not border showing
+// through). Returns false when there is no room for even one letter.
+export function putEdgeTitle(f, x, y, w, title, box, edgeShade, titleShade) {
+  const caps = titleCapsOf(box);
+  const avail = w - 4 - (caps ? 2 : 0) - 2;
+  const t = [...String(title || '')].slice(0, Math.max(0, avail)).join('');
+  if (avail <= 0 || t === '') return false;
+  let cx = x + 2;
+  if (caps) put(f, cx++, y, caps[0].codePointAt(0), edgeShade);
+  put(f, cx++, y, 32, 0);
+  putText(f, cx, y, t, titleShade);
+  cx += lenOf(t);
+  put(f, cx++, y, 32, 0);
+  if (caps) put(f, cx, y, caps[1].codePointAt(0), edgeShade);
+  return true;
+}
+
+// A row composed of parts: { left: [{ t, s }...], right: [{ t, s }...] } inside w cells from x. The left parts run from
+// the left edge, the right parts end at the right edge (a field the row can grow later: a note, a duration), and
+// whatever does not fit is cut. Spaces are skipped (the cell underneath stays).
+export function putRow(f, x, y, w, { left = [], right = [] } = {}) {
+  const rw = right.reduce((n, p) => n + lenOf(p.t), 0);
+  const leftRoom = Math.max(0, w - (rw > 0 ? rw + 1 : 0));
+  let cx = 0;
+  for (const p of left) {
+    if (cx >= leftRoom) break;
+    putText(f, x + cx, y, p.t, p.s, leftRoom - cx);
+    cx += lenOf(p.t);
+  }
+  if (rw > 0 && rw <= w) {
+    cx = w - rw;
+    for (const p of right) { putText(f, x + cx, y, p.t, p.s); cx += lenOf(p.t); }
+  }
+}
+
 // Greedy word wrap into lines of at most width characters (a word longer than the width is cut).
 export function wrapWords(text, width) {
   const w = Math.max(1, width | 0);
