@@ -8,13 +8,13 @@
 //   skin     the cartridge skin; skin.menu: { layout, anchor, cursor, title, box }
 //
 // Three engine layouts (a skin picks one by name; there are no free-form layouts):
-//   list   a boxed column of entries                         (skin layout 'list')
-//   slots  4-row cards, one per entry, 2-row below 30 rows   (skin layout 'columns')
-//   grid   22x7 tiles in rows; a list below 100 columns      (skin layout 'banner')
+//   list   a boxed column of entries
+//   slots  4-row cards, one per entry, 2-row below 30 rows
+//   grid   22x7 tiles in rows; a list below 100 columns
 // Only the cells inside the menu's boxes are written; the scene shows through everywhere else.
 import { put, putText, putCentered, fillRect, drawBox, lenOf, centerX } from './ui.js';
 
-export const LAYOUT_NAMES = { list: 'list', columns: 'slots', banner: 'grid', slots: 'slots', grid: 'grid' };
+export const LAYOUT_NAMES = Object.freeze({ list: 'list', slots: 'slots', grid: 'grid' });
 export const TILE_W = 22;
 export const TILE_H = 7;
 export const DEFAULT_HINT = 'Up and down choose, Enter selects, Esc closes';

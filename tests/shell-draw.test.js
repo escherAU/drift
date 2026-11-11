@@ -255,7 +255,7 @@ test('menu: list, slots and grid layouts at every size: allowed glyphs, only the
   const many = Array.from({ length: 8 }, (_, i) => ({ label: `Entry number ${i + 1}` }));
   const sk = (layout, extra = {}) => ({ ...fixtureSkin, menu: { layout, anchor: 'center', title: 'Menu title', ...extra } });
   const out = {};
-  for (const layout of ['list', 'columns', 'banner']) {
+  for (const layout of ['list', 'slots', 'grid']) {
     for (const [w, h] of SIZES) {
       for (const list of [ents, many]) {
         for (const anchor of ['center', 'left', 'bottom']) {
@@ -275,12 +275,12 @@ test('menu: list, slots and grid layouts at every size: allowed glyphs, only the
     out[layout] = text(f);
     assert.match(out[layout], /Storm/);
   }
-  assert.notEqual(out.list, out.columns);
-  assert.notEqual(out.list, out.banner);
-  assert.notEqual(out.columns, out.banner);
+  assert.notEqual(out.list, out.slots);
+  assert.notEqual(out.list, out.grid);
+  assert.notEqual(out.slots, out.grid);
   // grid: 22x7 tiles on a wide screen; below 100 columns it is the list
   const tile = newFrame(120, 40);
-  drawMenu(tile, { entries: ents, index: 0 }, sk('banner'));
+  drawMenu(tile, { entries: ents, index: 0 }, sk('grid'));
   const tl = frameLines(tile);
   const top = tl.findIndex((l) => l.includes('┌'));
   const x0 = tl[top].indexOf('┌');
@@ -288,13 +288,13 @@ test('menu: list, slots and grid layouts at every size: allowed glyphs, only the
   assert.equal(tl[top + 6][x0], '└', 'and 7 rows tall');
   assert.equal(tl[top + 7][x0], ' ');
   const narrow = newFrame(80, 24), narrowList = newFrame(80, 24);
-  drawMenu(narrow, { entries: ents, index: 0 }, sk('banner'));
+  drawMenu(narrow, { entries: ents, index: 0 }, sk('grid'));
   drawMenu(narrowList, { entries: ents, index: 0 }, sk('list'));
   assert.equal(text(narrow), text(narrowList), 'grid below 100 columns is the list');
   // slots: 4-row cards at 40 rows, 2-row cards below 30 rows
   const tall = newFrame(120, 40), short = newFrame(120, 24);
-  drawMenu(tall, { entries: ents, index: 0 }, sk('columns'));
-  drawMenu(short, { entries: ents, index: 0 }, sk('columns'));
+  drawMenu(tall, { entries: ents, index: 0 }, sk('slots'));
+  drawMenu(short, { entries: ents, index: 0 }, sk('slots'));
   const cardTops = (f) => frameLines(f).map((l, y) => (l.includes('┌') ? y : -1)).filter((y) => y >= 0);
   const ct = cardTops(tall);
   assert.equal(ct.length, 4);

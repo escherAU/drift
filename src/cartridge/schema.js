@@ -31,6 +31,7 @@ export const LIMITS = Object.freeze({
   labelBytes: 4 * 1024, labelW: 24, labelH: 10,
   bootBytes: 16 * 1024, bootW: 76, bootH: 18,
   textBytes: 32 * 1024, textCards: 12, textLines: 8, textChars: 60,
+  chapterNumeral: 8, chapterPlace: 30, chapterLine: 64, chapterIcon: 5,
   title: 30, author: 30, blurb: 60, sceneTitle: 30, menuLabel: 24,
   facts: 6, factChars: 40,
   sceneSecondsMin: 20, sceneSecondsMax: 3600, fadeSecondsMin: 5, fadeSecondsMax: 60,
@@ -48,7 +49,7 @@ export const SCENE_KINDS = Object.freeze(['cells', 'sim', 'field', 'text', 'buil
 export const CODE_KINDS = Object.freeze(['cells', 'sim', 'field']);
 export const MENU_ACTIONS = Object.freeze(['eject']);
 
-const OPEN_KEYS = ['format', 'id', 'title', 'version', 'author', 'blurb', 'runtime', 'locked', 'labelHue', 'scenes', 'programs', 'start', 'menu'];
+const OPEN_KEYS = ['format', 'id', 'title', 'version', 'author', 'blurb', 'runtime', 'locked', 'labelHue', 'scenes', 'programs', 'start', 'menu', 'chapters'];
 const LOCKED_KEYS = ['format', 'id', 'title', 'version', 'author', 'blurb', 'locked', 'code', 'facts', 'labelHue'];
 
 const fail = (reason) => ({ ok: false, reason });
@@ -186,6 +187,33 @@ function validateMenu(menu, programIds) {
   return { ok: true, menu: out };
 }
 
+// chapters: an optional list that names scenes for the cartridge's own screens (a chapter select).
+// Each chapter points at a scene id; the other fields are short allow-listed text.
+function validateChapters(chapters, scenesById) {
+  if (!Array.isArray(chapters) || chapters.length < 1 || chapters.length > LIMITS.scenes) return fail(`'chapters' must list 1 to ${LIMITS.scenes} chapters`);
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i < chapters.length; i++) {
+    const c = chapters[i];
+    const where = `chapters[${i}]`;
+    if (!isObj(c)) return fail(`${where} must be an object`);
+    const uk = unknownKey(c, ['id', 'numeral', 'place', 'line', 'icon', 'minutes'], where);
+    if (uk) return fail(uk);
+    if (typeof c.id !== 'string' || !scenesById.has(c.id)) return fail(`${where}: unknown scene ${JSON.stringify(c.id)}`);
+    if (seen.has(c.id)) return fail(`${where}: duplicate chapter '${c.id}'`);
+    seen.add(c.id);
+    for (const [k, max] of [['numeral', LIMITS.chapterNumeral], ['place', LIMITS.chapterPlace], ['line', LIMITS.chapterLine]]) {
+      const e = strErr(c[k], `${where}.${k}`, max);
+      if (e) return fail(e);
+    }
+    if (!Array.isArray(c.icon) || c.icon.length !== 2) return fail(`${where}.icon must be two pieces of text`);
+    for (let k = 0; k < 2; k++) { const e = strErr(c.icon[k], `${where}.icon[${k}]`, LIMITS.chapterIcon); if (e) return fail(e); }
+    if (!Number.isInteger(c.minutes) || c.minutes < 1 || c.minutes > 999) return fail(`${where}.minutes must be a whole number from 1 to 999`);
+    out.push({ id: c.id, numeral: c.numeral, place: c.place, line: c.line, icon: c.icon.slice(), minutes: c.minutes });
+  }
+  return { ok: true, chapters: out };
+}
+
 // manifest.json. `trusted` is true only for the install folder (the git checkout).
 export function validateManifest(obj, { trusted = false } = {}) {
   if (!isObj(obj)) return fail('manifest.json must hold an object');
@@ -236,7 +264,7 @@ export function validateManifest(obj, { trusted = false } = {}) {
   if (obj.runtime === 'classic') {
     if (!trusted) return fail("runtime 'classic' is only for the install folder");
     if (obj.id !== 'classic') return fail("runtime 'classic' belongs to the cartridge with id 'classic'");
-    for (const k of ['scenes', 'programs', 'start', 'menu']) if (obj[k] !== undefined) return fail(`the classic cartridge cannot have '${k}'`);
+    for (const k of ['scenes', 'programs', 'start', 'menu', 'chapters']) if (obj[k] !== undefined) return fail(`the classic cartridge cannot have '${k}'`);
     return { ok: true, manifest: out };
   }
   if (obj.id === 'classic') return fail("id 'classic' is reserved for the Drift Classic cartridge");
@@ -271,13 +299,18 @@ export function validateManifest(obj, { trusted = false } = {}) {
     if (!r.ok) return r;
     out.menu = r.menu;
   }
+  if (obj.chapters !== undefined) {
+    const r = validateChapters(obj.chapters, byId);
+    if (!r.ok) return r;
+    out.chapters = r.chapters;
+  }
   return { ok: true, manifest: out };
 }
 
 // ---- skin.json
 
 const SHOW = ['never', 'menu', 'always'];
-const LAYOUTS = ['list', 'columns', 'banner'];
+const LAYOUTS = ['list', 'slots', 'grid'];
 const ANCHORS = ['center', 'left', 'bottom'];
 
 function exactChars(v, name, n) {

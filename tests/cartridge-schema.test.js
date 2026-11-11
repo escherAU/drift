@@ -82,6 +82,34 @@ test('validateManifest: code scene kinds need trust, with the stated reason', ()
   assert.match(validateManifest(refOnText).reason, /only builtin scenes take a 'ref'/);
 });
 
+test('validateManifest: chapters are optional, each names a scene, and every field is checked', () => {
+  const ch = (over = {}) => ({ id: 'sandbox', numeral: 'I', place: 'The Shore', line: 'A quiet beginning.', icon: ['/\\', '\\/'], minutes: 5, ...over });
+  const withCh = (chapters) => validateManifest(dataManifest('abc', { chapters }));
+  assert.equal(validateManifest(dataManifest('abc')).manifest.chapters, undefined, 'optional');
+  const good = withCh([ch()]);
+  assert.equal(good.ok, true);
+  assert.deepEqual(good.manifest.chapters, [ch()]);
+  assert.notEqual(good.manifest.chapters[0], undefined);
+  assert.match(withCh([ch({ id: 'nowhere' })]).reason, /chapters\[0\]: unknown scene "nowhere"/);
+  assert.match(withCh([ch({ id: 5 })]).reason, /chapters\[0\]: unknown scene 5/);
+  assert.match(withCh([ch(), ch()]).reason, /chapters\[1\]: duplicate chapter 'sandbox'/);
+  assert.match(withCh([ch({ line: 'x'.repeat(65) })]).reason, /chapters\[0\]\.line is 65 characters, max 64/);
+  assert.equal(withCh([ch({ line: 'x'.repeat(64) })]).ok, true);
+  assert.match(withCh([ch({ line: 'bad ' + String.fromCodePoint(0x2196) })]).reason, /U\+2196/);
+  assert.match(withCh([ch({ place: String.fromCodePoint(0x1f600) })]).reason, /chapters\[0\]\.place has U\+1F600/);
+  assert.match(withCh([ch({ numeral: '' })]).reason, /numeral must not be empty/);
+  assert.match(withCh([ch({ icon: ['ab'] })]).reason, /icon must be two pieces of text/);
+  assert.match(withCh([ch({ icon: 'ab' })]).reason, /icon must be two pieces of text/);
+  assert.match(withCh([ch({ icon: ['abcdef', 'x'] })]).reason, /icon\[0\] is 6 characters, max 5/);
+  assert.match(withCh([ch({ icon: ['ok', String.fromCodePoint(0x2196)] })]).reason, /icon\[1\] has U\+2196/);
+  assert.match(withCh([ch({ minutes: 0 })]).reason, /minutes must be a whole number from 1 to 999/);
+  assert.match(withCh([ch({ minutes: 1.5 })]).reason, /minutes must be a whole number/);
+  assert.match(withCh([ch({ extra: 1 })]).reason, /unknown field 'extra' in chapters\[0\]/);
+  assert.match(withCh([]).reason, /'chapters' must list/);
+  assert.match(withCh('x').reason, /'chapters' must list/);
+  assert.match(validateManifest(lockedManifest('abc', { chapters: [] })).reason, /locked cartridges cannot have 'chapters'/);
+});
+
 const skinOf = (over = {}) => ({ palette: { hue: '#7FB069', ...over } });
 
 test('validateSkin: palette rules (extras cap, ui indexes, colours, background luminance)', () => {
@@ -110,7 +138,7 @@ test('validateSkin: frame, menu, help, boot, insert and wording sections', () =>
   const full = {
     ...skinOf(),
     frame: { show: 'menu', glyphs: box, title: 'Frame', colour: 3 },
-    menu: { layout: 'banner', anchor: 'bottom', cursor: '>', title: 'Menu', box },
+    menu: { layout: 'grid', anchor: 'bottom', cursor: '>', title: 'Menu', box },
     help: { title: 'Keys', box },
     boot: { lines: ['one', 'two'], art: true, seconds: 3 },
     insert: { text: 'Insert' },
@@ -123,7 +151,9 @@ test('validateSkin: frame, menu, help, boot, insert and wording sections', () =>
   bad({ frame: { glyphs: 'abcdefg' + String.fromCodePoint(0x2196) } }, /U\+2196/);
   bad({ frame: { colour: 16 } }, /frame\.colour must be a palette index/);
   bad({ frame: { extra: 1 } }, /unknown field 'extra' in frame/);
-  bad({ menu: { layout: 'grid' } }, /menu\.layout must be one of/);
+  bad({ menu: { layout: 'banner' } }, /menu\.layout must be one of list, slots, grid/);
+  bad({ menu: { layout: 'columns' } }, /menu\.layout must be one of list, slots, grid/);
+  for (const layout of ['list', 'slots', 'grid']) assert.equal(validateSkin({ ...full, menu: { layout } }).ok, true, layout);
   bad({ menu: { anchor: 'top' } }, /menu\.anchor must be one of/);
   bad({ menu: { cursor: '>>' } }, /menu\.cursor must be exactly 1 characters/);
   bad({ help: { title: 'x'.repeat(31) } }, /help\.title is 31 characters, max 30/);
