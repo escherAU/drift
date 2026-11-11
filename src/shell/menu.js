@@ -12,7 +12,7 @@
 //   slots  4-row cards, one per entry, 2-row below 30 rows
 //   grid   22x7 tiles in rows; a list below 100 columns
 // Only the cells inside the menu's boxes are written; the scene shows through everywhere else.
-import { put, putText, putCentered, fillRect, drawBox, lenOf, centerX } from './ui.js';
+import { put, putText, putCentered, fillRect, drawBox, lenOf, centerX, uiOf } from './ui.js';
 
 export const LAYOUT_NAMES = Object.freeze({ list: 'list', slots: 'slots', grid: 'grid' });
 export const TILE_W = 22;
@@ -31,7 +31,7 @@ function place(f, w, h, anchor) {
 }
 
 function drawList(f, a, skin) {
-  const ui = skin.palette.ui;
+  const ui = uiOf(skin);
   const m = skin.menu || {};
   const cursor = m.cursor || '▶';
   const hint = (skin.wording && skin.wording.menuHint) || DEFAULT_HINT;
@@ -61,7 +61,7 @@ function drawList(f, a, skin) {
 }
 
 function drawSlots(f, a, skin) {
-  const ui = skin.palette.ui;
+  const ui = uiOf(skin);
   const m = skin.menu || {};
   const cursor = m.cursor || '▶';
   const n = a.entries.length;
@@ -88,7 +88,7 @@ function drawSlots(f, a, skin) {
 }
 
 function drawGrid(f, a, skin) {
-  const ui = skin.palette.ui;
+  const ui = uiOf(skin);
   const m = skin.menu || {};
   const n = a.entries.length;
   const per = Math.max(1, Math.floor((f.cols - 2) / (TILE_W + 2)));
