@@ -302,3 +302,60 @@ test('flash helper: brightnessJumps sees a two-step jump, accepts one step, igno
   const swapped = { g: a.g, c: Uint8Array.from([2, 2, 2, 0]), L: lstarTable({ sgr: ['', '', '\x1b[38;2;93;100;116m'] }) };
   assert.equal(brightnessJumps(a, swapped, 4).length, 0, 'another palette index with the same colour is no change');
 });
+
+// ---- DRIFT-4 A4: moving the cursor through a slots menu (cards of 4 rows, 2-row entries, or the list it falls back to)
+import fs from 'node:fs';
+import path from 'node:path';
+import { runCartridge, makeRoot } from './helpers-shell.js';
+import { drawMenu } from '../src/shell/menu.js';
+import { newFrame } from '../src/shell/ui.js';
+
+for (const [cols, rows] of SIZES) {
+  test(`flash ${cols}x${rows}: cycling the cursor through a slots menu of 8 entries (the manifest limit) stays under the limit on every step, key steps included`, async (t) => {
+    const root = makeRoot();
+    const mp = path.join(root, 'fixture', 'manifest.json'), sp = path.join(root, 'fixture', 'skin.json');
+    const m = JSON.parse(fs.readFileSync(mp, 'utf8')), sk = JSON.parse(fs.readFileSync(sp, 'utf8'));
+    m.menu = Array.from({ length: 7 }, (_, i) => ({ label: `Program ${i + 1}`, program: i % 2 ? 'calm' : 'mix' })).concat([{ label: 'Eject', action: 'eject' }]);
+    sk.menu = { layout: 'slots', title: 'Menu' };
+    fs.writeFileSync(mp, JSON.stringify(m)); fs.writeFileSync(sp, JSON.stringify(sk));
+    const c = mkShell({ startScreen: { screen: 'library' }, cols, rows, root });
+    c.app.start();
+    await runCartridge(c, 'fixture');
+    assert.equal(c.sh().screen, 'running');
+    assert.equal(c.sh().menu, true, 'the menu is open');
+    const r = recorder(c);
+    r.run(1);
+    for (let i = 0; i < 9; i++) { r.press('\x1b[B'); r.run(0.4); }
+    for (let i = 0; i < 9; i++) { r.press('\x1b[A'); r.run(0.4); }
+    const steps = r.stepFractions();
+    const worst = Math.max(...steps);
+    t.diagnostic(`${cols}x${rows}: worst step ${(worst * 100).toFixed(1)}%`);
+    assert.ok(worst <= FLASH_FRACTION, `${cols}x${rows}: worst step ${(worst * 100).toFixed(1)}% (key steps included)`);
+    assertSafe(r, `slots cycle ${cols}x${rows}`);
+    c.done();
+  });
+
+  test(`flash ${cols}x${rows}: drawMenu cycling a 10-entry slots menu over a full-screen busy scene changes under 30% of the cells per step`, () => {
+    const scene = newFrame(cols, rows);
+    for (let i = 0; i < scene.glyphs.length; i++) { scene.glyphs[i] = 0x2591 + (i % 3); scene.shades[i] = 1 + (i * 7) % 5; }
+    const entries = Array.from({ length: 10 }, (_, i) => ({ label: `Program ${i + 1}`, current: i === 3 }));
+    const prev = (index) => {
+      const f = { glyphs: scene.glyphs.slice(), shades: scene.shades.slice(), cols, rows };
+      drawMenu(f, { entries, index }, { palette: { ui: { text: 5, dim: 3, head: 9, accent: 12 } }, menu: { layout: 'slots', title: 'Menu' } });
+      return { g: f.glyphs, c: f.shades };
+    };
+    let last = prev(0);
+    let worst = 0;
+    for (let k = 1; k <= 20; k++) { // down through the ten and wrapping, then back up
+      const cur = prev(k % 10);
+      worst = Math.max(worst, changedFraction(cur.g, last.g, cur.c, last.c));
+      last = cur;
+    }
+    for (let k = 9; k >= 0; k--) {
+      const cur = prev(k);
+      worst = Math.max(worst, changedFraction(cur.g, last.g, cur.c, last.c));
+      last = cur;
+    }
+    assert.ok(worst <= FLASH_FRACTION, `${cols}x${rows}: worst cursor step ${(worst * 100).toFixed(1)}%`);
+  });
+}
