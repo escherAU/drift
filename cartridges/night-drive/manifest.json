@@ -15,10 +15,11 @@
     { "id": "sundown", "kind": "cells", "title": "Sundown Grid" },
     { "id": "coast", "kind": "cells", "title": "Coast Road 86" },
     { "id": "redlight", "kind": "sim", "title": "Red Light, Rain" },
+    { "id": "diner", "kind": "cells", "title": "Luma's, Open Late" },
     { "id": "overdrive", "kind": "sim", "title": "Overdrive" }
   ],
   "programs": [
-    { "id": "tape", "title": "The tape", "transition": "dissolve", "scenes": ["onramp", "skyline", "sundown", "coast", "redlight", "overdrive"], "sceneSeconds": 90 }
+    { "id": "tape", "title": "The tape", "transition": "dissolve", "scenes": ["onramp", "skyline", "sundown", "coast", "redlight", "diner", "overdrive"], "sceneSeconds": 90 }
   ],
   "start": "tape",
   "menu": [
@@ -27,6 +28,7 @@
     { "label": "A3  SUNDOWN GRID", "program": "tape", "scene": "sundown", "note": "1:30", "desc": "The sun going down over the neon grid, one row every fifteen seconds." },
     { "label": "A4  COAST ROAD 86", "program": "tape", "scene": "coast", "note": "1:30", "desc": "Along the cliff road by the sea, moonlight on the water, a lighthouse ahead." },
     { "label": "B1  RED LIGHT, RAIN", "program": "tape", "scene": "redlight", "note": "1:30", "desc": "Stopped at a red light in the rain, the wiper clearing the glass." },
+    { "label": "B2  LUMA'S, OPEN LATE", "program": "tape", "scene": "diner", "note": "1:30", "desc": "Pie and coffee at Luma's, bulbs chasing next door, a sign on the blink." },
     { "label": "B4  OVERDRIVE", "program": "tape", "scene": "overdrive", "note": "1:30", "desc": "Into the tunnel in a blaze of light trails, and out onto the freeway." },
     { "label": "▲   EJECT THE TAPE", "action": "eject", "desc": "Back to the cartridge library." }
   ]
