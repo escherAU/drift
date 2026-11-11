@@ -317,10 +317,23 @@ function drawRing(cv, r, col, vis) {
 function streakLen(p, lv) {
   return Math.min(4, 1 + Math.floor((3 * (lv - 1)) / Math.max(1, p.K - 3)));
 }
-function drawStreak(cv, p, r, lv, vis) {
+function streakSpan(p, r, lv) {
   const len = Math.min(streakLen(p, lv), r.x1 - r.x0 - 1);
-  const start = Math.floor(p.cxf - (len - 1) / 2 + 1e-9);
+  return { start: Math.floor(p.cxf - (len - 1) / 2 + 1e-9), len };
+}
+function drawStreak(cv, p, r, lv, vis) {
+  const { start, len } = streakSpan(p, r, lv);
   for (let i = 0; i < len; i++) if (!vis || vis(start + i, r.y0)) put(cv, start + i, r.y0, G.h, TANG[3]);
+}
+// Steps the mouth's far-silhouette cells under a still ring's ceiling light go out before that ring and its light come on (more than a 4x
+// frame of 6.7 steps): the cell is dark in between, so it never goes far silhouette -> tang.3 in one frame while keeping its glyph.
+export const LIGHT_GAP = 8;
+function lightGap(p, x, y) {
+  if (!p.streaks || p.Mm === p.K || !p.statics.includes(p.Mm)) return 0;
+  const r = p.rects[p.Mm - 1];
+  if (y !== r.y0) return 0;
+  const { start, len } = streakSpan(p, r, p.Mm);
+  return x >= start && x < start + len ? LIGHT_GAP : 0;
 }
 
 function draw(s, params) {
@@ -354,7 +367,7 @@ function draw(s, params) {
   if (n <= T_TUNNEL) drawRing(cv, rects[mouthLevel(p, n) - 1], FAR, null);
   else {
     // the mouth dissolves away as the still rings dissolve in; the outermost still ring is far silhouette too
-    drawRing(cv, rects[p.Mm - 1], FAR, (x, y) => n < appearAt(p, x, y, seed) && (!here || here(x, y)));
+    drawRing(cv, rects[p.Mm - 1], FAR, (x, y) => n < appearAt(p, x, y, seed) - lightGap(p, x, y) && (!here || here(x, y)));
     drawRing(cv, rects[p.K - 1], FAR, (x, y) => n >= appearAt(p, x, y, seed) && (!here || here(x, y)));
     for (const lv of p.statics) {
       if (lv === p.K) continue;

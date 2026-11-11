@@ -2,12 +2,12 @@
 //   - a diner at night: the rooftop sign LUMA'S in tube letters (6 wide, 5 tall, 2-column gaps, the apostrophe one tube), DINER under it, a far
 //     silhouette facade with booth windows, a scalloped awning, a door with OPEN LATE, PIE · COFFEE · 24 HRS, the Quarterlight Arcade next door
 //     (a marquee ringed with chase bulbs, a cabinet screen running a tiny game), the kerb, and the Halcyon parked in profile (wheels still)
-//   - motion: bulbs step every 0.25 s; the apostrophe and the M's diagonal dip 3 -> 1 -> 3 over 0.4 s at most every 2.5 s and never go off;
+//   - motion: bulbs step every 0.25 s; the apostrophe and the M's diagonal dip 3 -> 2 -> 1 -> 2 -> 3 over 0.9 s (each level held 0.3 s) at most every 2.5 s and never go off;
 //     a server walks a window a column per 0.3 s; steam rises a cell per 0.5 s; the game steps every 0.25 s; a customer every 40 s
 //   - calm: under 5% of the cells change in a frame, no kept glyph moves more than a shade step
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import diner, { LAYOUTS, layoutFor, geometry, dipStart, flickerShade, DIP_LEN, DIP_GAP_MIN, CHASE_STEP, WALK_STEP, STEAM_STEP, GAME_STEP, CUSTOMER_EVERY } from '../cartridges/night-drive/scenes/diner.js';
+import diner, { LAYOUTS, layoutFor, geometry, dipStart, flickerShade, DIP_LEN, DIP_HOLD, DIP_GAP_MIN, CHASE_STEP, WALK_STEP, STEAM_STEP, GAME_STEP, CUSTOMER_EVERY } from '../cartridges/night-drive/scenes/diner.js';
 import { renderScene } from '../src/cells.js';
 import * as S from '../cartridges/night-drive/lib/sprites.js';
 import { SUN, CORAL, MAG, CYAN, MINT, ICE, VIOLET, TEXT, NEAR, COUNT } from '../cartridges/night-drive/lib/palette.js';
@@ -94,18 +94,27 @@ test('night-drive diner (D3): the Halcyon is parked in profile and its wheels ar
 
 // ---- D4 the flicker
 
-// The rules for one flicker series [{ t, shade }]: every sample is drawn at shade 1 to 3, the minimum is 1, a step is one shade, a dip lasts DIP_LEN
-// and two dips start at least DIP_GAP_MIN apart. Returns the dip starts.
+// The rules for one flicker series [{ t, shade }]: every sample is drawn at shade 1 to 3, the minimum is 1, a step is one shade, every shade level of a
+// dip (2, 1, 2) is held at least HOLD_MIN (longer than a 4x frame of 0.222 s, so the steps stay single at any speed and any clock phase), a dip lasts
+// DIP_LEN and two dips start at least DIP_GAP_MIN apart. Returns the dip starts.
+const HOLD_MIN = 0.25;
 function checkSeries(series, fps, label) {
   const step = 1 / fps;
   let min = 9;
   const dips = [];
   let inDip = null;
+  let run = 0;
   for (let k = 0; k < series.length; k++) {
     const { t, shade } = series[k];
     assert.ok(shade >= 1 && shade <= 3, `${label}: shade ${shade} at ${t.toFixed(3)} s (never off)`);
     if (shade < min) min = shade;
     if (k && Math.abs(shade - series[k - 1].shade) > 1) assert.fail(`${label}: shade ${series[k - 1].shade} -> ${shade} at ${t.toFixed(3)} s`);
+    // a level inside a dip is held HOLD_MIN or longer (a run is closed by a change of shade)
+    if (k && shade !== series[k - 1].shade) {
+      if (series[k - 1].shade < 3 && run * step < HOLD_MIN - 1e-9) assert.fail(`${label}: shade ${series[k - 1].shade} held only ${(run * step).toFixed(3)} s before ${t.toFixed(3)} s`);
+      run = 0;
+    }
+    run++;
     if (shade < 3 && inDip === null) inDip = t;
     if (shade === 3 && inDip !== null) { dips.push({ start: inDip, len: t - inDip }); inDip = null; }
   }
@@ -115,8 +124,10 @@ function checkSeries(series, fps, label) {
   return dips;
 }
 
-test('night-drive diner (D4): the apostrophe and the M\'s diagonal dip from shade 3 to 1 and back over 0.4 s in single steps, at most once every 2.5 s, and the glyphs are never blank, at 18 and 72 frames a second and for other seeds', () => {
-  assert.equal(DIP_LEN, 0.4);
+test('night-drive diner (D4): the apostrophe and the M\'s diagonal dip 3 -> 2 -> 1 -> 2 -> 3 over 0.9 s, each level held 0.3 s, in single steps, at most once every 2.5 s, and the glyphs are never blank, at 18 and 72 frames a second and for other seeds', () => {
+  assert.equal(DIP_HOLD, 0.3);
+  assert.ok(DIP_HOLD >= HOLD_MIN && DIP_HOLD > 4 / 18, 'each level is held longer than a 4x frame');
+  assert.ok(Math.abs(DIP_LEN - 3 * DIP_HOLD) < 1e-9, 'the dip is three levels of DIP_HOLD');
   assert.equal(DIP_GAP_MIN, 2.5);
   const W = 120, H = 40, g = geometry(W, H);
   assert.equal(g.flicker.length, 3, 'the apostrophe and the two cells of the M\'s diagonal');
@@ -143,14 +154,38 @@ test('night-drive diner (D4): the apostrophe and the M\'s diagonal dip from shad
   for (let k = 0; k < 10; k++) {
     const d = dipStart(k, 1);
     assert.equal(flickerShade(d - 0.01, 1), 3);
-    assert.equal(flickerShade(d + 0.2, 1), 1, 'the bottom of the dip');
+    assert.equal(flickerShade(d + 0.45, 1), 1, 'the bottom of the dip');
+    assert.equal(flickerShade(d + 0.15, 1), 2);
+    assert.equal(flickerShade(d + 0.75, 1), 2);
     assert.equal(flickerShade(d + DIP_LEN + 0.01, 1), 3);
     if (k) assert.ok(d - dipStart(k - 1, 1) >= DIP_GAP_MIN);
   }
   // the dip is also bounded in a window with a clock far from zero
   assert.ok(flickerShade(1e6, 1) >= 1 && flickerShade(1e6, 1) <= 3);
+  // any speed, any clock phase: the shade the scene would draw, sampled at frames of 1x to 4x (speed/18 s) from phases 0, 0.25, 0.5 and 0.75 of a
+  // frame, is never two shades from the last
+  for (const speed of [1, 2, 3, 4]) {
+    for (const phase of [0, 0.25, 0.5, 0.75]) {
+      const step = speed / 18;
+      for (const seed of [1, 2, 3]) {
+        let prev = null;
+        for (let k = 0; k <= Math.ceil(90 / step); k++) {
+          const t = (k + phase) * step, sh = flickerShade(t, seed);
+          if (prev !== null && Math.abs(sh - prev) > 1) assert.fail(`${speed}x phase ${phase} seed ${seed}: ${prev} -> ${sh} at ${t.toFixed(3)} s`);
+          prev = sh;
+        }
+      }
+    }
+  }
+  // control: the old dip (3 -> 2 -> 1 -> 2 -> 3 over 0.4 s: 0.15, 0.1, 0.15) jumps 3 -> 1 at 4x from some clock phase; a short hold fails the hold rule
+  const old = (T) => { const a = (((T % 3.8) + 3.8) % 3.8) - 2.5; return a < 0 || a >= 0.4 ? 3 : a < 0.15 ? 2 : a < 0.25 ? 1 : 2; };
+  let oldJumps = 0;
+  for (const phase of [0, 0.25, 0.5, 0.75]) for (let k = 0; k <= Math.ceil(90 / (4 / 18)); k++) if (Math.abs(old((k + phase) * 4 / 18) - old((k + 1 + phase) * 4 / 18)) > 1) oldJumps++;
+  assert.ok(oldJumps > 0, 'the 0.4 s dip jumps 3 -> 1 at 4x from some clock phase');
+  const quick = [3, 3, 2, 2, 1, 1, 2, 2, 3, 3].map((shade, k) => ({ t: k / 18, shade }));
+  assert.throws(() => checkSeries(quick, 18, 'control'), /held only/);
   // control: a flicker that goes to zero fails the check
-  const bad = [3, 3, 2, 1, 0, 1, 2, 3].map((shade, k) => ({ t: k / 18, shade }));
+  const bad = [3, 3, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 0, 1, 2, 3].map((shade, k) => ({ t: k / 18, shade }));
   assert.throws(() => checkSeries(bad, 18, 'control'), /never off/);
   const jump = [3, 3, 1, 1, 2, 3].map((shade, k) => ({ t: k / 18, shade }));
   assert.throws(() => checkSeries(jump, 18, 'control'), /3 -> 1/);
@@ -406,7 +441,7 @@ test('night-drive diner (D9): key frame 1 (t = 0, 120x40) has the sign tubes, OP
   assert.ok(cellsOf(f, '▄', MAG[1]).length >= 8, 'the rim is magenta 1');
   // key frame 3: the first dip, at its bottom
   const d = dipStart(0, 1);
-  const bottom = frame(d + 0.2, W, H);
+  const bottom = frame(d + 0.45, W, H);
   for (const c of g.flicker) assert.equal(colAt(bottom, c.x, c.y), MAG[1]);
   const before = frame(d - 0.05, W, H);
   for (const c of g.flicker) assert.equal(colAt(before, c.x, c.y), MAG[3]);

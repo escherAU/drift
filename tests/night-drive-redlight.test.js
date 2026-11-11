@@ -2,7 +2,7 @@
 //   - the view through a windscreen: roof liner, A-pillars (a quarter-block rounded corner), a mirror with two tail lights, a traffic
 //     light blurred by rain into a 15x7 bokeh of concentric shades, reflections under it, a pedestrian with an umbrella, a dashboard
 //     (dials, clock, radio, the top of the wheel) and one wiper whose pivot is at (34,31)
-//   - the light is red until 58 s, ramps down over 0.5 s and only then up in green over 0.5 s; the reflections retint after it
+//   - the light is red until 58 s, ramps down (each shade held 8 steps, 0.27 s: longer than a 4x frame) and only then up in green from 59.2 s to 60.1 s; the reflections retint after it
 //   - the wiper sweeps for 1.2 s, rests for 3 s, and clears the drops it crosses; drops land about 6 a second, 30% trickle
 //   - the far buildings stand still until 62 s and then slide a column every 0.2 s
 //   - calm: the worst frame changes only a few percent of the cells, at 1x and 4x
@@ -306,17 +306,17 @@ test('redlight (R6, green arm): at 62 s and 80 s the same bokeh cells are mint w
       assert.ok(refl.length >= 8);
       for (const [x, y] of refl) assert.equal(f.c[y * w + x], MINT[1], `${w}x${h} n=${n}: reflection colour`);
     }
-    // before 58 s no mint anywhere in the reflections; the retint is done by 61 s
+    // before 58 s no mint anywhere in the reflections; the retint is done by 61.7 s (1850; each level now holds 8 steps)
     const s = stepper(w, h);
     for (let n = 0; n < 1740; n += 5) assert.equal(reflCells(s.to(n).look(), w, h).filter(([x, y]) => mint(s.p.colours[y * w + x])).length, 0, `${w}x${h} n=${n}: mint before 58 s`);
-    const f61 = frameAt(1830, w, h);
-    for (const [x, y] of reflCells(f61, w, h)) assert.equal(f61.c[y * w + x], MINT[1], `${w}x${h}: retinted by 61 s`);
+    const f61 = frameAt(1850, w, h);
+    for (const [x, y] of reflCells(f61, w, h)) assert.equal(f61.c[y * w + x], MINT[1], `${w}x${h}: retinted by 61.7 s`);
   }
 });
 
 // ---- R7
 
-test('redlight (R7): nothing in the bokeh changes before 58.0 s; the red ramps down by 58.5 s, then the green ramps up by 59.0 s; no frame holds both; every ramp goes through each shade in single steps', () => {
+test('redlight (R7): nothing in the bokeh changes before 58.0 s; the red ramps down by 58.9 s (each shade held 8 steps, 0.27 s, more than a 4x frame), the green ramps up from 59.2 s to 60.1 s; no frame holds both; every ramp goes through each shade in single steps and holds each one 8 steps', () => {
   for (const [w, h] of [[120, 40], [80, 24]]) {
     const { box } = lamp(w, h);
     const s = stepper(w, h);
@@ -325,8 +325,8 @@ test('redlight (R7): nothing in the bokeh changes before 58.0 s; the red ramps d
     const baseKey = key(base);
     const seq = new Map(); // cell -> [colour per step from 1739]
     let firstChange = -1, redGone = -1, greenOn = -1;
-    const finalGreen = boxMap(frameAt(1800, w, h), box);
-    for (let n = 1600; n <= 1800; n++) {
+    const finalGreen = boxMap(frameAt(1840, w, h), box);
+    for (let n = 1600; n <= 1840; n++) {
       const m = boxMap(s.to(n).look(), box);
       const cs = [...m.values()].map((v) => v[1]);
       assert.ok(!(cs.some(coral) && cs.some(mint)), `${w}x${h} n=${n}: coral and mint together`);
@@ -338,8 +338,16 @@ test('redlight (R7): nothing in the bokeh changes before 58.0 s; the red ramps d
     }
     assert.ok(firstChange > 0, 'the light does change');
     assert.ok(firstChange >= 1739 && firstChange <= 1743, `first change at step ${firstChange}`);
-    assert.ok(redGone <= 1758, `${w}x${h}: red gone at step ${redGone} (58.6 s is 1758)`);
-    assert.ok(greenOn > 1755 && greenOn <= 1773, `${w}x${h}: green fully on at step ${greenOn} (59.1 s is 1773)`);
+    assert.ok(redGone <= 1767, `${w}x${h}: red gone at step ${redGone} (58.9 s is 1767)`);
+    assert.ok(greenOn > 1776 && greenOn <= 1803, `${w}x${h}: green fully on at step ${greenOn} (60.1 s is 1803)`);
+    // every level of every cell between its first change and its final colour is held at least 8 steps (0.267 s), longer than a 4x frame of 0.222 s
+    for (const [k] of base) {
+      const col = seq.get(k);
+      let run = 0, last = col[0];
+      const runs = [];
+      for (const c of col) { if (c === last) run++; else { runs.push([last, run]); last = c; run = 1; } }
+      for (const [c, len] of runs.slice(1)) assert.ok(len >= 8, `${w}x${h} cell ${k}: level ${c} held only ${len} steps`);
+    }
     // each cell: shades t, t-1 .. 0, blank, then 0 .. t in mint, one change at a time
     for (const [k, v] of base) {
       const t = CORAL.indexOf(v[1]);
@@ -390,7 +398,7 @@ test('redlight (R8): over 90 s no cell that keeps its glyph changes family or mo
 test('redlight (R8): the centre of the lamp goes coral, then nothing, then mint: a glyph that is blank at the switch', () => {
   const s = stepper(120, 40);
   const seen = [];
-  for (let n = 1736; n <= 1776; n++) { const f = s.to(n).look(); seen.push(f.g[7 * 120 + 60] === 32 ? 'blank' : coral(f.c[7 * 120 + 60]) ? 'coral' : mint(f.c[7 * 120 + 60]) ? 'mint' : '?'); }
+  for (let n = 1736; n <= 1840; n++) { const f = s.to(n).look(); seen.push(f.g[7 * 120 + 60] === 32 ? 'blank' : coral(f.c[7 * 120 + 60]) ? 'coral' : mint(f.c[7 * 120 + 60]) ? 'mint' : '?'); }
   const runs = seen.filter((c, i) => i === 0 || c !== seen[i - 1]);
   assert.deepEqual(runs, ['coral', 'blank', 'mint']);
 });

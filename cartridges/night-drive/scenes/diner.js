@@ -4,9 +4,9 @@
 // profile with its lights off.
 //
 //   chase      the marquee's bulbs (a ring of ● lit and ○ unlit, every fourth one lit) step one place along the ring every 0.25 s
-//   flicker    the faulty apostrophe and the M's diagonal (three cells) dip from magenta 3 through 2 to 1 and back: 3 -> 2 at 0, 2 -> 1 at 0.15 s, 1 -> 2
-//              at 0.25 s, 2 -> 3 at 0.4 s. One dip in every slot of 17 grid steps (3.8 s), so two dips start at least 2.67 s apart; the glyphs are never blank.
-//              Dips start 0.09 s before a step of the 4x frame grid (2/9 s), so that a 4x frame (0.222 s) never spans two shade steps: see dipStart
+//   flicker    the faulty apostrophe and the M's diagonal (three cells) dip from magenta 3 through 2 to 1 and back: 3 -> 2 at 0, 2 -> 1 at 0.3 s, 1 -> 2
+//              at 0.6 s, 2 -> 3 at 0.9 s. Every level is held 0.3 s, longer than a 4x frame (0.222 s), so a frame never spans two shade steps at any
+//              speed or clock phase. One dip in every slot of 17 grid steps (3.8 s), so two dips start at least 2.67 s apart; the glyphs are never blank.
 //   server     a silhouette walks the window row a column every 0.3 s and turns at the ends
 //   steam      a puff rises from a mug a cell every 0.5 s (°, ·) and thins out at the top
 //   game       the cabinet screen runs a 6x3 game, a ball between two ▌ paddles, one step every 0.25 s (the design says 0.15 s, but nothing may repeat
@@ -35,22 +35,22 @@ export function layoutFor(w, h) {
 export const MIN_W = 40, MIN_H = 18; // under this the window is too small for the picture, and stays blank
 export const CHASE_STEP = 0.25, WALK_STEP = 0.3, STEAM_STEP = 0.5, GAME_STEP = 0.25;
 export const CUSTOMER_EVERY = 40, CUSTOMER_STAY = 6, CUSTOMER_HEAD = 0.5;
-export const DIP_LEN = 0.4, DIP_GAP_MIN = 2.5;
-const GRID = 2 / 9; // the 4x frame step: four frames of 18 a second
+export const DIP_HOLD = 0.3; // each shade level of a dip is held this long: more than a 4x frame (2/9 s)
+export const DIP_LEN = 3 * DIP_HOLD, DIP_GAP_MIN = 2.5;
+const GRID = 2 / 9; // the schedule's quantum
 const SLOT = 17; // grid steps in a flicker slot
-const DIP_PHASE = 0.09; // a dip starts this long before a grid step
 const cp = (ch) => ch.codePointAt(0);
 
-// When the dip in slot k starts (seconds): 9 to 14 grid steps into the slot, less DIP_PHASE. Two dips are 12 to 22 grid steps (2.67 to 4.9 s) apart.
+// When the dip in slot k starts (seconds): 9 to 12 grid steps into the slot (so the 0.9 s dip ends inside it). Two dips are 14 to 20 grid steps (3.1 to 4.4 s) apart.
 export function dipStart(k, seed) {
-  return (SLOT * k + 9 + Math.floor(rand(seed + 71, k, 0) * 6)) * GRID - DIP_PHASE;
+  return (SLOT * k + 9 + Math.floor(rand(seed + 71, k, 0) * 4)) * GRID;
 }
-// The shade (1 to 3) of the flickering tubes at time T: 3, then 2 for 0.15 s, 1 for 0.1 s, 2 for 0.15 s, then 3 again. Every step is one shade.
+// The shade (1 to 3) of the flickering tubes at time T: 3, then 2, 1 and 2 for DIP_HOLD each, then 3 again. Every step is one shade.
 export function flickerShade(T, seed) {
   if (!(T >= 0)) return 3;
   const a = T - dipStart(Math.floor(T / (SLOT * GRID)), seed);
   if (a < 0 || a >= DIP_LEN) return 3;
-  return a < 0.15 ? 2 : a < 0.25 ? 1 : 2;
+  return a < DIP_HOLD ? 2 : a < 2 * DIP_HOLD ? 1 : 2;
 }
 
 const LETTERS = Object.freeze({
