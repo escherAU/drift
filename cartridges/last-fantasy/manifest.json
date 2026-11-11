@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "id": "last-fantasy",
+  "title": "Last Fantasy",
+  "version": "0.1.0",
+  "author": "Drift",
+  "blurb": "A long tale told in tiny pixels.",
+  "locked": true,
+  "code": "DM-02",
+  "facts": ["Genre: role-playing", "Players: 1", "Status: coming soon"],
+  "labelHue": "#6FA8FF"
+}

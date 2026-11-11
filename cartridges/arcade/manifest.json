@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "id": "arcade",
+  "title": "Arcade",
+  "version": "0.1.0",
+  "author": "Drift",
+  "blurb": "Coins, bright lights and high scores.",
+  "locked": true,
+  "code": "DM-03",
+  "facts": ["Genre: arcade", "Players: 1 to 2", "Status: coming soon"],
+  "labelHue": "#FFB000"
+}

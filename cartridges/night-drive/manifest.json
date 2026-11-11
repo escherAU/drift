@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "id": "night-drive",
+  "title": "Night Drive",
+  "version": "0.1.0",
+  "author": "Drift",
+  "blurb": "Neon highways after midnight.",
+  "locked": true,
+  "code": "DM-01",
+  "facts": ["Genre: racing", "Players: 1", "Status: coming soon"],
+  "labelHue": "#B07CFF"
+}

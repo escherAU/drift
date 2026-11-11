@@ -7,12 +7,20 @@ import path from 'node:path';
 import os from 'node:os';
 import { PRESETS, DEFAULT_PRESET, CHAOS_PALETTES, DEFAULT_CHAOS_PALETTE } from './color.js';
 import { MODES, DEFAULT_MODE } from './modes.js';
+import { ID_RE as CARTRIDGE_ID_RE } from './cartridge/schema.js';
 
 export const DEFAULT_CONFIG = Object.freeze({
   colour: DEFAULT_PRESET,
   mode: DEFAULT_MODE,
   chaosPalette: DEFAULT_CHAOS_PALETTE,
   invert: false,
+});
+
+// Extra fields live beside the four core ones: they are not part of DEFAULT_CONFIG or validateConfig
+// (tests/config.test.js pins those at four fields), but updateConfig keeps them when it rewrites the
+// file, so another window's colour change never wipes them. An invalid value is dropped on the next write.
+export const EXTRA_FIELDS = Object.freeze({
+  lastCartridge: (v) => typeof v === 'string' && CARTRIDGE_ID_RE.test(v),
 });
 
 export function defaultConfigPath(env = process.env) {
@@ -37,6 +45,21 @@ export function loadConfig(file) {
     return validateConfig(JSON.parse(fs.readFileSync(file, 'utf8')));
   } catch { /* missing, unreadable or corrupt: use defaults */ }
   return { ...DEFAULT_CONFIG };
+}
+
+function readRaw(file) {
+  try {
+    const o = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+  } catch { return {}; }
+}
+
+// The valid extra fields present in the file (nothing for a missing or corrupt file).
+export function loadExtras(file) {
+  const raw = readRaw(file);
+  const out = {};
+  for (const k of Object.keys(EXTRA_FIELDS)) if (k in raw && EXTRA_FIELDS[k](raw[k])) out[k] = raw[k];
+  return out;
 }
 
 // Write text to the file atomically: a temp file in the SAME directory, then a rename over the
@@ -70,10 +93,12 @@ export function saveConfig(file, cfg) {
 
 // Read the file again NOW, change only the fields in the patch (an invalid value is ignored, so the
 // field keeps what the file had), write atomically. This is what the app calls on a keypress, so two
-// windows sharing one file never roll each other's fields back. Never throws.
+// windows sharing one file never roll each other's fields back. Valid extra fields already in the
+// file are kept (and patched the same way). Never throws.
 export function updateConfig(file, patch) {
   try {
     const cur = loadConfig(file);
+    const extras = loadExtras(file);
     const p = patch && typeof patch === 'object' ? patch : {};
     const check = validateConfig({ ...DEFAULT_CONFIG, ...p });
     const next = { ...cur };
@@ -82,7 +107,10 @@ export function updateConfig(file, patch) {
       const valid = k === 'invert' ? typeof p[k] === 'boolean' : check[k] === p[k];
       if (valid) next[k] = p[k];
     }
-    return saveConfig(file, next);
+    for (const k of Object.keys(EXTRA_FIELDS)) {
+      if (k in p && EXTRA_FIELDS[k](p[k])) extras[k] = p[k];
+    }
+    return writeAtomic(file, JSON.stringify({ ...validateConfig(next), ...extras }, null, 2) + '\n');
   } catch {
     return false;
   }

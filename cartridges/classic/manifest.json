@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "id": "classic",
+  "title": "Drift Classic",
+  "version": "1.0.0",
+  "author": "Drift",
+  "blurb": "The original calm screensaver, and its other modes.",
+  "runtime": "classic",
+  "labelHue": "#D97757"
+}
