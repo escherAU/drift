@@ -2,16 +2,21 @@
 // it, and a test checks that), so the library, the insert animation, the console boot and the
 // console help all draw through the same code as a cartridge.
 //
-// Palette: 0-15 the hue at 16 levels, then 16 amber (LED, accent), 17 red (error), 18 housing grey,
-// 19 dark housing. The background is near black, as every skin's must be.
-export const DRIFTMAN_COLOURS = Object.freeze({ amber: 16, red: 17, housing: 18, dark: 19 });
+// Palette (the designer's library colours, DRIFT-4-3 section 9): the hue is silver #c8ccd4 at 16 levels
+// (entries 0-15), then 16 amber #ffb000 (LED, accent), 17 cyan #39d0ff (LINK LED), 18 graphite #5d6474
+// (shells, grille, console frame; not for text), 19 dim #8b93a1 (hints, plates; 6.3:1 on the background).
+// The background #0a0c10 is near black, as every skin's must be. 20 entries; each cartridge adds 4.
+export const DRIFTMAN_COLOURS = Object.freeze({
+  amber: 16, cyan: 17, housing: 18, dim: 19,
+  dark: 3, // silver level 3: darker than graphite, for the empty slot mouth
+});
 
 export const driftmanSkin = Object.freeze({
   palette: {
-    hue: '#9DB8A8',
-    colours: ['#FFB000', '#E8553A', '#56655C', '#2A332E'],
-    bg: '#080C0A',
-    ui: { text: 13, dim: 7, head: 15, accent: 16 },
+    hue: '#C8CCD4',
+    colours: ['#FFB000', '#39D0FF', '#5D6474', '#8B93A1'],
+    bg: '#0A0C10',
+    ui: { text: 15, dim: 19, head: 15, accent: 16 },
   },
   frame: { show: 'always', glyphs: '┌─┐│┘─└│', title: 'DRIFTMAN 2000', colour: 18 },
   menu: { layout: 'list', anchor: 'center', cursor: '▶', title: 'DRIFTMAN 2000', box: '┌─┐│┘─└│' },
