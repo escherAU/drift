@@ -322,3 +322,28 @@ test('relLuminance is the WCAG formula', () => {
   assert.ok(relLuminance(parseHex('#F0F0F0')) > 0.8);
   assert.ok(relLuminance(parseHex('#0B140C')) < 0.01);
 });
+
+test('programs: per-scene seconds (keyed by scene id, 20 to 3600, kept only when given)', () => {
+  const two = [{ id: 'aa', kind: 'builtin', ref: 'sand' }, { id: 'bb', kind: 'builtin', ref: 'bounce' }];
+  const prog = (over) => validateManifest(dataManifest('abc', { scenes: two, programs: [{ id: 'main', transition: 'dissolve', scenes: ['aa', 'bb'], ...over }] }));
+  const good = prog({ seconds: { aa: 20, bb: 3600 } });
+  assert.equal(good.ok, true);
+  assert.deepEqual(good.manifest.programs[0].seconds, { aa: 20, bb: 3600 });
+  assert.equal(good.manifest.programs[0].sceneSeconds, 180);
+  assert.equal('seconds' in prog({}).manifest.programs[0], false, 'absent unless given');
+  assert.match(prog({ seconds: { xx: 30 } }).reason, /seconds names 'xx', which is not in this program/);
+  assert.match(prog({ seconds: { aa: 19 } }).reason, /seconds/);
+  assert.match(prog({ seconds: { aa: 3601 } }).reason, /seconds/);
+  assert.match(prog({ seconds: { aa: 'x' } }).reason, /seconds/);
+  assert.match(prog({ seconds: [30] }).reason, /seconds/);
+  // a scene named by the manifest but outside this program is also refused
+  const three = [...two, { id: 'cc', kind: 'builtin', ref: 'sand' }];
+  assert.match(validateManifest(dataManifest('abc', { scenes: three, programs: [{ id: 'main', transition: 'dissolve', scenes: ['aa', 'bb'], seconds: { cc: 30 } }] })).reason, /seconds names 'cc', which is not in this program/);
+  // crossfade: the fade must be shorter than the shortest scene time
+  const fieldScenes = [{ id: 'pp', kind: 'builtin', ref: 'plasma' }, { id: 'qq', kind: 'builtin', ref: 'plasma' }];
+  const cross = (over) => validateManifest(dataManifest('abc', { scenes: fieldScenes, programs: [{ id: 'main', transition: 'crossfade', scenes: ['pp', 'qq'], sceneSeconds: 60, fadeSeconds: 10, ...over }] }));
+  assert.equal(cross({ seconds: { pp: 30 } }).ok, true);
+  assert.match(cross({ seconds: { pp: 20 }, fadeSeconds: 20 }).reason, /fadeSeconds must be shorter than sceneSeconds/);
+  assert.match(cross({ seconds: { qq: 20 }, fadeSeconds: 20 }).reason, /fadeSeconds must be shorter than sceneSeconds/);
+  assert.equal(cross({ seconds: { qq: 20 }, fadeSeconds: 19 }).ok, true);
+});

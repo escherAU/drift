@@ -130,7 +130,7 @@ function validateScene(s, i, trusted) {
 function validateProgram(p, i, scenesById) {
   const where = `programs[${i}]`;
   if (!isObj(p)) return fail(`${where} must be an object`);
-  const uk = unknownKey(p, ['id', 'title', 'transition', 'scenes', 'sceneSeconds', 'fadeSeconds'], where);
+  const uk = unknownKey(p, ['id', 'title', 'transition', 'scenes', 'sceneSeconds', 'seconds', 'fadeSeconds'], where);
   if (uk) return fail(uk);
   const ir = idReason(p.id, 'program');
   if (ir) return fail(`${where}: ${ir}`);
@@ -153,14 +153,27 @@ function validateProgram(p, i, scenesById) {
     if (!Number.isFinite(p.sceneSeconds) || p.sceneSeconds < LIMITS.sceneSecondsMin || p.sceneSeconds > LIMITS.sceneSecondsMax) return fail(`${where} ('${p.id}'): sceneSeconds must be ${LIMITS.sceneSecondsMin} to ${LIMITS.sceneSecondsMax}`);
     sceneSeconds = p.sceneSeconds;
   }
+  let seconds;
+  if (p.seconds !== undefined) {
+    if (!isObj(p.seconds)) return fail(`${where} ('${p.id}'): seconds must be an object keyed by scene id`);
+    seconds = {};
+    for (const key of Object.keys(p.seconds)) {
+      if (!p.scenes.includes(key)) return fail(`${where} ('${p.id}'): seconds names '${key}', which is not in this program`);
+      const v = p.seconds[key];
+      if (!Number.isFinite(v) || v < LIMITS.sceneSecondsMin || v > LIMITS.sceneSecondsMax) return fail(`${where} ('${p.id}'): seconds for '${key}' must be ${LIMITS.sceneSecondsMin} to ${LIMITS.sceneSecondsMax}`);
+      seconds[key] = v;
+    }
+  }
   const out = { id: p.id, title: p.title === undefined ? p.id : p.title, transition: p.transition, scenes: p.scenes.slice(), sceneSeconds };
+  if (seconds) out.seconds = seconds;
   if (p.transition === 'crossfade') {
     let fadeSeconds = LIMITS.defaultFadeSeconds;
     if (p.fadeSeconds !== undefined) {
       if (!Number.isFinite(p.fadeSeconds) || p.fadeSeconds < LIMITS.fadeSecondsMin || p.fadeSeconds > LIMITS.fadeSecondsMax) return fail(`${where} ('${p.id}'): fadeSeconds must be ${LIMITS.fadeSecondsMin} to ${LIMITS.fadeSecondsMax}`);
       fadeSeconds = p.fadeSeconds;
     }
-    if (fadeSeconds >= sceneSeconds) return fail(`${where} ('${p.id}'): fadeSeconds must be shorter than sceneSeconds`);
+    const shortest = Math.min(...p.scenes.map((sid) => (seconds && seconds[sid] !== undefined ? seconds[sid] : sceneSeconds)));
+    if (fadeSeconds >= shortest) return fail(`${where} ('${p.id}'): fadeSeconds must be shorter than sceneSeconds`);
     out.fadeSeconds = fadeSeconds;
   } else if (p.fadeSeconds !== undefined) {
     return fail(`${where} ('${p.id}'): fadeSeconds only applies to crossfade programs`);

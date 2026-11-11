@@ -171,3 +171,34 @@ test('X5 staggered blend: exactly A at p=0, exactly B at p=1, between A and B in
     prev = Array.from(out);
   }
 });
+
+test('X4 durations: per-scene hold times (20, 45, 20 with a 2 s fade) fade at 20 s, sit on scene 1 at 23 s, hold until 67 s; omitted, durationSec governs', () => {
+  const s = new Scheduler({ count: 3, durationSec: 180, fadeSec: 2, durations: [20, 45, 20] });
+  s.advance(19.9);
+  assert.equal(s.state().fading, false);
+  s.advance(0.2); // 20.1
+  assert.deepEqual({ a: s.state().a, f: s.state().fading }, { a: 0, f: true });
+  s.advance(2.9); // 23.0
+  assert.deepEqual({ a: s.state().a, f: s.state().fading }, { a: 1, f: false });
+  s.advance(43); // 66.0
+  assert.deepEqual({ a: s.state().a, f: s.state().fading }, { a: 1, f: false }, 'still holding scene 1 at 66 s');
+  s.advance(1.1); // 67.1
+  assert.deepEqual({ a: s.state().a, f: s.state().fading }, { a: 1, f: true });
+  s.advance(2); // 69.1: scene 2, 20 s hold, fade at 89
+  assert.equal(s.state().a, 2);
+  s.advance(19.8);
+  assert.equal(s.state().fading, false);
+  s.advance(0.4);
+  assert.equal(s.state().fading, true);
+  s.advance(2); // wraps to scene 0 and takes durations[0] again
+  assert.equal(s.state().a, 0);
+  s.advance(19.5);
+  assert.equal(s.state().fading, false);
+  s.advance(0.4);
+  assert.equal(s.state().fading, true);
+  const plain = new Scheduler({ count: 3, durationSec: 30, fadeSec: 2 });
+  plain.advance(29.9);
+  assert.equal(plain.state().fading, false);
+  plain.advance(0.2);
+  assert.equal(plain.state().fading, true);
+});

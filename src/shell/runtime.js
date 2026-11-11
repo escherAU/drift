@@ -59,6 +59,7 @@ export function createCartridgeRuntime(cart, scenes, palette, opts) {
     durationSec: def.sceneSeconds,
     fadeSec: def.transition === 'crossfade' ? (def.fadeSeconds ?? DEFAULT_FADE_SECONDS) : DISSOLVE_SECONDS,
     start: 0,
+    ...(def.seconds ? { durations: def.scenes.map((id) => def.seconds[id] ?? def.sceneSeconds) } : {}),
   });
   for (const def of m.programs) {
     const family = def.transition === 'crossfade' ? 'field' : 'cells';

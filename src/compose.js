@@ -48,11 +48,13 @@ export function blend(a, b, p, out, off, spread = 0) {
 // Which scene is showing, and how far into the cross-fade to the next one.
 // Time is whatever the caller advances it by (the app passes scene seconds).
 export class Scheduler {
-  constructor({ count, durationSec = 180, fadeSec = 5, start = 0 }) {
+  constructor({ count, durationSec = 180, fadeSec = 5, start = 0, durations = null }) {
     this.count = count;
+    this.durations = durations;
     this.duration = durationSec;
     this.fade = Math.max(fadeSec, 1e-6);
     this.cur = ((start % count) + count) % count;
+    if (this.durations) this.duration = this.durations[this.cur];
     this.hold = 0;
     this.fadeT = 0;
     this.fading = false;
@@ -73,6 +75,7 @@ export class Scheduler {
         else {
           rem -= left;
           this.cur = (this.cur + 1) % this.count;
+          if (this.durations) this.duration = this.durations[this.cur];
           this.fading = false; this.fadeT = 0; this.hold = 0;
           if (this.pending) { this.pending = false; this.fading = true; this.hold = this.duration; }
         }
