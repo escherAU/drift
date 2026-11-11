@@ -374,11 +374,14 @@ inside the running cartridge are checked against the real process in `tests/real
 | `%APPDATA%\drift\cartridges\` (next to the config file, so `DRIFT_CONFIG` moves it too) | no | **data only**: `text` and `builtin` scenes, skins, labels, boot art |
 
 Scene code is JavaScript loaded with `import()`, and only ever from the install folder, which is
-the git checkout: it is reviewed and committed like `src/`. A cartridge in the user folder that
-contains any `.js`, `.mjs` or `.cjs` file, or declares a `cells`, `sim` or `field` scene, is
-skipped with "user cartridges cannot contain code in this version", and its code is never
-imported. There is no environment override. If the same id is in both folders the install one
-wins. Cost of the rule: user cartridges can re-skin Drift, add cut scenes and reuse Classic
+the git checkout: it is reviewed and committed like `src/`. That is the wall: the code of a user
+cartridge is never imported, whatever the folder holds. As a courtesy the scan of the user folder
+skips, with "user cartridges cannot contain code in this version", a cartridge in which it finds a
+`.js`, `.mjs` or `.cjs` file or that declares a `cells`, `sim` or `field` scene. The scan reads
+the folder's own files: it does not follow links (junctions, symbolic links), and does not see
+names that end in a dot or hidden NTFS streams, so a file hidden that way is not reported. It
+cannot run either, because nothing reads it. There is no environment override. If the same id is
+in both folders the install one wins. Cost of the rule: user cartridges can re-skin Drift, add cut scenes and reuse Classic
 scenes, but not add new animations.
 
 Every skin background must be dark, which also makes the photosensitivity rule structural:
