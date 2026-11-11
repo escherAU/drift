@@ -553,6 +553,21 @@ export function slideOffset(p, dir) {
   return o === 0 ? 0 : d * o;
 }
 
+// The extra-large tier (176 x 58 and up) writes about twice the bytes of the full tier for the same slide, so the shelf
+// moves in fewer, longer steps there. Moving a cartridge rewrites nearly all of its cells whatever the distance, so the
+// cost of a slide is the number of frames in which it moves, not the distance. At 18 fps the 0.36 s slide has frames at
+// progress 0.154, 0.309, 0.463, 0.617, 0.772, 0.926 and 1: here it moves on the 2nd, 4th and 6th (34 -> 21 -> 10 -> 0
+// columns, still an ease-out, 34 in all, ending on the settled frame) and holds in between. The first frame holds too:
+// the key press already shows in the chrome and the brightness of the two cartridges. The cuts sit half-way between
+// frames, so a frame that comes a little early or late still lands on the same step.
+export const XL_SLIDE_STEPS = Object.freeze([[0.23, 0], [0.54, 0.309], [0.85, 0.617]]);
+export function xlSlideProgress(p) {
+  if (!(p > 0)) return 0;
+  if (p >= 1) return 1;
+  for (const [upTo, at] of XL_SLIDE_STEPS) if (p < upTo) return at;
+  return 1;
+}
+
 // The locked "dip and spring back": rows the selected cartridge is pressed down t seconds after Enter. A sine
 // half-wave over DIP_SECONDS rounded to whole rows: 0 for the first 0.05 s, 1 for 0.2 s, 0 again for the last 0.05 s.
 export const DIP_SECONDS = 0.3;
@@ -699,6 +714,9 @@ export function drawShelf(f, view, skin, o = {}) {
   const L = shelfLayout(f.cols, f.rows, tier);
   const ui = skin.palette.ui;
   const n = view.cartridges.length;
+  // extra-large: the brightness and chrome ramps follow the stepped slide, so they change in the frames in which the
+  // shelf moves and cost no frames of their own
+  const look = L.xl && view.slide !== undefined && view.slide < 1 && view.prev !== view.index ? { ...view, slide: xlSlideProgress(view.slide) } : view;
   const fadeP = o.fadeP || 0;
   const sel = view.cartridges[view.index];
   const ctx = fadeCtx(f, fadeP);
@@ -708,7 +726,7 @@ export function drawShelf(f, view, skin, o = {}) {
   // compact: the one cartridge on show is swapped in place, so its chrome stays at the selected shade (a ramp would
   // flip every border cell from silver to graphite in one frame when the cursor moves)
   const cartAt = (i, selected, compact = false) => cartridgeGrid(view.cartridges[i], {
-    selected, level: levelOf(view, i), chrome: compact ? 13 : chromeShadeOf(view, i) ?? undefined, ui, led: selected && idle ? ledLevelAt(idle) : undefined, ripple: selected && idle ? rippleColAt(idle) : -1,
+    selected, level: levelOf(look, i), chrome: compact ? 13 : chromeShadeOf(look, i) ?? undefined, ui, led: selected && idle ? ledLevelAt(idle) : undefined, ripple: selected && idle ? rippleColAt(idle) : -1,
   });
 
   // the console, then the takeover band over it
@@ -726,9 +744,31 @@ export function drawShelf(f, view, skin, o = {}) {
     // while the shelf slides it is displaced by `shift` columns; the cartridges beyond the settled cluster
     // (two whole neighbours each side) are clipped to it so nothing pops in or out when the slide ends
     const sliding = view.slide !== undefined && view.slide < 1 && view.prev !== view.index;
-    const shift = sliding ? slideOffset(view.slide, slideDir(view)) : 0;
+    const dir = sliding ? slideDir(view) : 1;
+    const shift = sliding ? slideOffset(L.xl ? xlSlideProgress(view.slide) : view.slide, dir) : 0;
     const win0 = L.cartX - 2 * L.step, win1 = L.cartX + CART_W + 2 * L.step;
-    if (n > 1) {
+    const spread = o.spread || 0;
+    const drawNeighbour = (idx, x) => {
+      const visible = Math.min(x + CART_W, f.cols, win1) - Math.max(x, 0, win0);
+      if (visible < (shift ? 1 : 3)) return;
+      blit(f, cartAt(idx, false), x, L.cartTop, { fadeP, all: true, clipX0: win0, clipX1: win1 });
+    };
+    if (n > 1 && L.xl && shift !== 0) {
+      // Extra-large slide: only the centre three slide (the cartridge before, the new one and the one after, each
+      // 34 columns to its place). The two far slots stay put and change at the ends of the slide: on the side the
+      // shelf comes from the new far cartridge is simply uncovered as the near one slides off it; on the side it
+      // goes to, the cartridges the old shelf had there stay under the sliding one and the far one changes in the
+      // last frame. A taste call to save bytes (tests/shell-library-bandwidth.test.js).
+      const ahead = -dir;
+      const seen = new Set([view.index]);
+      const plan = [];
+      const want = (idx, x, layer) => { if (seen.has(idx)) return; seen.add(idx); plan.push({ idx, x, layer }); };
+      for (const side of [1, -1]) want(wrapIdx(view.index + side, n), L.cartX + side * L.step + shift + side * spread, 1);
+      want(wrapIdx(view.index + dir * 2, n), L.cartX + dir * 2 * L.step + dir * spread, 0);
+      for (const k of [1, 2]) want(wrapIdx(view.prev + ahead * k, n), L.cartX + ahead * k * L.step + ahead * spread, 0);
+      for (const layer of [0, 1]) for (const p of plan) if (p.layer === layer) drawNeighbour(p.idx, p.x);
+      drawSpines(f, look, ui, L, fadeP, cartAt);
+    } else if (n > 1) {
       // neighbours: each cartridge at most once, nearest first, the right side winning a tie; slivers at the edges
       const seen = new Set([view.index]);
       const maxR = shift ? 3 : 2;
@@ -737,13 +777,10 @@ export function drawShelf(f, view, skin, o = {}) {
           const idx = wrapIdx(view.index + side * r, n);
           if (seen.has(idx)) continue;
           seen.add(idx);
-          const x = L.cartX + side * r * L.step + shift + side * (o.spread || 0);
-          const visible = Math.min(x + CART_W, f.cols, win1) - Math.max(x, 0, win0);
-          if (visible < (shift ? 1 : 3)) continue;
-          blit(f, cartAt(idx, false), x, L.cartTop, { fadeP, all: true, clipX0: win0, clipX1: win1 });
+          drawNeighbour(idx, L.cartX + side * r * L.step + shift + side * spread);
         }
       }
-      if (L.xl) drawSpines(f, view, ui, L, fadeP, cartAt);
+      if (L.xl) drawSpines(f, look, ui, L, fadeP, cartAt);
     }
     blit(f, cartAt(view.index, true), L.cartX + shift, L.cartTop + offset, { clipY: L.consoleTop + 2 });
     if (L.xl) {
