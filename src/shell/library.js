@@ -472,6 +472,16 @@ export function shelfLayout(cols, rows, tier) {
   };
 }
 
+// The console screen as the boot draws on it: { x, y, w, h } including its one-cell edge, or null where there is no
+// art (list tier and smaller). Full and extra-large: the bezel interior, 46 x 9 (text area 44 x 7). Compact: the
+// blurb box on the right, 38 x 9 (text area 36 x 7).
+export function screenRect(cols, rows, tier = sizeTier(cols, rows)) {
+  if (tier !== 'full' && tier !== 'compact') return null;
+  const L = shelfLayout(cols, rows, tier);
+  if (L.full) return { x: L.consoleX + BEZEL_X + 1, y: L.consoleTop + 4, w: 46, h: 9 };
+  return { x: L.listX, y: L.cartTop + 9, w: L.listW, h: 9 };
+}
+
 // Ease-out: fast first, settling softly (1 - (1 - p)^2).
 export function slideEase(p) {
   const x = p <= 0 ? 0 : p >= 1 ? 1 : p;

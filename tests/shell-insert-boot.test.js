@@ -6,16 +6,22 @@ import assert from 'node:assert/strict';
 import { discoverCartridges } from '../src/cartridge/loader.js';
 import { validateSkin } from '../src/cartridge/schema.js';
 import { isAllowedGlyph } from '../src/glyphs.js';
-import { drawLibrary, shelfLayout, CONSOLE_W, CART_W, LABEL_H, MOUTH_X } from '../src/shell/library.js';
+import { drawLibrary, shelfLayout, screenRect, CONSOLE_W, CART_W, MOUTH_X } from '../src/shell/library.js';
+import {
+  drawBoot, bootPhases, bootSeconds, bootLines, lineRuns, mergeBootPalette, titleOrnament, LINE_SECONDS,
+} from '../src/shell/boot.js';
+import { drawChrome } from '../src/shell/chrome.js';
+import { makeSkinPalette } from '../src/cartridge/palette.js';
 import {
   drawInsert, INSERT_END, INSERT_LIFT_END, INSERT_SLIDE_END, INSERT_DROP_END, INSERT_CLICK_END, BAND_W, cartridgeOffset, spreadAt, sweepStyle,
 } from '../src/shell/insert.js';
 import { driftmanSkin, classicBootSkin, DRIFTMAN_COLOURS } from '../src/shell/driftman.js';
-import { libraryPalette, EJECT_SECONDS } from '../src/shell/shell.js';
+import { libraryPalette, createShell, EJECT_SECONDS } from '../src/shell/shell.js';
+import { SPEEDS, DISSOLVE_SECONDS, DEFAULT_FADE_SECONDS } from '../src/app.js';
 import { newFrame, ramp } from '../src/shell/ui.js';
 import { isWide, isInvisible } from './helpers-width.js';
 import { frameLines } from './helpers-help.js';
-import { makeRoot } from './helpers-shell.js';
+import { makeRoot, mkShell } from './helpers-shell.js';
 
 const SIZES = [[240, 67], [120, 40], [80, 24], [30, 10], [4, 2]];
 const FPS = 18;
@@ -293,4 +299,374 @@ test('insert at 80x24: the compact tier plays the same steps (lift, drop, click,
   assert.equal(cellAt(at(80, 24, 0.9), C.miniX + 9, C.miniTop + 2).g, '●', 'CART LED on');
 });
 
-void classicBootSkin; void lit; void LABEL_H;
+// ---------------------------------------------------------------------------------------------------------------
+// boot on the console (designer steps 6-12): the boot is drawn ON the console screen, not on a blank frame
+// ---------------------------------------------------------------------------------------------------------------
+
+const BOOT_SKIN = { ...skinned, boot: { lines: ['CARTRIDGE ...... FIXTURE', 'MEMORY 64K ..... OK', 'MAP ............ UNROLLED', 'The forest remembers you.'], art: false } };
+const cartPal = makeSkinPalette(BOOT_SKIN, 'truecolor', 'fixture');
+const merged = mergeBootPalette(cartPal, lib.pal, entries[1].tint);
+const MAP = merged.map;
+const EDGE = BOOT_SKIN.frame.colour; // the zoom edge's shade (a cartridge palette index, so no console cell can have it)
+const ACCENT = cartPal.ui.accent;
+const P = bootPhases(BOOT_SKIN);
+const LINES = bootLines(BOOT_SKIN, driftmanSkin, 'Fixture');
+
+const boot = (cols, rows, t, o = {}) => {
+  const f = newFrame(cols, rows);
+  drawBoot(f, { skin: BOOT_SKIN, item: skinnedItem, labelArt: fixture.label, t, loading: false, title: 'Fixture', consoleMap: MAP, ...o }, driftmanSkin);
+  return f;
+};
+const bootAt120 = (t, o) => boot(120, 40, t, o);
+const edgeCells = (f) => {
+  const out = [];
+  for (let y = 0; y < f.rows; y++) {
+    for (let x = 0; x < f.cols; x++) {
+      const i = y * f.cols + x;
+      if (f.shades[i] === EDGE && '+-|'.includes(String.fromCharCode(f.glyphs[i]))) out.push({ x, y });
+    }
+  }
+  return out;
+};
+const boxOf = (cells) => (cells.length ? {
+  x0: Math.min(...cells.map((c) => c.x)), x1: Math.max(...cells.map((c) => c.x)), y0: Math.min(...cells.map((c) => c.y)), y1: Math.max(...cells.map((c) => c.y)),
+} : null);
+const rowText = (f, y, x0, x1) => String.fromCharCode(...f.glyphs.subarray(y * f.cols + x0, y * f.cols + x1 + 1));
+const EIGHTHS = { '█': 8, '▉': 7, '▊': 6, '▋': 5, '▌': 4, '▍': 3, '▎': 2, '▏': 1 };
+
+test('screenRect: the console screen is 46 x 9 at the full tier (bezel interior) and the 38 x 9 blurb box at the compact tier; nothing smaller', () => {
+  const full = shelfLayout(120, 40, 'full');
+  assert.deepEqual(screenRect(120, 40), { x: full.consoleX + 3, y: full.consoleTop + 4, w: 46, h: 9 });
+  const compact = shelfLayout(80, 24, 'compact');
+  assert.deepEqual(screenRect(80, 24), { x: compact.listX, y: compact.cartTop + 9, w: 38, h: 9 });
+  const xl = shelfLayout(240, 67, 'full');
+  assert.deepEqual(screenRect(240, 67), { x: xl.consoleX + 3, y: xl.consoleTop + 4, w: 46, h: 9 });
+  assert.equal(screenRect(40, 10), null);
+  assert.equal(screenRect(4, 2), null);
+  // the rect is the bezel's interior: blank in the post-insert frame, with the bezel glyphs round it
+  const f = at(120, 40, INSERT_END, skinnedItem);
+  const R = screenRect(120, 40);
+  for (let y = R.y; y < R.y + R.h; y++) assert.equal(rowText(f, y, R.x, R.x + R.w - 1).trim(), '', `row ${y} of the screen is blank`);
+  assert.equal(cellAt(f, R.x - 1, R.y).g, '|', 'the bezel (skin glyphs) is just outside it');
+});
+
+test('mergeBootPalette: the cartridge palette first (so the running cartridge\'s indices are untouched), the console\'s colours after it on the cartridge\'s background', () => {
+  const off = cartPal.sgr.length;
+  assert.deepEqual(merged.pal.sgr.slice(0, off), cartPal.sgr);
+  assert.equal(merged.pal.base, cartPal.base);
+  assert.deepEqual(merged.pal.ui, cartPal.ui);
+  assert.notEqual(merged.pal.key, cartPal.key);
+  assert.equal(MAP(0), off);
+  assert.equal(MAP(DRIFTMAN_COLOURS.dim), off + 19);
+  assert.equal(MAP(entries[1].tint + 2), off + 20 + 2);
+  assert.ok(merged.pal.sgr.length <= off + 24, 'only the console\'s 20 colours and this cartridge\'s 4 tints');
+  // the console entry is the library entry with the cartridge's background instead of the library's
+  const libSgr = lib.pal.sgr[DRIFTMAN_COLOURS.housing];
+  assert.ok(libSgr.endsWith(lib.pal.base));
+  assert.equal(merged.pal.sgr[MAP(DRIFTMAN_COLOURS.housing)], libSgr.slice(0, -lib.pal.base.length) + cartPal.base);
+  assert.ok(merged.pal.sgr.length <= 256, 'the merged palette does not grow with the number of cartridges on the shelf');
+});
+
+for (const [cols, rows] of [[120, 40], [80, 24]]) {
+  const R = screenRect(cols, rows);
+  const barW = R.w - 6;
+  const bootAt = (t, o) => boot(cols, rows, t, o);
+
+  test(`boot ${cols}x${rows} step 6 (screen on, 0 - 0.2 s): a line grows from the centre of the console screen to its full width`, () => {
+    const start = bootAt(0);
+    const end = at(cols, rows, INSERT_END, skinnedItem);
+    // the first frame is the console exactly as the insert left it (mapped to the boot palette)
+    assert.deepEqual(Array.from(start.glyphs), Array.from(end.glyphs));
+    assert.deepEqual(Array.from(start.shades), Array.from(end.shades, (s, i) => (end.glyphs[i] === 32 ? 0 : MAP(s))));
+    assert.equal(edgeCells(start).length, 0, 'no line at t = 0');
+    let prev = 0;
+    for (const t of [0.04, 0.08, 0.12, 0.16, 0.2]) {
+      const cells = edgeCells(bootAt(t));
+      const b = boxOf(cells);
+      assert.ok(cells.every((c) => c.y === R.y + 4), `one row, the middle of the screen (t=${t})`);
+      const w = b.x1 - b.x0 + 1;
+      assert.ok(w >= prev, 'grows');
+      assert.ok(Math.abs((b.x0 - R.x) - (R.x + R.w - 1 - b.x1)) <= 1, 'from the centre');
+      prev = w;
+    }
+    assert.equal(prev, R.w, 'full width at 0.2 s');
+  });
+
+  test(`boot ${cols}x${rows} step 7 (0.2 - 0.4 s): the line opens to the full screen height, the inside stays dark`, () => {
+    let prev = 0;
+    for (const t of [0.22, 0.26, 0.3, 0.34, 0.38, 0.4]) {
+      const f = bootAt(t);
+      const b = boxOf(edgeCells(f));
+      const h = b.y1 - b.y0 + 1;
+      assert.ok(h >= prev && h >= 1, 'opens');
+      prev = h;
+      assert.equal(b.x1 - b.x0 + 1, R.w);
+      assert.ok(Math.abs((b.y0 - R.y) - (R.y + R.h - 1 - b.y1)) <= 1, 'from the middle');
+      for (let y = b.y0 + 1; y < b.y1; y++) assert.equal(rowText(f, y, b.x0 + 1, b.x1 - 1).trim(), '', 'dark inside');
+    }
+    assert.equal(prev, R.h, 'the full height at 0.4 s');
+    const f = bootAt(P.on);
+    assert.equal(cellAt(f, R.x, R.y).g, '+');
+    assert.equal(cellAt(f, R.x + R.w - 1, R.y + R.h - 1).g, '+');
+    assert.equal(cellAt(f, R.x, R.y + 3).g, '|', 'the skin\'s frame glyphs');
+    assert.equal(cellAt(f, R.x + 5, R.y).s, EDGE);
+  });
+
+  test(`boot ${cols}x${rows} step 8: the boot lines type out 0.25 s each in the console screen`, () => {
+    assert.equal(LINE_SECONDS, 0.25);
+    const textW = R.w - 4;
+    for (let k = 0; k < LINES.length; k++) {
+      const row = R.y + 1 + k;
+      const done = bootAt(P.on + (k + 1) * LINE_SECONDS + 0.005);
+      assert.equal(rowText(done, row, R.x + 2, R.x + 1 + textW).trimEnd(), [...LINES[k]].slice(0, textW).join(''), `line ${k} complete`);
+      const half = bootAt(P.on + (k + 0.5) * LINE_SECONDS);
+      const typed = rowText(half, row, R.x + 2, R.x + 1 + textW).trimEnd();
+      assert.ok(typed.length > 0 && typed.length < LINES[k].length && LINES[k].startsWith(typed), `line ${k} half typed: ${JSON.stringify(typed)}`);
+      const before = bootAt(P.on + k * LINE_SECONDS - 0.001);
+      assert.equal(rowText(before, row, R.x + 2, R.x + 1 + textW).trim(), '', `line ${k} not started`);
+    }
+    // 'OK'-style words come in the accent colour: the text after a run of dots and a space
+    const f = bootAt(P.on + LINES.length * LINE_SECONDS + 0.01);
+    const lines = frameLines(f);
+    const y = lines.findIndex((l) => l.includes('MEMORY 64K ..... OK'));
+    assert.ok(y >= 0);
+    const x = lines[y].indexOf('OK');
+    assert.equal(f.shades[y * cols + x], ACCENT, 'OK in the accent colour');
+    assert.equal(f.shades[y * cols + lines[y].indexOf('MEMORY')], cartPal.ui.text, 'the rest in the text colour');
+    // the line runs the typed-line drawer is built on: text, dots, value
+    assert.deepEqual(lineRuns('MEMORY 64K ..... OK'), [{ text: 'MEMORY 64K ', kind: 'text' }, { text: '..... ', kind: 'dots' }, { text: 'OK', kind: 'value' }]);
+    assert.deepEqual(lineRuns('Nothing to do.'), [{ text: 'Nothing to do.', kind: 'text' }]);
+    assert.deepEqual(lineRuns('Loading ...'), [{ text: 'Loading ...', kind: 'text' }], 'a dot run with nothing after it has no value');
+    assert.deepEqual(lineRuns('v1.2 .. x'), [{ text: 'v1.2 .. x', kind: 'text' }], 'two dots are not a run');
+  });
+
+  test(`boot ${cols}x${rows} step 9 (progress bar, 3.4 - 3.8 s): fills monotonically in eighth-cell steps and holds just short of full while loading`, () => {
+    const fill = (f) => {
+      const y = R.y + R.h - 2;
+      let sum = 0, partial = 0;
+      for (let x = R.x + 3; x < R.x + 3 + barW; x++) { const e = EIGHTHS[String.fromCharCode(f.glyphs[y * cols + x])] || 0; sum += e; if (e > 0 && e < 8) partial++; }
+      return { sum, partial, open: String.fromCharCode(f.glyphs[y * cols + R.x + 2]), close: String.fromCharCode(f.glyphs[y * cols + R.x + 3 + barW]) };
+    };
+    assert.equal(fill(bootAt(P.linesEnd - 0.01)).open, ' ', 'no bar before the lines are done');
+    const sums = [];
+    let sawPartial = false;
+    for (let t = P.linesEnd; t <= P.barEnd + 1e-9; t += 1 / FPS) {
+      const r = fill(bootAt(Math.min(t, P.barEnd)));
+      sums.push(r.sum);
+      sawPartial = sawPartial || r.partial > 0;
+      assert.equal(r.open + r.close, '[]');
+    }
+    assert.ok(sums.every((s, i) => i === 0 || s >= sums[i - 1]), `monotone: ${sums}`);
+    assert.ok(sawPartial, 'sub-cell steps are used');
+    assert.equal(fill(bootAt(P.barEnd)).sum, barW * 8, 'full when the scenes are loaded');
+    const held = fill(bootAt(P.barEnd, { loading: true })).sum;
+    assert.ok(held < barW * 8 && held >= Math.floor(barW * 8 * 0.9), `held just short of full (${held} of ${barW * 8})`);
+  });
+
+  test(`boot ${cols}x${rows} step 10 (zoom, 3.8 - 4.6 s): the screen rectangle zooms ease in and out to the whole terminal; the last frame is drawChrome's border`, () => {
+    let prev = { x0: R.x, x1: R.x + R.w - 1, y0: R.y, y1: R.y + R.h - 1 };
+    for (let t = P.barEnd; t <= P.zoomEnd + 1e-9; t += 1 / FPS) {
+      const b = boxOf(edgeCells(bootAt(Math.min(t, P.zoomEnd))));
+      assert.ok(b.x0 <= prev.x0 && b.y0 <= prev.y0 && b.x1 >= prev.x1 && b.y1 >= prev.y1, `grows monotonically at ${t.toFixed(2)}`);
+      prev = b;
+    }
+    assert.deepEqual([prev.x0, prev.y0, prev.x1, prev.y1], [0, 0, cols - 1, rows - 1], 'ends at the whole terminal');
+    const span = P.zoomEnd - P.barEnd;
+    const at25 = boxOf(edgeCells(bootAt(P.barEnd + 0.25 * span)));
+    const at75 = boxOf(edgeCells(bootAt(P.barEnd + 0.75 * span)));
+    assert.ok((R.x - at25.x0) / R.x < 0.25, 'ease in: slower than linear at the start');
+    assert.ok((R.x - at75.x0) / R.x > 0.75, 'ease out: nearly there at 75%');
+    // the final zoom frame IS drawChrome's output: this edge becomes the menu frame
+    for (const o of [{}, { item: undefined }]) {
+      const f = bootAt(P.zoomEnd, o);
+      const ref = newFrame(cols, rows);
+      drawChrome(ref, BOOT_SKIN);
+      assert.deepEqual(Array.from(f.glyphs), Array.from(ref.glyphs), 'glyphs are drawChrome\'s');
+      assert.deepEqual(Array.from(f.shades), Array.from(ref.shades), 'and so are the colours');
+    }
+    // the typed text clears away cell by cell during the zoom (never in one step)
+    assert.ok(text(bootAt(P.barEnd)).includes('CARTRIDGE'));
+    assert.ok(!text(bootAt(P.barEnd + 0.5)).includes('CARTRIDGE'));
+  });
+}
+
+test('boot step 11 (title card, 4.6 - 5.2 s): the title is revealed left to right over 0.3 s; the ornament row only if the skin has one', () => {
+  const [cols, rows] = [120, 40];
+  const full = bootAt120(P.titleEnd);
+  const cellsOf = (f) => {
+    const out = new Set();
+    for (let y = 1; y < rows - 1; y++) for (let x = 1; x < cols - 1; x++) if (f.glyphs[y * cols + x] === 0x2588 && f.shades[y * cols + x] === cartPal.ui.head) out.add(y * cols + x);
+    return out;
+  };
+  const total = cellsOf(full);
+  assert.ok(total.size > 100, 'big block letters');
+  const colOf = (i) => i % cols;
+  let prevSize = 0, prevSet = new Set();
+  for (const dt of [0.02, 0.06, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4]) {
+    const set = cellsOf(bootAt120(P.zoomEnd + dt));
+    assert.ok(set.size >= prevSize, 'reveals');
+    for (const i of prevSet) assert.ok(set.has(i), 'a revealed cell stays');
+    // left to right: the revealed cells are exactly the title's cells up to some column
+    const c = Math.max(...[...set].map(colOf));
+    for (const i of total) if (colOf(i) < c) assert.ok(set.has(i), `column ${colOf(i)} is revealed before column ${c} (dt ${dt})`);
+    for (const i of set) assert.ok(total.has(i));
+    prevSize = set.size; prevSet = set;
+  }
+  assert.equal(cellsOf(bootAt120(P.zoomEnd + 0.3)).size, total.size, 'complete after 0.3 s');
+  const part = cellsOf(bootAt120(P.zoomEnd + 0.1)).size;
+  assert.ok(part < total.size && part > 0, 'partial part-way');
+  // the ornament hook: nothing under the title today; a skin with an ornament field gets its row
+  assert.equal(titleOrnament(BOOT_SKIN), null);
+  const titleRows = [...total].map((i) => Math.floor(i / cols));
+  const top = Math.min(...titleRows), bottom = Math.max(...titleRows);
+  assert.equal(frameLines(full)[bottom + 2].slice(1, -1).trim(), '', 'no ornament row without a field');
+  const orn = { ...BOOT_SKIN, menu: { ...(BOOT_SKIN.menu || {}), ornament: '── ◆ ──' } };
+  assert.equal(titleOrnament(orn), '── ◆ ──');
+  const f = bootAt120(P.titleEnd, { skin: orn });
+  assert.ok(frameLines(f)[bottom + 2].includes('── ◆ ──'), 'the ornament row under the title');
+  // nothing else is on the title card but the border, the title, its ornament and the label above it
+  const stray = [];
+  for (let y = 1; y < rows - 1; y++) {
+    for (let x = 1; x < cols - 1; x++) {
+      const i = y * cols + x;
+      if (f.glyphs[i] !== 32 && f.glyphs[i] !== 0x2588 && y !== bottom + 2 && !(y >= 1 && y <= top - 1)) stray.push(`${x},${y}`);
+    }
+  }
+  assert.deepEqual(stray, [], 'nothing but the title, its ornament and the label');
+});
+
+test('boot: the label is drawn above the title card at the cartridge\'s tint when there is room (10 rows plus a margin), and boot art takes its place', () => {
+  const labelRow = fixture.label[1].trim();
+  assert.ok(labelRow.length > 10);
+  const big = bootAt120(P.titleEnd);
+  assert.ok(text(big).includes(labelRow), 'label shown at 120x40');
+  const ys = frameLines(big);
+  const y = ys.findIndex((l) => l.includes(labelRow));
+  assert.equal(big.shades[y * 120 + ys[y].indexOf(labelRow)], MAP(entries[1].tint + 1), 'tint level 1');
+  const tall = Array.from({ length: 10 }, (_, i) => 'LABEL ROW ' + i + ' ~~~~~~');
+  assert.ok(text(boot(120, 40, P.titleEnd, { labelArt: tall })).includes('LABEL ROW 0 ~~~~~~'), 'a full 24 x 10 label fits at 120x40');
+  assert.ok(!text(boot(80, 24, P.titleEnd, { labelArt: tall })).includes('LABEL ROW 0'), '80x24 has rows >= 24 but no room above the title for 10 rows, so no label');
+  assert.ok(!text(bootAt120(P.zoomEnd)).includes(labelRow), 'not before the zoom has ended');
+  // boot art replaces the label
+  const artSkin = { ...BOOT_SKIN, boot: { ...BOOT_SKIN.boot, art: true } };
+  const withArt = bootAt120(P.titleEnd, { skin: artSkin, bootArt: ['<< BOOT ART >>'] });
+  assert.ok(text(withArt).includes('<< BOOT ART >>'));
+  assert.ok(!text(withArt).includes(labelRow));
+  // a label is optional
+  assert.ok(!text(bootAt120(P.titleEnd, { labelArt: undefined })).includes(labelRow));
+});
+
+test('boot, LINK LED: the console\'s LINK LED turns cyan as the last line lands (full tier); CART stays on in the accent colour', () => {
+  const ledX = L.consoleX + 53 + 19, ledY = L.consoleTop + 3;
+  const landed = P.on + LINES.length * LINE_SECONDS;
+  const before = cellAt(boot(120, 40, landed - 0.02), ledX, ledY);
+  const after = cellAt(boot(120, 40, landed + 0.01), ledX, ledY);
+  assert.deepEqual([before.g, after.g], ['○', '●']);
+  assert.equal(after.s, MAP(DRIFTMAN_COLOURS.cyan));
+  assert.equal(cellAt(boot(120, 40, P.on), L.consoleX + 53 + 9, ledY).s, MAP(driftmanSkin.palette.ui.accent), 'CART LED on in the accent colour');
+});
+
+test('boot, Classic: the console keeps its own frame (a shimmer only), and the zoom edge is the console skin\'s frame glyphs - drawChrome\'s output', () => {
+  const f = newFrame(120, 40);
+  drawBoot(f, { skin: classicBootSkin, item: classicItem, labelArt: entries[0].label, t: 0.3, title: 'Drift Classic' }, driftmanSkin);
+  assert.ok(text(f).includes('╔'), 'bezel unchanged');
+  assert.ok(text(f).includes('DRIFT CLASSIC'), 'the seated cartridge\'s name plate');
+  const z = newFrame(120, 40);
+  drawBoot(z, { skin: classicBootSkin, item: classicItem, t: bootPhases(classicBootSkin).zoomEnd, title: 'Drift Classic' }, driftmanSkin);
+  const ref = newFrame(120, 40);
+  drawChrome(ref, classicBootSkin);
+  assert.deepEqual(Array.from(z.glyphs), Array.from(ref.glyphs));
+  assert.deepEqual(Array.from(z.shades), Array.from(ref.shades));
+});
+
+test('boot without an item behaves as before: the centred rectangle, no console, the same phases', () => {
+  const f = newFrame(120, 40);
+  drawBoot(f, { skin: BOOT_SKIN, t: P.on + 0.3, title: 'Fixture' }, driftmanSkin);
+  assert.ok(text(f).includes('CARTRIDGE'));
+  assert.ok(!text(f).includes('PWR'), 'no console');
+  const z = newFrame(120, 40);
+  drawBoot(z, { skin: BOOT_SKIN, t: P.zoomEnd, title: 'Fixture' }, driftmanSkin);
+  const ref = newFrame(120, 40);
+  drawChrome(ref, BOOT_SKIN);
+  assert.deepEqual(Array.from(z.glyphs), Array.from(ref.glyphs));
+});
+
+test('boot: every phase at every size draws allowed single-width glyphs in palette, owns every cell, and never throws (item or not, loading or not, down to 4x2)', () => {
+  const variants = [
+    { name: 'skinned item', skin: BOOT_SKIN, item: skinnedItem, map: MAP, len: merged.pal.sgr.length },
+    { name: 'skinned plain', skin: BOOT_SKIN, item: undefined, map: undefined, len: cartPal.sgr.length },
+    { name: 'classic item', skin: classicBootSkin, item: classicItem, map: undefined, len: LIB_LEN },
+    { name: 'console skin', skin: driftmanSkin, item: classicItem, map: undefined, len: LIB_LEN },
+  ];
+  for (const [w, h] of SIZES) {
+    for (const v of variants) {
+      const total = bootSeconds(v.skin);
+      for (const loading of [true, false]) {
+        for (let t = 0; t <= total + 0.3; t += 0.1) {
+          const args = { skin: v.skin, item: v.item, consoleMap: v.map, labelArt: fixture.label, bootArt: ['ART'], t, loading, title: 'Fixture' };
+          const f = newFrame(w, h);
+          assert.doesNotThrow(() => drawBoot(f, args, driftmanSkin), `${v.name} ${w}x${h} t=${t}`);
+          assert.deepEqual(problems(f, v.len, `boot ${v.name} ${w}x${h} t=${t.toFixed(2)}`), []);
+          const g = dirty(w, h);
+          drawBoot(g, args, driftmanSkin);
+          assert.deepEqual(Array.from(g.glyphs), Array.from(f.glyphs), `${v.name} ${w}x${h} t=${t}: owns every cell`);
+          assert.deepEqual(Array.from(g.shades), Array.from(f.shades));
+        }
+      }
+      const e = newFrame(w, h);
+      assert.doesNotThrow(() => drawBoot(e, { skin: v.skin, item: v.item, t: 0, error: 'something went wrong in the scene file'.repeat(3), title: 'x' }, driftmanSkin));
+      assert.deepEqual(problems(e, v.len, `boot error ${v.name} ${w}x${h}`), []);
+    }
+  }
+  for (const bad of [NaN, -3, 1e9, undefined]) assert.doesNotThrow(() => drawBoot(newFrame(120, 40), { skin: BOOT_SKIN, item: skinnedItem, consoleMap: MAP, t: bad, title: 'T' }, driftmanSkin));
+});
+
+test('boot timeline: bootPhases (skin.boot.seconds) is unchanged', () => {
+  assert.equal(Math.round(bootPhases({ palette: driftmanSkin.palette }).end * 100) / 100, 4.3);
+  assert.equal(Math.round(bootPhases({ palette: driftmanSkin.palette, boot: { seconds: 3 } }).linesEnd * 100) / 100, 3.4);
+});
+
+// ---- through the real shell: it hands the boot the console and a palette that holds both
+
+function directShell(startId, cols = 120, rows = 40) {
+  const log = { left: false };
+  const sh = createShell({
+    cols, rows, cmode: 'truecolor', seed: 1, cartridges, lastCartridge: startId,
+    consts: { SPEEDS, DISSOLVE_SECONDS, DEFAULT_FADE_SECONDS },
+    host: { persist() {}, quit() {}, leaveToClassic() { log.left = true; } },
+  });
+  return { sh, log };
+}
+const settle = async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 40)); };
+const tickFor = (sh, seconds) => { for (let t = 0; t < seconds - 1e-9; t += 1 / FPS) sh.tick(Math.min(1 / FPS, seconds - t)); };
+
+test('the shell boots on the console: the console stays on screen through the boot, in a palette holding the console\'s colours and the cartridge\'s; the running cartridge gets its own palette back', async () => {
+  const { sh } = directShell('fixture');
+  sh.key('enter');
+  await settle();
+  tickFor(sh, INSERT_END + 0.3);
+  assert.equal(sh.screen, 'boot');
+  const cartLen = makeSkinPalette(JSON.parse(JSON.stringify(fixture.skin)), 'truecolor', 'x').sgr.length;
+  const shot = sh.frame();
+  assert.ok(frameLines(shot).join('\n').includes('PWR'), 'the console is on screen during the boot');
+  assert.equal(shot.palette.sgr.length, cartLen + 24, 'the cartridge palette, the console\'s 20 colours and the 4 tints');
+  assert.ok(Math.max(...shot.shades) < shot.palette.sgr.length);
+  tickFor(sh, bootSeconds(fixture.skin) + 0.5);
+  await settle();
+  tickFor(sh, 1);
+  assert.equal(sh.screen, 'running');
+  assert.equal(sh.frame().palette.sgr.length, cartLen, 'the running cartridge has its own palette (no console colours)');
+});
+
+test('the shell boots Classic on the console too, in the library palette, and hands back to the Classic path when the boot ends', () => {
+  const { sh, log } = directShell('classic');
+  sh.key('enter');
+  tickFor(sh, INSERT_END + 0.5);
+  assert.equal(sh.screen, 'boot');
+  const shot = sh.frame();
+  assert.ok(frameLines(shot).join('\n').includes('PWR'));
+  assert.equal(shot.palette.sgr.length, LIB_LEN);
+  assert.equal(log.left, false);
+  tickFor(sh, bootSeconds(classicBootSkin) - 0.5 + 0.1);
+  assert.equal(log.left, true, 'the Classic path takes over when the boot ends');
+});

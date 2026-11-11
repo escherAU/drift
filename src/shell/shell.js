@@ -20,7 +20,7 @@ import { parseHex, sgrFor } from '../color.js';
 import { driftmanSkin, classicBootSkin } from './driftman.js';
 import { drawLibrary, idleSignature, dipAt, DIP_SECONDS } from './library.js';
 import { drawInsert, INSERT_END } from './insert.js';
-import { drawBoot, bootPhases } from './boot.js';
+import { drawBoot, bootPhases, mergeBootPalette } from './boot.js';
 import { createCartridgeRuntime, dissolveFrames } from './runtime.js';
 import { newFrame, clearFrame, ramp, sizeTier, dissolveThresholds } from './ui.js';
 
@@ -76,6 +76,7 @@ export function createShell(o) {
   let cart = null, entry = null, classic = false, skipped = false, menuOnArrive = true;
   let load = { status: 'none', scenes: null, error: null };
   let bootSkin = driftmanSkin, bootPal = libPal, errorText = '';
+  let cartPal = libPal, bootMap = null; // the cartridge's own palette (the runtime's) and, for a skinned one, where the console's colours sit in bootPal
   let runtime = null;
   let bt = 0; // boot-local seconds
 
@@ -133,12 +134,17 @@ export function createShell(o) {
   function toBoot() {
     screen = 'boot'; st = 0; bt = 0; forced = true;
     bootSkin = classic ? classicBootSkin : (cart.skin || driftmanSkin);
-    bootPal = classic || !cart.skin ? libPal : makeSkinPalette(cart.skin, cmode, cart.id);
+    bootMap = null;
+    if (classic || !cart.skin) { cartPal = libPal; bootPal = libPal; return; }
+    // a skinned boot draws the console (library colours) and the cartridge's screen (skin colours) in one frame
+    cartPal = makeSkinPalette(cart.skin, cmode, cart.id);
+    const m = mergeBootPalette(cartPal, libPal, entry.tint);
+    bootPal = m.pal; bootMap = m.map;
   }
 
   function ensureRuntime() {
     if (runtime || load.status !== 'ok' || classic) return;
-    runtime = createCartridgeRuntime(cart, load.scenes, bootPal, {
+    runtime = createCartridgeRuntime(cart, load.scenes, cartPal, {
       cols, rows, seed, skin: cart.skin || driftmanSkin, cmode, ...consts,
     });
     if (menuOnArrive) runtime.open();
@@ -296,7 +302,7 @@ export function createShell(o) {
 
   function helpInfo(forScreen) {
     const sk = forScreen === 'running' && cart && cart.skin ? cart.skin : driftmanSkin;
-    const pal = forScreen === 'running' ? bootPal : libPal;
+    const pal = forScreen === 'running' ? cartPal : libPal;
     const sc = runtime ? runtime.state().sceneId : '';
     return {
       mode: forScreen, modeName: forScreen, sceneName: sc || '', ui: pal.ui,
@@ -331,6 +337,7 @@ export function createShell(o) {
         const P = bootPhases(bootSkin);
         drawBoot(f, {
           skin: bootSkin, labelArt: cart.label, bootArt: cart.boot, t: bt, loading: load.status !== 'ok', title: cart.title,
+          item: insertItem(), consoleMap: bootMap || undefined,
         }, driftmanSkin);
         if (bt > P.titleEnd) {
           const p = ramp(bt, P.titleEnd, P.end);

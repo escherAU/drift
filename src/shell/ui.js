@@ -1,9 +1,15 @@
 // Small drawing helpers shared by the console screens (DRIFT-4). Pure: they write into a frame
 // { glyphs: Uint16Array, shades: Uint8Array, cols, rows } and never throw, whatever the size.
 import { fadeOffsets } from '../compose.js';
+import { DEFAULT_UI } from '../cartridge/palette.js';
 
 export const MSG_TOO_SMALL = 'Make the window bigger to see the cartridges.';
 export const DEFAULT_BOX = '┌─┐│┘─└│'; // tl t tr r br b bl l
+
+// The skin's four UI shades with the defaults filled in (a validated skin keeps only the ones it names).
+export function uiOf(skin) {
+  return { ...DEFAULT_UI, ...((skin && skin.palette && skin.palette.ui) || {}) };
+}
 
 export function newFrame(cols, rows) {
   const c = Math.max(0, cols | 0), r = Math.max(0, rows | 0);
