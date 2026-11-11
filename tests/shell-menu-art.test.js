@@ -174,3 +174,117 @@ test('list: the highlighted row is drawn in the accent shade and the others in t
   assert.equal(shadeOfLabel('Program 1'), UI.text);
   assert.notEqual(shadeOfLabel('Program 3'), shadeOfLabel('Program 1'));
 });
+
+// ---- slots
+
+const find = (f, s) => { const lines = frameLines(f); const y = lines.findIndex((l) => l.includes(s)); return y < 0 ? null : { x: lines[y].indexOf(s), y }; };
+const count = (f, ch) => (text(f).split(ch).length - 1);
+
+test('slots: 4-row cards at 30 rows, 2-row entries with a dashed rule at 29; Roman numerals I..X and the current mark', () => {
+  const draw = (rows, n, index = 0, cols = 120) => { const f = newFrame(cols, rows); drawMenu(f, { entries: mkEntries(n), index }, mkSkin('slots')); return f; };
+  const tall = draw(30, 3);
+  assert.equal(count(tall, '╔') + count(tall, '┌'), 3, 'three boxed cards at 30 rows');
+  assert.equal(count(tall, '┄'), 0);
+  const topsOf = (f) => frameLines(f).map((l, y) => (/[┌╔]/.test(l) ? y : -1)).filter((y) => y >= 0);
+  const tops = topsOf(tall);
+  assert.deepEqual([tops[1] - tops[0], tops[2] - tops[1]], [4, 4], 'cards are 4 rows apart and 4 rows high');
+  const bottoms = frameLines(tall).map((l, y) => (/[└╚]/.test(l) ? y : -1)).filter((y) => y >= 0);
+  assert.equal(bottoms[0] - tops[0], 3, 'a card is 4 rows high');
+  const short = draw(29, 3);
+  assert.equal(count(short, '╔') + count(short, '┌'), 0, 'no boxes at 29 rows');
+  assert.ok(count(short, '┄') > 0, 'dashed rule at 29 rows');
+  const ls = frameLines(short);
+  const y1 = ls.findIndex((l) => l.includes('Program 1')), y2 = ls.findIndex((l) => l.includes('Program 2'));
+  assert.equal(y2 - y1, 3, 'a 2-row entry plus a rule row');
+  assert.ok(/^\s*┄+\s*$/.test(ls[y1 + 2]), 'the rule sits between the entries');
+  assert.ok(!/┄/.test(ls[y2 + 2 + 3] || ''), 'and not after the last');
+  // numerals and the current mark
+  for (const f of [tall, short]) {
+    const t = text(f);
+    assert.match(t, /\bI\s+Program 1/);
+    assert.match(t, /\bII\s+Program 2 \*/);
+    assert.match(t, /\bIII\s+Program 3/);
+  }
+  // ten entries: the numeral X; 4-row cards where they fit (240x67), 2-row entries where only those do (120x40)
+  const big = draw(67, 10, 9, 240);
+  assert.equal(count(big, '╔') + count(big, '┌'), 10);
+  assert.match(text(big), /\bX\s+Program 10/);
+  const mid = draw(40, 10, 9);
+  assert.equal(count(mid, '╔') + count(mid, '┌'), 0, '10 entries at 120x40 are 2-row entries');
+  assert.ok(count(mid, '┄') > 0);
+  assert.match(text(mid), /\bX\s+Program 10/);
+  // and where not even those fit (80x16) it is the scrolling list
+  const small = draw(16, 10, 4, 80);
+  assert.match(text(small), /↑ \d+ more|↓ \d+ more/);
+});
+
+test('slots: the selected card is a double line in the accent shade, the others single and dim; the selected label is distinguishable', () => {
+  for (const [cols, rows] of [[120, 40], [240, 67], [80, 24]]) {
+    const f = newFrame(cols, rows);
+    drawMenu(f, { entries: mkEntries(3), index: 1 }, mkSkin('slots'));
+    const sel = find(f, 'Program 2 *'), other = find(f, 'Program 1');
+    assert.equal(f.shades[cell(f, sel.x, sel.y)], UI.accent, `${cols}x${rows} selected label`);
+    assert.equal(f.shades[cell(f, other.x, other.y)], UI.text, `${cols}x${rows} other label`);
+    const mark = find(f, '*');
+    assert.equal(f.shades[cell(f, mark.x, mark.y)], UI.accent, 'the current mark follows its row');
+    if (rows >= 30) {
+      const dbl = find(f, '╔'), single = find(f, '┌');
+      assert.equal(f.shades[cell(f, dbl.x, dbl.y)], UI.accent, 'double line in the accent colour');
+      assert.equal(f.shades[cell(f, single.x, single.y)], UI.dim, 'single line dim');
+      assert.equal(count(f, '╔'), 1);
+    }
+  }
+  // the current mark when not selected uses the head shade, the same in every layout
+  for (const layout of ['list', 'slots', 'grid']) {
+    const f = newFrame(120, 40);
+    drawMenu(f, { entries: mkEntries(3), index: 0 }, mkSkin(layout));
+    const mark = find(f, '*');
+    assert.equal(f.shades[cell(f, mark.x, mark.y)], UI.head, `${layout}: current mark`);
+  }
+});
+
+// ---- grid
+
+test('grid: 22x7 tiles, 3 per row from 120 columns and 2 from 100, a list below 100; up to 10 entries fit or fall back to the list', () => {
+  const draw = (cols, rows, n, index = 0, layout = 'grid') => { const f = newFrame(cols, rows); drawMenu(f, { entries: mkEntries(n), index }, mkSkin(layout)); return f; };
+  const tiles = (f) => frameLines(f).flatMap((l, y) => [...l].map((c, x) => (c === '╔' || c === '┌' ? { x, y } : null)).filter(Boolean));
+  const t100 = tiles(draw(100, 40, 4));
+  assert.equal(t100.filter((p) => p.y === t100[0].y).length, 2, '2 per row at 100 columns');
+  const t120 = tiles(draw(120, 40, 4, 1));
+  assert.equal(t120.filter((p) => p.y === t120[0].y).length, 3, '3 per row at 120 columns');
+  const t99 = draw(99, 40, 4), list99 = draw(99, 40, 4, 0, 'list');
+  assert.equal(text(t99), text(list99), 'grid at 99 columns is the list');
+  assert.equal(count(t99, '╔'), 0);
+  assert.notEqual(text(draw(100, 40, 4)), text(draw(100, 40, 4, 0, 'list')), 'grid at 100 columns is not');
+  // tile size: 22 wide, 7 high, 2 apart
+  const f = draw(120, 40, 4, 1);
+  const lines = frameLines(f);
+  const first = tiles(f)[0];
+  assert.equal(lines[first.y].slice(first.x, first.x + 22), '┌' + '─'.repeat(20) + '┐');
+  assert.equal(lines[first.y + 6][first.x], '└');
+  assert.equal(lines[first.y + 7][first.x], ' ');
+  assert.equal(tiles(f)[1].x - first.x, 24);
+  // the label is centred in its tile, the current mark in the label
+  const lab = find(f, 'Program 1');
+  assert.ok(Math.abs((lab.x - first.x) - (22 - 9) / 2) <= 1);
+  assert.equal(lab.y - first.y, 3);
+  // 10 entries: 3 per row x 4 lines at 120 and 240 columns (31 rows) when the rows allow, else the list
+  const ten = draw(240, 67, 10, 9);
+  assert.equal(count(ten, '╔'), 1);
+  assert.equal(count(ten, '┌'), 9);
+  const tenShort = draw(120, 24, 10, 9);
+  assert.match(text(tenShort), /↑|more|Program 10/);
+  assert.equal(count(tenShort, '╔'), 0, 'rows do not fit: list');
+  assert.ok(text(tenShort).includes('Program 10'));
+  // selected tile: accent double line; the others dim single lines
+  const dbl = find(f, '╔'), single = find(f, '┌');
+  assert.equal(f.shades[cell(f, dbl.x, dbl.y)], UI.accent);
+  assert.equal(f.shades[cell(f, single.x, single.y)], UI.dim);
+  assert.equal(f.shades[cell(f, lab.x, lab.y)], UI.text);
+  const sel = find(f, 'Program 2 *');
+  assert.equal(f.shades[cell(f, sel.x, sel.y)], UI.accent);
+  // a heavy/double skin box does not take the unselected tiles' single line away
+  const g = newFrame(120, 40);
+  drawMenu(g, { entries: mkEntries(3), index: 0 }, mkSkin('grid', { box: '╔═╗║╝═╚║' }));
+  assert.equal(count(g, '╔'), 1);
+});
