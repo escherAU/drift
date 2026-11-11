@@ -63,6 +63,28 @@ test('delza manifest: blurb, facts and label art fit their limits; every scene i
   assert.ok(validateManifest(JSON.parse(fs.readFileSync(path.join(DIR, 'manifest.json'), 'utf8')), { trusted: true }).ok);
 });
 
+test('delza tale: all six scenes in the designer\'s order, the cut scene 45 s and the rest 75 s, and the shelf fact is the real total', () => {
+  const tale = manifest.programs.find((p) => p.id === 'tale');
+  const order = ['thornwell', 'tallow', 'cinderhorn', 'reach', 'highcandle', 'lampwarden'];
+  assert.deepEqual(manifest.scenes.map((s) => s.id), order);
+  assert.deepEqual(tale.scenes, order);
+  assert.deepEqual(manifest.chapters.map((c) => c.numeral), ['I', 'II', 'III', 'IV', 'V', 'VI']);
+  assert.deepEqual(manifest.menu.slice(0, -1).map((e) => e.scene), order);
+  assert.equal(tale.sceneSeconds, 75);
+  assert.deepEqual(tale.seconds, { lampwarden: 45 });
+  assert.deepEqual(manifest.scenes.map((s) => s.kind), ['cells', 'sim', 'cells', 'cells', 'cells', 'cells']);
+  const total = order.reduce((n, id) => n + (tale.seconds[id] ?? tale.sceneSeconds), 0);
+  assert.equal(total, 420);
+  assert.deepEqual(manifest.facts, [`Woodsy fantasy · about ${Math.round(total / 60)} min`], 'the shelf says what the tale really lasts');
+  // every chapter's minutes and every Journal note agree with its length in the program
+  for (const c of manifest.chapters) {
+    const secs = tale.seconds[c.id] ?? tale.sceneSeconds;
+    assert.equal(c.minutes, Math.max(1, Math.round(secs / 60)), c.id);
+    const note = manifest.menu.find((e) => e.scene === c.id).note;
+    assert.equal(note, secs >= 60 ? `about ${Math.round(secs / 60)} min` : `about ${secs} s`, c.id);
+  }
+});
+
 test('delza skin: validates, the background is deep and dark, the console block and the help wording are the designer\'s', () => {
   const raw = JSON.parse(fs.readFileSync(path.join(DIR, 'skin.json'), 'utf8'));
   const v = validateSkin(raw);

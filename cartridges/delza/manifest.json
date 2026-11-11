@@ -8,7 +8,7 @@
   "runtime": "cartridge",
   "code": "DM-01",
   "facts": [
-    "Woodsy fantasy · about 4 min"
+    "Woodsy fantasy · about 7 min"
   ],
   "labelHue": "#6FAE5A",
   "scenes": [
@@ -26,6 +26,21 @@
       "id": "cinderhorn",
       "kind": "cells",
       "title": "The Cinderhorn"
+    },
+    {
+      "id": "reach",
+      "kind": "cells",
+      "title": "Across the Reach"
+    },
+    {
+      "id": "highcandle",
+      "kind": "cells",
+      "title": "Highcandle at Dusk"
+    },
+    {
+      "id": "lampwarden",
+      "kind": "cells",
+      "title": "The Lampwarden"
     }
   ],
   "programs": [
@@ -36,9 +51,15 @@
       "scenes": [
         "thornwell",
         "tallow",
-        "cinderhorn"
+        "cinderhorn",
+        "reach",
+        "highcandle",
+        "lampwarden"
       ],
-      "sceneSeconds": 75
+      "sceneSeconds": 75,
+      "seconds": {
+        "lampwarden": 45
+      }
     }
   ],
   "start": "tale",
@@ -63,6 +84,27 @@
       "scene": "cinderhorn",
       "note": "about 1 min",
       "desc": "A stag of embers blocks the road. Orrin stands his ground."
+    },
+    {
+      "label": "ACROSS THE REACH",
+      "program": "tale",
+      "scene": "reach",
+      "note": "about 1 min",
+      "desc": "From Lowmarrow to Highcandle, one dotted step at a time."
+    },
+    {
+      "label": "HIGHCANDLE AT DUSK",
+      "program": "tale",
+      "scene": "highcandle",
+      "note": "about 1 min",
+      "desc": "Nine hundred lamps, and only one still dark."
+    },
+    {
+      "label": "THE LAMPWARDEN",
+      "program": "tale",
+      "scene": "lampwarden",
+      "note": "about 45 s",
+      "desc": "Maren hands over the Moonwax Key, and Orrin climbs."
     },
     {
       "label": "Eject the cartridge",
@@ -100,6 +142,39 @@
       "icon": [
         "ψ  ψ",
         "▀██▀"
+      ],
+      "minutes": 1
+    },
+    {
+      "id": "reach",
+      "numeral": "IV",
+      "place": "The Hollowmere Reach · map",
+      "line": "From Lowmarrow to Highcandle, one dotted step at a time.",
+      "icon": [
+        "▲▲ ≈≈",
+        "■ ··●"
+      ],
+      "minutes": 1
+    },
+    {
+      "id": "highcandle",
+      "numeral": "V",
+      "place": "Highcandle · dusk",
+      "line": "Nine hundred lamps, and only one still dark.",
+      "icon": [
+        "▄ ▲ ▄",
+        "█▄█▄█"
+      ],
+      "minutes": 1
+    },
+    {
+      "id": "lampwarden",
+      "numeral": "VI",
+      "place": "The tower · night",
+      "line": "Maren hands over the Moonwax Key, and Orrin climbs.",
+      "icon": [
+        "╭──╮",
+        "╰▼─╯"
       ],
       "minutes": 1
     }

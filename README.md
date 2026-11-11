@@ -347,6 +347,11 @@ The `c` key walks Greenwood, Autumn and Moonlit: only the pines (the skin's hue)
 | I | `thornwell` The Thornwell Path | cells | forest walk in parallax layers; lantern glow; Pim; a Brambleback every 40 to 60 s; the far ridge is dropped at 80x24 |
 | II | `tallow` The Tallow & Tin | sim | the hearth fire (shade drift, never out), sparks, pipe smoke, mugs, the cat's tail; under 1% of the screen changes a frame |
 | III | `cinderhorn` The Cinderhorn | cells | a 4 s-a-turn fight, then the calm; a hit glow lights only the creature's own cells two shades, 0.15 s up and 0.45 s down, never closer than 1.5 s |
+| IV | `reach` Across the Reach | cells | the map: a dotted route drawn a dot every 0.3 s with a gold marker that rests 2 s at each of four landmarks (the labels fade up), cloud shadows, fog that thins ahead of the marker; redrawn every 90 s |
+| V | `highcandle` Highcandle at Dusk | cells | the sky deepens a shade every 6 s (each cell at its own moment), stars, up to 80 windows lit one at a time in a seeded order, three Gloamcrows; the Great Lamp rises at 58 s with a halo |
+| VI | `lampwarden` The Lampwarden | cells | the 45 s cut scene: letterbox, portraits, a typed dialogue box (30 characters a second), Pim's flutter, candles, the Ember Lantern climbing the stair. It is a cells scene rather than text because it needs the portraits, speaker names and the room behind the box |
+
+The tale plays the six in order, 75 s each except the cut scene (45 s): 7 minutes, which is what the shelf says.
 
 `tests/delza-*.test.js` check the manifest, skin, palette, Journal at 120x40 and 80x24, help words, boot lines, the countdown, the
 seasons and each scene's promises on rendered frames.
@@ -496,14 +501,14 @@ not a TTY, drift prints a message and exits 0 without emitting any escape sequen
 npm test            # node --test, no dependencies
 ```
 
-The suite is 1066 tests in `tests/*.test.js` and takes about 20 seconds (test files run in parallel). The cartridge work is
+The suite is 1138 tests in `tests/*.test.js` and takes about 20 seconds (test files run in parallel). The cartridge work is
 covered by `cartridge-schema` (validators, text scene, skin palette), `cartridge-loader`
 (every way a cartridge can be wrong, and both arms of the trust rule), `cartridge-scenes` (every
 install cartridge's scenes through the size, glyph, colour, determinism and flash checks, with controls
 that must fail), `cartridges` (glyph and import scans over `cartridges/`), `config-extras`, `shell-app`
 (the console at app level on a fake clock), `shell-draw` and `shell-flash` (every screen at every size,
 and the photosensitivity checks), `tools-cartridges` (the cartridge captures and `measure.mjs` options),
-`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow` and `delza-cinderhorn` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), and the cartridge arms of `real-process` (below).
+`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), and the cartridge arms of `real-process` (below).
 
 Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 `tests/real-process.test.js`, which spawns the real `bin/drift.js` with piped stdio):
