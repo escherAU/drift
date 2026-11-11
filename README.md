@@ -166,7 +166,7 @@ drift --cartridge classic  # insert a cartridge at start (boot included)
 drift --cartridge last     # the one inserted most recently (Drift Classic if none yet)
 ```
 
-In Classic press `l` to open the library, `Esc` or `l` to go back. A bad id (`--cartridge nope`,
+In Classic press `l` to open the library (Classic's help panel gains just that one `l` row), `Esc` or `l` to go back. A bad id (`--cartridge nope`,
 a locked or broken cartridge) prints `drift: ...` to stderr and exits 2 before the terminal is
 touched, with no escape bytes. The id of the cartridge you insert is remembered as
 `lastCartridge` in the config file (it only sets where the library cursor starts and what
@@ -188,7 +188,7 @@ never rebind a key.
 | running | Enter | open the menu; with the menu open, choose the highlighted entry |
 | running | up or left / down or right | menu: previous / next |
 | running | Esc | close the help or the menu (the menu also closes after 20 s idle) |
-| running | `e`, `l` | eject: the insert animation plays backwards and you are back in the library |
+| running | `e`, `l` | eject: the insert animation plays backwards and you are back in the library (Classic has no `e`; it has only the `l` that opens the library) |
 | running | space | next scene in the current program |
 | running | `p` | pause or resume |
 | running | `+` (or `=`) / `-` (or `_`) | faster / slower |
@@ -201,7 +201,28 @@ console takes on the cartridge's skin behind a 6-column band), then the boot, dr
 console's own screen (a line opens into the screen, boot lines type out, a progress bar that
 waits for the scenes to finish loading, the screen zooms to fill the terminal, the title card),
 then the menu opens over the first program. If loading fails the console shows the reason for
-4 s and returns to the library. Ejecting plays the insert backwards in 1.6 s.
+4 s and returns to the library. Ejecting plays the insert backwards over 1.6 s (the same frames in reverse;
+there is no separate shrink animation, and no hint line about the eject key is drawn).
+
+### The library: sizes and codes
+
+The library picks a layout from the window size (`sizeTier` in `src/shell/ui.js`, and the extra-large check in `src/shell/library.js`):
+
+| window | layout |
+|---|---|
+| 176 x 58 or more (extra-large) | the full layout with two whole neighbours each side, a spine shelf above the cartridges and a desk line under the console's feet. The art is not scaled, only centred |
+| 88 x 39 or more (full) | the selected cartridge in the middle, neighbours 4 columns apart, the far ones as slivers at the edges |
+| 78 x 24 or more (compact) | one cartridge on the left, the cartridge list and blurb on the right, a mini console under them |
+| 40 x 10 or more (list) | text only: the list and a hint |
+| smaller | one line, "Make the window bigger to see the cartridges." |
+
+At the extra-large size the slide between cartridges moves in 3 steps (the 0.36 s slide is stepped, not continuous) and the far slots
+snap to their place instead of sliding. This is a deliberate cost choice: moving a cartridge rewrites nearly all its cells whatever
+the distance, and a continuous slide there wrote about twice the bytes of the full tier.
+
+Each unlocked card shows its manifest `code` on its name plate and on the console screen (a locked card shows SOON there instead). The scheme is DM-00 Classic, DM-01 Delza, DM-02 Night Drive,
+DM-03 Arcade and DM-04 Last Fantasy; a card only appears when its folder exists, so Delza is absent until it is added. Any
+manifest (including a data-only user cartridge) may set `code` and `facts`.
 
 ### What a cartridge is: the folder format
 
@@ -219,8 +240,8 @@ A cartridge is a folder whose name equals its manifest `id`:
 
 **label-ink.txt** sits beside label.txt and shades the card's art. It is a grid of the digits 0 to 3 (and spaces), row for row and
 column for column over label.txt: 0 is the dimmest tint of the cartridge, 3 the brightest. The card draws a cell at
-`max(0, digit - (3 - level))`, where level is how bright the card is as a whole (3 for the selected card, 2 and 1 for its
-neighbours), so the selected card shows the file as written and a neighbour shows it two steps dimmer, never below 0. A space,
+`max(0, digit - (3 - level))`, where level is how bright the card is as a whole (3 for the selected card, 1 for every other card; the two ramp between while the shelf slides),
+so the selected card shows the file as written and the others show it two steps dimmer, never below 0. A space,
 or a cell the ink rows do not reach, keeps the card's own level. Any other character (a 4, a letter) skips the cartridge with a
 message naming the file, and so do rows wider than 24 or more than 10 rows. The file is optional. A locked cartridge
 is still drawn at its dimmest level whatever the ink says, so the file cannot light one up.
@@ -244,7 +265,7 @@ and never stops the others; at most 50 cartridges are read.
 | `runtime` | unless `locked` | `"cartridge"`; `"classic"` is only for the install folder's `classic` |
 | `locked` | no | `true` makes a coming-soon card: it can then hold only `format`, `id`, `title`, `version`, `author`, `blurb`, `labelHue`, `code` and `facts`, and cannot be inserted |
 | `code` | any | exactly 5 characters, capitals, digits or hyphen (like `DM-01`): the shelf code shown beside the title |
-| `facts` | any | up to 6 lines of up to 40 characters, listed under the blurb when the window is roomy |
+| `facts` | any | up to 6 lines of up to 40 characters, listed under the blurb on the console screen of an unlocked card (full tier) |
 | `labelHue` | no | `#RRGGBB`: the tint of the library card |
 | `scenes` | yes (1 to 16) | list of `{ id, kind, title?, ref? }`. `id` follows the id rule; `kind` is `cells`, `sim`, `field` (code, install only), `text` (a `scenes/<id>.txt` file) or `builtin`; `title` up to 30 characters; `ref` (builtin only) names a Classic **calm** or **experimental** scene, such as `sand` or `plasma` |
 | `programs` | yes (1 to 8) | list of `{ id, title?, transition, scenes, sceneSeconds?, seconds?, fadeSeconds? }`: `transition` is `dissolve` or `crossfade`; `scenes` lists scene ids (1 to 16); `sceneSeconds` 20 to 3600 (default 180); `seconds` (optional) is an object keyed by scene id that gives single scenes their own time, 20 to 3600 each (a key must be a scene in this program; scenes not named use `sceneSeconds`); `fadeSeconds` 5 to 60 (default 15, crossfade only, and shorter than the shortest scene time: `sceneSeconds` or any `seconds` entry). A `crossfade` program holds only `field` scenes and calm builtins; a `dissolve` program holds `cells`, `sim`, `text` and experimental builtins |
@@ -454,7 +475,7 @@ not a TTY, drift prints a message and exits 0 without emitting any escape sequen
 npm test            # node --test, no dependencies
 ```
 
-The suite is 766 tests in `tests/*.test.js` and takes about 20 seconds (test files run in parallel). The cartridge work is
+The suite is 977 tests in `tests/*.test.js` and takes about 20 seconds (test files run in parallel). The cartridge work is
 covered by `cartridge-schema` (validators, text scene, skin palette), `cartridge-loader`
 (every way a cartridge can be wrong, and both arms of the trust rule), `cartridge-scenes` (every
 install cartridge's scenes through the size, glyph, colour, determinism and flash checks, with controls
