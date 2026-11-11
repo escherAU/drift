@@ -3,7 +3,6 @@
                                                                                                                         
                                                                                                                         
                                                                                                                         
-                                                                                                                        
                                    ┌────────────────────────────────────────────────┐                                   
                                    │                                                │                                   
                                    │  DRIFT  keys                                   │                                   
@@ -11,11 +10,11 @@
                                    │                                                │                                   
                                    │  Modes                                         │                                   
                                    │  m             next mode                       │                                   
-                                   │  1             calm mode                       │                               ▄   
-                                   │  2             chaos mode                      │                               ▀ ▀ 
-                                   │  3             high contrast mode              │                               ▄▀  
-                                   │  4             experimental mode               │                               █   
-                                   │                                                │                                   
+                                   │  1             calm mode                       │                                   
+                                   │  2             chaos mode                      │                               ▄   
+                                   │  3             high contrast mode              │                               ▀ ▀ 
+                                   │  4             experimental mode               │                               ▄▀  
+                                   │                                                │                               █   
                                    │  Scenes                                        │                                   
                                    │  space         next scene in this mode         │                                   
                                    │                                                │                                   
@@ -26,9 +25,10 @@
                                    │  Speed                                         │                                   
                                    │  +             faster                          │                                   
                                    │  -             slower                          │                                   
-                                   │                                                │            ▀▀█ █                  
-                                   │  Other                                         │            ▀█  ▀                  
-                                   │  p             pause or resume                 │            ▀  ▀▀                  
+                                   │                                                │                                   
+                                   │  Other                                         │            ▀▀█ █                  
+                                   │  p             pause or resume                 │            ▀█  ▀                  
+                                   │  l             cartridge library               │            ▀  ▀▀                  
                                    │  h             show or hide this help          │                                   
                                    │  Esc           close this help                 │                                   
                                    │  q or Ctrl+C   quit                            │                                   
