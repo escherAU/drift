@@ -69,3 +69,41 @@ test('cartridge captures are deterministic (second run is byte-identical)', asyn
     fs.rmSync(d2, { recursive: true, force: true });
   }
 });
+
+// ---- tools/measure.mjs console options (DRIFT-4)
+import { runMeasure, cartridgeTargets } from '../tools/measure.mjs';
+import { tmpRoot, makeFixtureCartridge } from './helpers-cartridge.js';
+
+const fixtureDirs = () => { const root = tmpRoot('drift-measure-fx-'); makeFixtureCartridge(root, 'fixture'); return [{ dir: root, trusted: true }]; };
+
+test('measure --library: a still library draws once; arrow presses every cycle redraw it; the start-up load is reported', async () => {
+  const idle = await runMeasure({ seconds: 2.2, cols: 80, rows: 24, library: true, quiet: true });
+  const cyc = await runMeasure({ seconds: 2.2, cols: 80, rows: 24, library: true, cycle: 0.5, quiet: true });
+  assert.ok(idle.frames >= 1 && idle.frames <= 3, `idle library frames ${idle.frames}`);
+  assert.ok(cyc.frames > idle.frames + 5, `cycling library redraws: ${cyc.frames} vs ${idle.frames}`);
+  assert.ok(Number.isFinite(idle.loadMs) && idle.loadMs >= 0);
+  assert.equal(idle.samples.length >= 2, true);
+});
+
+test('measure --cartridge: sampling starts after the cartridge runs; --program and --scene are honoured; bad ones are errors (both arms)', async () => {
+  const dirs = fixtureDirs();
+  const r = await runMeasure({ seconds: 2.2, cols: 80, rows: 24, cartridge: { id: 'fixture', program: 'mix', scene: 'drops' }, dirs, quiet: true });
+  assert.ok(r.frames > 5, `frames ${r.frames}`);
+  assert.ok(r.bytes > 500);
+  assert.ok(Number.isFinite(r.loadMs) && r.loadMs >= 0 && r.loadMs < 5000, `load_ms ${r.loadMs}`);
+  assert.equal(r.firstWrite, '\x1b[?1049h\x1b[?25l', 'through the real terminal-enter path');
+  await runMeasure({ seconds: 1.2, cols: 80, rows: 24, cartridge: { id: 'fixture', program: 'calm' }, dirs, quiet: true }); // a program switch, then the start scene
+  await assert.rejects(runMeasure({ seconds: 1, cols: 80, rows: 24, cartridge: { id: 'fixture', program: 'nope' }, dirs, quiet: true }), /no program 'nope'/);
+  await assert.rejects(runMeasure({ seconds: 1, cols: 80, rows: 24, cartridge: { id: 'fixture', program: 'mix', scene: 'haze' }, dirs, quiet: true }), /does not hold scene 'haze'/);
+  await assert.rejects(runMeasure({ seconds: 1, cols: 80, rows: 24, cartridge: { id: 'nope' }, dirs, quiet: true }), /no cartridge called 'nope'/);
+  await assert.rejects(runMeasure({ seconds: 1, cols: 80, rows: 24, cartridge: { id: 'classic' }, dirs: [{ dir: INSTALL_DIR, trusted: true }], quiet: true }), /Classic: use --scene/);
+  await assert.rejects(runMeasure({ seconds: 1, cols: 80, rows: 24, cartridge: { id: 'arcade' }, dirs: [{ dir: INSTALL_DIR, trusted: true }], quiet: true }), /it is locked/);
+});
+
+test('measure --cartridge all: one target per unlocked scene (each with a program that holds it); the install has none yet', () => {
+  const t = cartridgeTargets(fixtureDirs());
+  assert.deepEqual(t.map((x) => x.scene).sort(), ['drops', 'haze', 'note', 'plasma-ref', 'sandbox', 'swell', 'tide']);
+  assert.deepEqual(t.find((x) => x.scene === 'haze'), { cartridge: 'fixture', program: 'calm', scene: 'haze' });
+  assert.deepEqual(t.find((x) => x.scene === 'tide'), { cartridge: 'fixture', program: 'mix', scene: 'tide' });
+  assert.deepEqual(cartridgeTargets(), [], 'only Classic and locked cartridges are installed so far (this fails the day a real cartridge lands: update it then)');
+});
