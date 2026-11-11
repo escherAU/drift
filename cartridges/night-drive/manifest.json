@@ -11,15 +11,17 @@
   "labelHue": "#FF3EC8",
   "scenes": [
     { "id": "onramp", "kind": "cells", "title": "Midnight On-Ramp" },
-    { "id": "sundown", "kind": "cells", "title": "Sundown Grid" }
+    { "id": "sundown", "kind": "cells", "title": "Sundown Grid" },
+    { "id": "redlight", "kind": "sim", "title": "Red Light, Rain" }
   ],
   "programs": [
-    { "id": "tape", "title": "The tape", "transition": "dissolve", "scenes": ["onramp", "sundown"], "sceneSeconds": 90 }
+    { "id": "tape", "title": "The tape", "transition": "dissolve", "scenes": ["onramp", "sundown", "redlight"], "sceneSeconds": 90 }
   ],
   "start": "tape",
   "menu": [
     { "label": "A1  MIDNIGHT ON-RAMP", "program": "tape", "scene": "onramp", "note": "1:30", "desc": "Out of Port Solace on Shoreline 9, lamps sliding past." },
     { "label": "A3  SUNDOWN GRID", "program": "tape", "scene": "sundown", "note": "1:30", "desc": "The sun going down over the neon grid, one row every fifteen seconds." },
+    { "label": "B1  RED LIGHT, RAIN", "program": "tape", "scene": "redlight", "note": "1:30", "desc": "Stopped at a red light in the rain, the wiper clearing the glass." },
     { "label": "▲   EJECT THE TAPE", "action": "eject", "desc": "Back to the cartridge library." }
   ]
 }
