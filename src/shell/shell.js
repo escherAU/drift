@@ -304,11 +304,13 @@ export function createShell(o) {
     const sk = forScreen === 'running' && cart && cart.skin ? cart.skin : driftmanSkin;
     const pal = forScreen === 'running' ? cartPal : libPal;
     const sc = runtime ? runtime.state().sceneId : '';
+    const found = sc && load.scenes ? load.scenes.find((x) => x.id === sc) : null;
+    const sceneTitle = (found && found.title) || sc || '';
     return {
       mode: forScreen, modeName: forScreen, sceneName: sc || '', ui: pal.ui,
       title: (sk.help && sk.help.title) || 'DRIFTMAN 2000  keys', box: sk.help && sk.help.box,
       lines: shellHelpLines(forScreen, sk),
-      modeLine: forScreen === 'running' && cart ? `cartridge: ${cart.title}    scene: ${sc || ''}` : '',
+      modeLine: forScreen === 'running' && cart ? `${(sk.help && sk.help.modeLabel) || 'cartridge'}: ${cart.title}    ${(sk.help && sk.help.sceneLabel) || 'scene'}: ${sceneTitle}` : '',
     };
   }
 

@@ -144,16 +144,22 @@ export function knownKeyIds() {
   return new Set([...KEYMAP.map((e) => e.id), ...SHELL_KEYMAP.map((e) => e.id)]);
 }
 
-// Help lines for a console screen. A skin may relabel rows (skin.wording.keys[id]).
+// The group names the running screen's help shows (a skin may rename them with help.groups).
+export function shellGroupIds() {
+  return [...new Set(SHELL_KEYMAP.filter((e) => e.screens.includes('running')).map((e) => e.group))];
+}
+
+// Help lines for a console screen. A skin may relabel rows (skin.wording.keys[id]) and group headings (skin.help.groups).
 export function shellHelpLines(screen, skin) {
   const words = (skin && skin.wording && skin.wording.keys) || {};
+  const groups = (skin && skin.help && skin.help.groups) || {};
   const rows = SHELL_KEYMAP.filter((e) => e.screens.includes(screen === 'running' ? 'running' : 'library'));
   const lines = [];
   let group = null;
   for (const e of rows) {
     if (e.group !== group) {
       if (lines.length) lines.push({ text: '', style: 'text' });
-      lines.push({ text: e.group, style: 'head' });
+      lines.push({ text: groups[e.group] ?? e.group, style: 'head' });
       group = e.group;
     }
     lines.push({ text: e.display.padEnd(KEY_COL) + (words[e.id] || e.label), style: 'text' });

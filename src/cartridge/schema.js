@@ -6,7 +6,7 @@ import { isAllowedGlyph } from '../glyphs.js';
 import { PLAYLISTS } from '../scenes/index.js';
 import { relLuminance } from './palette.js';
 import { parseHex } from '../color.js';
-import { knownKeyIds } from '../keymap.js';
+import { knownKeyIds, shellGroupIds } from '../keymap.js';
 
 export const FORMAT = 1;
 
@@ -459,11 +459,24 @@ export function validateSkin(obj) {
   if (obj.help !== undefined) {
     const h = obj.help;
     if (!isObj(h)) return fail('help must be an object');
-    const k = unknownKey(h, ['title', 'box'], 'help');
+    const k = unknownKey(h, ['title', 'box', 'groups', 'modeLabel', 'sceneLabel'], 'help');
     if (k) return fail(k);
     const o = {};
     if (h.title !== undefined) { const e = strErr(h.title, 'help.title', 30); if (e) return fail(e); o.title = h.title; }
     if (h.box !== undefined) { const e = exactChars(h.box, 'help.box', 8); if (e) return fail(e); o.box = h.box; }
+    if (h.groups !== undefined) {
+      if (!isObj(h.groups)) return fail('help.groups must be an object');
+      const g = {};
+      for (const name of Object.keys(h.groups)) {
+        if (!shellGroupIds().includes(name)) return fail(`help.groups: '${name}' is not a group on the running screen (${shellGroupIds().join(', ')})`);
+        const e = strErr(h.groups[name], `help.groups.${name}`, 24); if (e) return fail(e);
+        g[name] = h.groups[name];
+      }
+      o.groups = g;
+    }
+    for (const f of ['modeLabel', 'sceneLabel']) {
+      if (h[f] !== undefined) { const e = strErr(h[f], `help.${f}`, 12); if (e) return fail(e); o[f] = h[f]; }
+    }
     out.help = o;
   }
   if (obj.boot !== undefined) {
