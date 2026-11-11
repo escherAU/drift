@@ -6,7 +6,8 @@
 //   frame  { glyphs: Uint16Array, shades: Uint8Array, cols, rows }
 //   view   {
 //     cartridges: [{ id, title, code, blurb, facts: [text], locked, label: [text rows, <= 24x10],
-//                    ink: [rows of digits 0-3] | null (per-glyph brightness; absent = solid),
+//                    ink: [rows of digits 0-3] | null (per-glyph brightness: shade = tint + max(0, digit - (3 - level));
+//                    spaces and cells without a digit keep the card's level; a locked card ignores it),
 //                    tint: palette index of the cartridge's 4 brightness levels (tint+0 dim .. tint+3 bright) }],
 //     index   the cartridge under the cursor
 //     prev    the cursor's previous position (for the ramp)
@@ -167,7 +168,7 @@ export function cartridgeGrid(cart, o = {}) {
     for (let c = 0; c < chars.length; c++) {
       const cp = cpOf(chars[c]);
       if (cp === 32) continue;
-      const lv = locked ? 0 : (ink && ink[c] >= '0' && ink[c] <= '3' ? Number(ink[c]) : level);
+      const lv = locked ? 0 : (ink && ink[c] >= '0' && ink[c] <= '3' ? Math.max(0, Number(ink[c]) - (3 - level)) : level);
       gPut(G, 3 + c, 3 + r, cp, cart.tint + lv);
     }
   }

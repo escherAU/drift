@@ -93,10 +93,28 @@ function loadOne(dir, name, trusted) {
   const lr = parseTextAsset(label, { maxW: LIMITS.labelW, maxH: LIMITS.labelH, maxBytes: LIMITS.labelBytes });
   if (!lr.ok) skip(`label.txt: ${lr.reason}`);
 
+  // label-ink.txt (optional): a 0-3 brightness digit per label cell; read before the locked early return
+  let labelInk = null;
+  const inkFile = path.join(cartDir, 'label-ink.txt');
+  let inkSt = null;
+  try { inkSt = fs.lstatSync(inkFile); } catch (e) { if (!e || e.code !== 'ENOENT') skip(`label-ink.txt cannot be read: ${errText(e)}`); }
+  if (inkSt) {
+    let itext;
+    try { itext = readTextFile(inkFile, LIMITS.labelBytes, 'label-ink.txt'); } catch (e) { if (e instanceof Skip) throw e; skip(`label-ink.txt cannot be read: ${errText(e)}`); }
+    contained(realDir, inkFile, 'label-ink.txt');
+    const ir = parseTextAsset(itext, { maxW: LIMITS.labelW, maxH: LIMITS.labelH, maxBytes: LIMITS.labelBytes });
+    if (!ir.ok) skip(`label-ink.txt: ${ir.reason}`);
+    for (let r = 0; r < ir.lines.length; r++) {
+      const m = /[^0-3 ]/u.exec(ir.lines[r]);
+      if (m) skip(`label-ink.txt: row ${r + 1} has '${m[0]}', but only the digits 0 to 3 and spaces are allowed`);
+    }
+    labelInk = ir.lines;
+  }
+
   const cart = {
     id: manifest.id, title: manifest.title, manifest, dir: cartDir, trusted,
     locked: manifest.locked === true, runtime: manifest.runtime || null,
-    label: lr.lines, boot: null, skin: null, texts: {}, sceneFiles: {},
+    label: lr.lines, labelInk, boot: null, skin: null, texts: {}, sceneFiles: {},
   };
   if (cart.locked || manifest.runtime === 'classic') return cart;
 

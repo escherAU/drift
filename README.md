@@ -210,11 +210,20 @@ A cartridge is a folder whose name equals its manifest `id`:
 ```
 <id>/manifest.json     required
 <id>/label.txt         required: the art on the library card, at most 24 columns x 10 rows, 4 KB
+<id>/label-ink.txt     optional: how bright each label cell is (see below), at most 24 columns x 10 rows, 4 KB
 <id>/skin.json         optional (32 KB at most): the look
 <id>/boot.txt          optional: art for the boot screen, at most 76 x 18, 16 KB (drawn when skin.boot.art is true)
 <id>/scenes/<id>.txt   one per scene of kind "text" (32 KB at most)
 <id>/scenes/<id>.js    one per scene of kind "cells", "sim" or "field" (install folder only; see the trust rule)
 ```
+
+**label-ink.txt** sits beside label.txt and shades the card's art. It is a grid of the digits 0 to 3 (and spaces), row for row and
+column for column over label.txt: 0 is the dimmest tint of the cartridge, 3 the brightest. The card draws a cell at
+`max(0, digit - (3 - level))`, where level is how bright the card is as a whole (3 for the selected card, 2 and 1 for its
+neighbours), so the selected card shows the file as written and a neighbour shows it two steps dimmer, never below 0. A space,
+or a cell the ink rows do not reach, keeps the card's own level. Any other character (a 4, a letter) skips the cartridge with a
+message naming the file, and so do rows wider than 24 or more than 10 rows. The file is optional. A locked cartridge
+is still drawn at its dimmest level whatever the ink says, so the file cannot light one up.
 
 Rules that apply to every file: only allow-listed glyphs (the list in `src/glyphs.js`; tabs,
 emoji and wide characters are rejected with the exact code point), LF or CRLF, a link or junction

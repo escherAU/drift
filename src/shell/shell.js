@@ -58,7 +58,7 @@ export function createShell(o) {
   const libPal = lib.pal;
   const libCarts = carts.map((c, i) => ({
     id: c.id, title: c.title, code: (c.manifest && c.manifest.code) || '', blurb: c.manifest.blurb, facts: c.manifest.facts || [],
-    locked: c.locked, label: c.label, ink: null, tint: lib.tints[i],
+    locked: c.locked, label: c.label, ink: c.labelInk || null, tint: lib.tints[i],
   }));
 
   let screen = 'library';
