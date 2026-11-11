@@ -7,20 +7,77 @@
   "blurb": "A lamplighter's apprentice crosses the Hollowmere Reach.",
   "runtime": "cartridge",
   "code": "DM-01",
-  "facts": ["Woodsy fantasy · about 4 min"],
+  "facts": [
+    "Woodsy fantasy · about 3 min"
+  ],
   "labelHue": "#6FAE5A",
   "scenes": [
-    { "id": "thornwell", "kind": "cells", "title": "The Thornwell Path" }
+    {
+      "id": "thornwell",
+      "kind": "cells",
+      "title": "The Thornwell Path"
+    },
+    {
+      "id": "tallow",
+      "kind": "sim",
+      "title": "The Tallow & Tin"
+    }
   ],
   "programs": [
-    { "id": "tale", "title": "The tale", "transition": "dissolve", "scenes": ["thornwell"], "sceneSeconds": 75 }
+    {
+      "id": "tale",
+      "title": "The tale",
+      "transition": "dissolve",
+      "scenes": [
+        "thornwell",
+        "tallow"
+      ],
+      "sceneSeconds": 75
+    }
   ],
   "start": "tale",
   "menu": [
-    { "label": "THE THORNWELL PATH", "program": "tale", "scene": "thornwell", "note": "about 1 min", "desc": "Orrin sets out with the Ember Lantern and a moth named Pim." },
-    { "label": "Eject the cartridge", "action": "eject" }
+    {
+      "label": "THE THORNWELL PATH",
+      "program": "tale",
+      "scene": "thornwell",
+      "note": "about 1 min",
+      "desc": "Orrin sets out with the Ember Lantern and a moth named Pim."
+    },
+    {
+      "label": "THE TALLOW & TIN",
+      "program": "tale",
+      "scene": "tallow",
+      "note": "about 1 min",
+      "desc": "Warm ale, a crackling hearth, and a rumour about the Lamp."
+    },
+    {
+      "label": "Eject the cartridge",
+      "action": "eject"
+    }
   ],
   "chapters": [
-    { "id": "thornwell", "numeral": "I", "place": "Thornwell Wood · morning", "line": "Orrin sets out with the Ember Lantern and a moth named Pim.", "icon": ["▲ ▲ ▲", "█ █ █"], "minutes": 1 }
+    {
+      "id": "thornwell",
+      "numeral": "I",
+      "place": "Thornwell Wood · morning",
+      "line": "Orrin sets out with the Ember Lantern and a moth named Pim.",
+      "icon": [
+        "▲ ▲ ▲",
+        "█ █ █"
+      ],
+      "minutes": 1
+    },
+    {
+      "id": "tallow",
+      "numeral": "II",
+      "place": "Lowmarrow · night",
+      "line": "Warm ale, a crackling hearth, and a rumour about the Lamp.",
+      "icon": [
+        "┌▲▲┐",
+        "└▓▓┘"
+      ],
+      "minutes": 1
+    }
   ]
 }
