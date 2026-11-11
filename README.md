@@ -366,11 +366,16 @@ node bin\drift.js --cartridge delza      # straight in: insert, boot, the Journa
 `q` quits from the library and from inside Delza; `e` ejects Delza back to the library. Both quits, `Ctrl+C` and a crash
 inside the running cartridge are checked against the real process in `tests/real-process.test.js` (the terminal is restored each time).
 
-### Night Drive, the second real cartridge (in progress)
+### Night Drive, the second real cartridge
 
 Night Drive (DM-02) is an 80s neon highway: the Vantra Halcyon, a low coupe with the plate NITE86, driving out of the made-up Port Solace
-on Shoreline 9, with late-night radio on 88.1 Moonlow FM. Everything in it is original. It is built as one tape of eight tracks (sides A
-and B, 90 s each, about 12 minutes), added a few at a time; today the tape holds track A1, `onramp` Midnight On-Ramp, track A3, `sundown` Sundown Grid, track B1, `redlight` Red Light, Rain, and track B4, `overdrive` Overdrive. The skin gives it a
+on Shoreline 9, with late-night radio on 88.1 Moonlow FM. Everything in it is original. It is one tape of 8 tracks, sides A and B, about 12 min: the tracks hold 90 s each
+(Late Caller 75 s), 705 s or 11:45 in all, and with the 2 s dissolve between tracks the tape loops every 721 s. In tape order:
+A1 Midnight On-Ramp (1:30), A2 Velvet Skyline (1:30), A3 Sundown Grid (1:30), A4 Coast Road 86 (1:30),
+B1 Red Light, Rain (1:30), B2 Luma's, Open Late (1:30), B3 Late Caller (1:15) and B4 Overdrive (1:30). The scene ids are `onramp`, `skyline`,
+`sundown`, `coast`, `redlight`, `diner`, `caller` and `overdrive`; Red Light, Rain and Overdrive are simulations, the other six are cell scenes.
+The tape deck keys: Enter opens the deck (and Enter on a track plays on from there), up/down or left/right pick a track, Esc closes it,
+space skips to the next track, `e` ejects the tape, `p` pauses, `h` shows the Owner's Manual and `q` quits. The skin gives it a
 violet-black background (#0D0820), a heavy-line magenta console (`┏━┓┃┛━┗┃`, a stacked-vent grille, an equaliser
 stripe), the tape deck menu (the `list` layout with a 15 s countdown), an Owner's Manual help panel (groups Tracks and Glovebox) and a
 cassette on the boot screen. Its colours are in `cartridges/night-drive/lib/palette.js` (eight hues in four shades each, plus text, dim and
@@ -385,10 +390,12 @@ window (`capsOf`), so that no frame at 1x changes more than about a tenth of its
 ticks in one), no four ticks in a row change more than 18% of them (120x40: 11.3%; 80x24: 16.3%; the short windows under 14 rows, where the arriving horizontal alone
 is 14% or more of the picture, 23.5% at 41x11). To keep that, each horizontal moves in a few jumps of several rows rather than a row at a time.
 Red Light, Rain is a simulation (it steps at 30 a second, so the same seed and step count always draw the same frame): the view from the driver's seat at a red
-light in the rain, with a traffic light blurred by the rain into a bokeh, a pedestrian crossing under an umbrella, drops landing about seven a second (3 in 10
-send a trickle down) and one wiper that sweeps for 1.2 s every 4.2 s and clears the drops it crosses. At 58 s the red ramps down and the green ramps up over a
-second, never cutting from one to the other; from 62 s the far buildings slide a column every 0.2 s. Under 100 columns or 32 rows it drops the mirror, shrinks the
+light in a heavy downpour, with a traffic light blurred by the rain into a bokeh, a pedestrian crossing under an umbrella, slanted speed lines of 2 to 8 cells
+falling 27 to 48 cells a second in a gusting wind, in deep red with a few brighter sparks (about 14 to 22% of the glass is rain), and one wiper that sweeps for 0.93 s every 2.4 s, clears a
+swath and throws spray off its leading edge; the rain is back within a second. At 58 s the red ramps down and the green ramps up over a
+second, never cutting from one to the other, and the rain near the lamp goes red, dark for a moment, then green (the far rain stays red); from 62 s the far buildings slide a column every 0.2 s. Under 100 columns or 32 rows it drops the mirror, shrinks the
 bokeh to 9x5 and keeps a two-row dashboard. Its drops, wiper, bokeh and dashboard are in `lib/rain.js`, `lib/bokeh.js` and `lib/dash.js`.
+Velvet Skyline is parked at an overlook across the bay from Port Solace: two towers (The Orchid and Solace Tower with a coral beacon on a 4 s cycle), lit windows that change one at a time, a rail bridge with a train from 8 s and every 30 s, and reflections in the bay. Coast Road 86 is a side view of the car on a cliff road above the sea, a moon with a path of glitter, a lighthouse beam on an 8 s turn and a palm passing every 6 to 10 s. Luma's, Open Late is the diner and the Quarterlight Arcade next door across the street: the LUMA'S rooftop sign with a faulty apostrophe that dips, chasing marquee bulbs, a server walking the window, steam from a mug and a customer every 40 s. Late Caller (75 s) is a radio call on 88.1 Moonlow FM, nine cards typed one at a time over a dim road. All four have a compact layout under 100 columns or 32 rows and are blank under 40 columns or 18 rows.
 Overdrive is the busy one, also a simulation: A1's road at double pace while a far-silhouette tunnel mouth grows out of the vanishing point (0 to 15 s), then nested rings of
 light in perspective with a ceiling light on each, tail lights running away and headlights coming toward us, each with a trail of 4 to 10 cells fading to nothing (15 to 60 s),
 then the far end opens and the city is revealed inside it by a dissolve from the centre outward (60 to 62 s), and an elevated freeway with the skyline on both sides, a trail
@@ -555,7 +562,7 @@ install cartridge's scenes through the size, glyph, colour, determinism and flas
 that must fail), `cartridges` (glyph and import scans over `cartridges/`), `config-extras`, `shell-app`
 (the console at app level on a fake clock), `shell-draw` and `shell-flash` (every screen at every size,
 and the photosensitivity checks), `tools-cartridges` (the cartridge captures and `measure.mjs` options),
-`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge`, `night-drive-onramp`, `night-drive-sundown`, `night-drive-redlight`, `night-drive-overdrive` and `night-drive-flash` (Night Drive's skin, palette, label, boot art, manifest, help panel, the road, sprites and calm bounds of its first track, the sun, grid, loop and calm bounds of Sundown Grid, the purity, light change, wiper, rain, buildings and calm bounds of Red Light, Rain, and the ring schedule, light trails, phases, exit dissolve and changed-cell bounds of Overdrive), and the cartridge arms of `real-process` (below).
+`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge`, `night-drive-onramp`, `night-drive-skyline`, `night-drive-sundown`, `night-drive-coast`, `night-drive-redlight`, `night-drive-diner`, `night-drive-caller`, `night-drive-overdrive`, `night-drive-menu`, `night-drive-phase` and `night-drive-flash` (Night Drive's skin, palette, label, boot art, manifest, help panel, the road, sprites and calm bounds of its first track, the sun, grid, loop and calm bounds of Sundown Grid, the purity, light change, wiper, rain, buildings and calm bounds of Red Light, Rain, and the ring schedule, light trails, phases, exit dissolve and changed-cell bounds of Overdrive), and the cartridge arms of `real-process` (below).
 
 Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 `tests/real-process.test.js`, which spawns the real `bin/drift.js` with piped stdio):

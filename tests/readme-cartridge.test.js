@@ -57,3 +57,45 @@ test('README example, control: a broken copy of it is refused (the check bites),
   assert.equal(c.cartridges.length, 0);
   assert.match(c.errors[0].reason, /user cartridges cannot contain code/);
 });
+
+// DRIFT-5: the Night Drive section of the README must describe the finished cartridge, read off its manifest
+// (not retyped): the code, the track count, the length, and every track with its label and length.
+const NIGHT = JSON.parse(fs.readFileSync(new URL('../cartridges/night-drive/manifest.json', import.meta.url), 'utf8'));
+
+function nightDriveSection(text) {
+  const start = text.indexOf('### Night Drive');
+  assert.ok(start >= 0, 'the README has a Night Drive section');
+  const end = text.indexOf('\n### ', start + 5);
+  return text.slice(start, end < 0 ? undefined : end);
+}
+
+// the lines the README must carry, all derived from the manifest
+function nightDriveExpectations() {
+  const titleOf = Object.fromEntries(NIGHT.scenes.map((s) => [s.id, s.title]));
+  const tracks = NIGHT.menu.filter((m) => m.scene).map((m) => `${m.label.split(/\s+/)[0]} ${titleOf[m.scene]} (${m.note})`);
+  const count = /(\d+) tracks/.exec(NIGHT.facts.join(' '))[1];
+  const mins = /about (\d+) min/.exec(NIGHT.facts.join(' '))[1];
+  return { code: NIGHT.code, count: `${count} tracks`, mins: `${mins} min`, tracks };
+}
+
+test('README Night Drive section: the code, 8 tracks, about 12 min, and every track with its label and length', () => {
+  const sec = nightDriveSection(README);
+  const e = nightDriveExpectations();
+  assert.equal(e.tracks.length, 8);
+  assert.ok(sec.includes(e.code), `says ${e.code}`);
+  assert.ok(sec.includes(e.count), `says ${e.count}`);
+  assert.ok(sec.includes(`about ${e.mins}`), `says about ${e.mins}`);
+  for (const t of e.tracks) assert.ok(sec.includes(t), `lists ${t}`);
+  assert.ok(!/in progress/i.test(sec), 'no longer marked in progress');
+  assert.ok(sec.includes('space') && sec.includes('Enter') && /\be\b/.test(sec), 'names the tape-deck keys');
+});
+
+test('README Night Drive section, control: a section missing a track, the code or the count fails', () => {
+  const e = nightDriveExpectations();
+  const sec = nightDriveSection(README);
+  const lacks = (s, needle) => !s.includes(needle);
+  for (const t of e.tracks) assert.ok(lacks(sec.replace(t, ''), t), `removing ${t} is noticed`);
+  assert.ok(lacks(sec.replaceAll(e.code, 'DM-01'), e.code));
+  assert.ok(lacks(sec.replaceAll(e.count, '4 tracks'), e.count));
+  assert.ok(lacks(nightDriveSection(README.replace('A4 Coast Road 86 (1:30)', 'A4 Coast Road')), 'A4 Coast Road 86 (1:30)'));
+});
