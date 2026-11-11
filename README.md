@@ -557,14 +557,14 @@ not a TTY, drift prints a message and exits 0 without emitting any escape sequen
 npm test            # node --test, no dependencies
 ```
 
-The suite is 1280 tests in `tests/*.test.js` and takes 45 to 80 seconds depending on the machine (test files run in parallel; the real-process arms start the real program and wait in real time, about 28 s of that). The cartridge work is
+The suite is 1606 tests in `tests/*.test.js` and takes 45 to 80 seconds depending on the machine (test files run in parallel; the real-process arms start the real program and wait in real time, about 28 s of that). The cartridge work is
 covered by `cartridge-schema` (validators, text scene, skin palette), `cartridge-loader`
 (every way a cartridge can be wrong, and both arms of the trust rule), `cartridge-scenes` (every
 install cartridge's scenes through the size, glyph, colour, determinism and flash checks, with controls
 that must fail), `cartridges` (glyph and import scans over `cartridges/`), `config-extras`, `shell-app`
 (the console at app level on a fake clock), `shell-draw` and `shell-flash` (every screen at every size,
 and the photosensitivity checks), `tools-cartridges` (the cartridge captures and `measure.mjs` options),
-`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge`, `night-drive-onramp`, `night-drive-skyline`, `night-drive-sundown`, `night-drive-coast`, `night-drive-redlight`, `night-drive-diner`, `night-drive-caller`, `night-drive-overdrive`, `night-drive-menu`, `night-drive-phase` and `night-drive-flash` (Night Drive's skin, palette, label, boot art, manifest, help panel, the road, sprites and calm bounds of its first track, the sun, grid, loop and calm bounds of Sundown Grid, the purity, light change, wiper, rain, buildings and calm bounds of Red Light, Rain, and the ring schedule, light trails, phases, exit dissolve and changed-cell bounds of Overdrive), and the cartridge arms of `real-process` (below).
+`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge`, `night-drive-onramp`, `night-drive-skyline`, `night-drive-sundown`, `night-drive-coast`, `night-drive-redlight`, `night-drive-diner`, `night-drive-caller`, `night-drive-overdrive`, `night-drive-menu`, `night-drive-phase`, `night-drive-flash`, `night-drive-matrix-cells`, `night-drive-matrix-dissolve`, `night-drive-matrix-sims`, `night-drive-phase-sizes`, `night-drive-redlight-sizes`, `night-drive-shell-edges`, `night-drive-shell-edges-b`, `night-drive-shell-eject`, `night-drive-shell-keyframes`, `night-drive-skin-contrast` and `night-drive-banned-glyphs`, with the helpers `helpers-night-drive`, `helpers-night-drive-matrix` and `helpers-night-drive-shell` (Night Drive's skin, palette, label, boot art, manifest, help panel, the road, sprites and calm bounds of its first track, the sun, grid, loop and calm bounds of Sundown Grid, the purity, light change, wiper, rain, buildings and calm bounds of Red Light, Rain, and the ring schedule, light trails, phases, exit dissolve and changed-cell bounds of Overdrive), and the cartridge arms of `real-process` (below).
 
 Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 `tests/real-process.test.js`, which spawns the real `bin/drift.js` with piped stdio):
@@ -605,10 +605,10 @@ usual `cart-eject-delza-...`. A test fails if the folder holds a `cart-*` file t
 
 Night Drive adds `cart-night-drive-*.txt`: `scene-<id>-t<s>` for each of its eight tracks (`-80x24` before the time for the compact
 console) at 2, 20 and 40 s of scene time (the diner and the on-ramp at 2, 21 and 40), chosen from the tape deck, plus the later moments
-where the story moves (sundown 75 s, redlight 62 s, diner 25 s mid flicker dip, caller 29 s and 70 s, overdrive 64 s); `menu-120x40` and
+where the story moves (sundown 75 s, redlight 9, 11, 61 and 62 s, diner 25 s mid flicker dip, caller 29 s and 70 s, overdrive 64 s); `menu-120x40` and
 `-80x24` (the tape deck open over the playing track, the `*` on it and the cursor on the next); `help-120x40` and `-80x24` (the
 reskinned help panel); and `console-120x40` and `-80x24` (the console takeover as the tape boots, the only time it is on screen).
-Sixty-six files in all, on top of the generic library, insert, boot and eject files it already had.
+Seventy-two files in all, on top of the generic library, insert, boot and eject files it already had.
 
 `captures/*.ansi` are git-ignored (large) except the calm scenes' and the crossfade's; regenerate with the
 capture command and view with `type captures\sunburst-120x40.ansi` in a truecolor terminal.

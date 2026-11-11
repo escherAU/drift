@@ -99,3 +99,36 @@ test('README Night Drive section, control: a section missing a track, the code o
   assert.ok(lacks(sec.replaceAll(e.count, '4 tracks'), e.count));
   assert.ok(lacks(nightDriveSection(README.replace('A4 Coast Road 86 (1:30)', 'A4 Coast Road')), 'A4 Coast Road 86 (1:30)'));
 });
+
+// DRIFT-5: the README's test-file list and Night Drive capture count are read off the folders, so they cannot go stale.
+const WORDS = { 66: 'Sixty-six', 72: 'Seventy-two' };
+const testNames = () => fs.readdirSync(new URL('../tests/', import.meta.url))
+  .filter((f) => /^(night-drive-.*\.test\.js|helpers-night-drive.*\.js)$/.test(f))
+  .map((f) => f.replace(/\.test\.js$|\.js$/, ''));
+
+function suiteParagraph(text) {
+  const i = text.indexOf('The suite is');
+  assert.ok(i >= 0, 'the README has the suite paragraph');
+  return text.slice(i, text.indexOf('Test hooks', i));
+}
+
+test('README suite paragraph names every night-drive test file and helper', () => {
+  const names = testNames();
+  assert.ok(names.length >= 25, `found the night-drive files (${names.length})`);
+  const p = suiteParagraph(README);
+  assert.deepEqual(names.filter((n) => !p.includes('`' + n + '`')), [], 'files missing from the README list');
+});
+
+test('README suite paragraph, control: a list without a file, or a new unlisted file, is noticed', () => {
+  const p = suiteParagraph(README);
+  assert.ok(!p.replace('`night-drive-shell-eject`', '').includes('`night-drive-shell-eject`'));
+  assert.ok(![...testNames(), 'night-drive-brand-new'].every((n) => p.includes('`' + n + '`')));
+});
+
+test('README captures paragraph: the Night Drive count is the number of cart-night-drive files', () => {
+  const n = fs.readdirSync(new URL('../captures/', import.meta.url)).filter((f) => f.startsWith('cart-night-drive')).length;
+  const m = /(\S+) files in all, on top of the generic/.exec(README);
+  assert.ok(m, 'the README states a file count');
+  assert.equal(m[1], WORDS[n] || String(n), `says ${n} files`);
+  assert.notEqual(m[1], 'Sixty-six', 'control: the old wrong count would be refused');
+});

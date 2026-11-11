@@ -125,13 +125,13 @@ test('shell edges (E7 todo a) 41x11: the manual names the playing track (the tap
   assert.ok(text.includes(`track: ${titleOf(ORDER[0])}`), `the playing track is named: ${JSON.stringify(text.split('\n').filter((l) => l.includes('MANUAL')))}`);
 });
 
-test('shell edges (E7 todo b) 41x11: key labels longer than 23 characters are shown whole, not cut', { todo: 'at 41x11 the manual cuts key labels at 23 characters: "open the tape deck, or" (skin: 27 chars), "tape deck: previous tra" (25), "close the tape deck or" (27); wording lives in skin.json' }, async () => {
+test('shell edges (E7 b) 41x11: every key label is 23 characters or fewer, so the tight panel shows each whole', async () => {
   const text = await helpAt41();
-  const long = Object.values(SKIN.wording.keys).filter((l) => l.length > 23);
-  const seen = long.filter((l) => text.includes(l.slice(0, 15)));
-  assert.ok(seen.length >= 1, 'some long labels are on the tight panel (so the check sees them)');
-  const cut = seen.filter((l) => !text.includes(l));
-  assert.deepEqual(cut, [], 'labels shown cut');
+  const labels = Object.values(SKIN.wording.keys);
+  assert.deepEqual(labels.filter((l) => l.length > 23), [], 'labels longer than the tight panel column');
+  const seen = labels.filter((l) => text.includes(l.slice(0, 12)));
+  assert.ok(seen.length >= 3, 'labels are on the tight panel (so the check sees them)');
+  assert.deepEqual(seen.filter((l) => !text.includes(l)), [], 'labels shown cut');
 });
 
 // ---- E8

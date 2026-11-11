@@ -53,16 +53,16 @@
   "insert": { "text": "CLUNK · TAPE IN · AUTO-REVERSE ON" },
   "wording": {
     "keys": {
-      "menu": "open the tape deck, or play",
-      "menu-prev": "tape deck: previous track",
-      "menu-next": "tape deck: next track",
-      "close": "close the tape deck or page",
+      "menu": "open tape deck, or play",
+      "menu-prev": "deck: previous track",
+      "menu-next": "deck: next track",
+      "close": "close the deck or page",
       "eject": "eject the tape",
       "scene-next": "skip to the next track",
-      "pause": "pause the tape or play on",
+      "pause": "pause the tape, or play",
       "faster": "cruise control: faster",
       "slower": "cruise control: slower",
-      "seasons": "colours: none on this tape",
+      "seasons": "colours: none on tape",
       "help": "show or hide these keys",
       "quit": "quit Drift"
     },
