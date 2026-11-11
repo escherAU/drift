@@ -422,8 +422,10 @@ test('the brightness ramp: the cursor cartridge brightens and the previous one d
     const cell = (x) => f.shades[10 * 120 + x + shift];
     return [cell(45 + 3 + 11), cell(79 + 3 + 11)];
   };
-  const steps = [0, 0.25, 0.5, 0.75, 1].map(tintAt);
+  // the upper half of the cartridges (the row read here) moves on the stops of BAND_STEPS[0] (the lower half takes the
+  // other frames), so the slide values sampled are those stops
+  const steps = [0, 0.154, 0.463, 0.772, 1].map(tintAt);
   const tint = (i) => carts(5)[i].tint;
-  assert.deepEqual(steps.map((s) => s[0] - tint(4)), [1, 2, 2, 3, 3]);
-  assert.deepEqual(steps.map((s) => s[1] - tint(0)), [3, 2, 2, 1, 1]);
+  assert.deepEqual(steps.map((s) => s[0] - tint(4)), [1, 1, 2, 3, 3]);
+  assert.deepEqual(steps.map((s) => s[1] - tint(0)), [3, 3, 2, 1, 1]);
 });

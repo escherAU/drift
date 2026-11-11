@@ -35,7 +35,7 @@ import { cartridgeLines } from './driftman.js';
 import { drawChrome } from './chrome.js';
 import { FONT } from '../scenes/blockfont.js';
 import {
-  clearFrame, uiOf, put, putText, putCentered, centerX, fillRect, drawBox, ramp, dissolveThresholds, wrapWords, lenOf, sizeTier,
+  newFrame, clearFrame, uiOf, put, putText, putCentered, centerX, fillRect, drawBox, ramp, dissolveThresholds, wrapWords, lenOf, sizeTier,
 } from './ui.js';
 
 export const SCREEN_ON_END = INSERT_END + 0.4; // 1.9
@@ -224,6 +224,20 @@ function drawRect(f, r, glyphs, edge) {
   drawBox(f, r.x, r.y, r.w, r.h, glyphs, edge);
 }
 
+// The list tier (below 78 x 24) has no console to open on: the screen rectangle is the whole of the picture, and moving
+// its edges rewrites the border rows and columns, which is 36% of a 40 x 10 screen for a two row step and 38% for the
+// one column zoom to the full frame. There the rectangle changes by dissolve instead (the frame from A to B, cell by
+// cell in the shell's dissolve order, p 0..1): the border cells swap over several frames.
+function dissolveRects(f, drawA, drawB, p) {
+  const A = newFrame(f.cols, f.rows), B = newFrame(f.cols, f.rows);
+  drawA(A); drawB(B);
+  const thr = dissolveThresholds(f.cols * f.rows);
+  for (let i = 0; i < f.glyphs.length; i++) {
+    const src = p >= thr[i] ? B : A;
+    f.glyphs[i] = src.glyphs[i]; f.shades[i] = src.shades[i];
+  }
+}
+
 export function drawBoot(frame, args, consoleSkin) {
   const { skin, t, loading, error, item } = args;
   const sk = skin || consoleSkin;
@@ -247,6 +261,7 @@ export function drawBoot(frame, args, consoleSkin) {
     const w0 = Math.max(6, Math.min(f.cols - 4, 64)), h0 = Math.max(4, Math.min(f.rows - 2, 20));
     R0 = { x: Math.floor((f.cols - w0) / 2), y: Math.floor((f.rows - h0) / 2), w: w0, h: h0 };
   }
+  const soft = !onConsole && tier === 'list';
   const textRows = Math.max(0, R0.h - 3); // rows for lines; the last interior row is the bar
   const shownLines = lines.slice(0, textRows);
 
@@ -263,6 +278,9 @@ export function drawBoot(frame, args, consoleSkin) {
     if (open <= 0) {
       const w = Math.round(R0.w * grow);
       if (w > 0) drawRect(f, { x: R0.x + Math.floor((R0.w - w) / 2), y: R0.y + Math.floor(R0.h / 2), w, h: 1 }, glyphs, edge);
+    } else if (soft) {
+      const line = { x: R0.x, y: R0.y + Math.floor(R0.h / 2), w: R0.w, h: 1 };
+      dissolveRects(f, (A) => drawRect(A, line, glyphs, edge), (B) => drawRect(B, R0, glyphs, edge), open);
     } else {
       const h = 1 + Math.round((R0.h - 1) * open);
       drawRect(f, { x: R0.x, y: R0.y + Math.floor((R0.h - h) / 2), w: R0.w, h }, glyphs, edge);
@@ -277,6 +295,8 @@ export function drawBoot(frame, args, consoleSkin) {
   if (full) {
     clearFrame(f);
     drawChrome(f, sk); // the zoom's last frame IS the menu's frame
+  } else if (soft) {
+    dissolveRects(f, (A) => drawRect(A, R0, glyphs, edge), (B) => drawChrome(B, sk), ez);
   } else {
     const x0 = Math.round(R0.x * (1 - ez)), y0 = Math.round(R0.y * (1 - ez));
     const x1 = Math.round((R0.x + R0.w) + (f.cols - R0.x - R0.w) * ez), y1 = Math.round((R0.y + R0.h) + (f.rows - R0.y - R0.h) * ez);

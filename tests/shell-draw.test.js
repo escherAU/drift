@@ -146,8 +146,10 @@ test('library: the highlight ramps over several frames (a cursor move never swap
     sel.push(shadeAt(f, 'FIXTURE', 40) - t1);
     old.push(classicShade(f) - t0);
   }
-  assert.deepEqual(sel, [1, 2, 2, 3, 3], 'the new cartridge brightens through the levels');
-  assert.deepEqual(old, [3, 2, 2, 1, 1], 'the old one dims through them');
+  // the shelf moves in two halves that take turns (BAND_STEPS); the row read here is in the upper one, which holds the
+  // 0 and 0.154 levels over the first frames and has its stops at 0.154, 0.463 and 0.772
+  assert.deepEqual(sel, [1, 1, 2, 3, 3], 'the new cartridge brightens through the levels');
+  assert.deepEqual(old, [3, 3, 2, 1, 1], 'the old one dims through them');
   assert.ok(sel.every((v, i) => i === 0 || Math.abs(v - sel[i - 1]) <= 1), 'never more than one level per step');
 });
 

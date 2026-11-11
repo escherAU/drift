@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { INSTALL_DIR } from '../src/cartridge/loader.js';
-import { shelfLayout, slideOffset, xlSlideProgress, CART_W, NEIGHBOUR_STEP } from '../src/shell/library.js';
+import { shelfLayout, slideOffset, xlSlideProgress, bandProgress, BAND_STEPS, CART_W, NEIGHBOUR_STEP } from '../src/shell/library.js';
 import { SLIDE_SECONDS } from '../src/shell/shell.js';
 import { mkShell, DT } from './helpers-shell.js';
 import { tmpRoot } from './helpers-cartridge.js';
@@ -53,11 +53,12 @@ function slideBytes(cols, rows, presses = 4) {
 // [cols, rows, bound in bytes for one slide plus the 1.64 s of idle after it]. Measured here, worst of 4 slides:
 // 240x67 60617, 120x40 142756, 80x24 5118 (until Delza: she is the first cartridge that is unlocked and has a coloured label,
 // and 80x24 measured 8321 with her on the shelf, 4 KB/s as a 2 s cycle, a tenth of the 40 KB/s budget). The 240x67 bound is the budget itself (40 KB/s x 2 s, 32% above the
-// measurement; it was 190-200 KB before the stepped slide); the others are the measurement + 25%. 120x40 is NOT within the 40 KB/s budget (see the report): the
-// 30% per-frame rule caps the shelf at 7 columns a frame there, so it cannot take the stepped slide.
+// measurement; it was 190-200 KB before the stepped slide); the others are the measurement + 25%. 120x40 was NOT within the 40 KB/s budget (142756 a slide, the 30% per-frame rule capped the shelf at 7 columns a frame
+// so it could not take the stepped slide); the two-halves slide of the photosensitivity fix (bandProgress) writes about
+// 83400, 40.7 KB/s as a 2 s cycle, and the bound is that + 25%.
 const BOUNDS = [
   [240, 67, 80000],
-  [120, 40, 178000],
+  [120, 40, 104000],
   [80, 24, 10400],
 ];
 
@@ -84,6 +85,27 @@ test('bandwidth: the extra-large slide moves on three of its frames (34 -> 21 ->
   const moves = [NEIGHBOUR_STEP, 21, 10, 0].map((x, k, a) => (k ? a[k - 1] - x : 0)).slice(1);
   assert.equal(moves.reduce((a, b) => a + b, 0), NEIGHBOUR_STEP);
   assert.ok(moves[0] >= moves[1] && moves[1] >= moves[2] - 1, `ease-out: ${moves}`);
+});
+
+test('bandwidth: below the extra-large tier the shelf moves in two halves that take turns, each to where the whole shelf would be, ending settled', () => {
+  assert.equal(bandProgress(0, 0), 0);
+  assert.equal(bandProgress(0, 1), 0);
+  assert.equal(bandProgress(1, 0), 1);
+  assert.equal(bandProgress(1, 1), 1);
+  const frame = DT / SLIDE_SECONDS;
+  const seq = [[], []];
+  for (let k = 1; k * frame < 1; k++) for (const b of [0, 1]) seq[b].push(slideOffset(bandProgress(k * frame, b), 1));
+  // the upper half moves on frames 1, 3, 5 and the lower on 2, 4, 6; nothing moves backwards; both are at rest after 6
+  assert.deepEqual(seq[0], [27, 27, 15, 15, 5, 5], 'upper half, frames 1-6');
+  assert.deepEqual(seq[1], [34, 21, 21, 10, 10, 1], 'lower half, frames 1-6');
+  // the halves are never more than one frame's step (7 columns) apart; in every frame at most one half moves
+  for (let k = 0; k < 6; k++) assert.ok(Math.abs(seq[0][k] - seq[1][k]) <= 7, `frame ${k + 1}: halves ${seq[0][k]} / ${seq[1][k]}`);
+  for (let k = 1; k < 6; k++) assert.ok(seq[0][k] === seq[0][k - 1] || seq[1][k] === seq[1][k - 1], `frame ${k + 1}: only one half moves`);
+  // the cuts sit between frames: a frame 40% early or late lands on the same step
+  for (let k = 1; k <= 6; k++) for (const b of [0, 1]) {
+    const want = bandProgress(k * frame, b);
+    for (const e of k === 6 ? [-0.4] : [-0.4, 0.4]) assert.equal(bandProgress((k + e) * frame, b), want, `frame ${k} half ${b} ${e}`); // frame 6 + 0.4 is already the settled frame
+  }
 });
 
 test('bandwidth 240x67: the far slot the shelf moves towards keeps its old picture until the last frame', () => {

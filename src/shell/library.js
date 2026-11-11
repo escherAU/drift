@@ -99,15 +99,16 @@ export function gridRows(G) {
 
 // Copy a grid onto the frame. Blank grid cells leave what is underneath. Options:
 //   fadeP + all   dissolve every cell (fadeP 0..1); with fadeP only, just the cells the grid marked as fading
-//   clipX0/clipX1 only columns in [clipX0, clipX1) of the frame; clipY rows at or below it are not drawn
+//   clipX0/clipX1 only columns in [clipX0, clipX1) of the frame; clipY rows at or below it are not drawn;
+//   clipY0 rows above it are not drawn
 function blit(f, G, x0, y0, o = {}) {
   const fadeP = o.fadeP || 0, all = !!o.all;
   const cx0 = o.clipX0 === undefined ? 0 : o.clipX0, cx1 = o.clipX1 === undefined ? f.cols : o.clipX1;
-  const cy = o.clipY === undefined ? Infinity : o.clipY;
+  const cy = o.clipY === undefined ? Infinity : o.clipY, cy0 = o.clipY0 === undefined ? -Infinity : o.clipY0;
   const thr = fadeP > 0 ? dissolveThresholds(f.cols * f.rows) : null;
   for (let y = 0; y < G.h; y++) {
     const yy = y0 + y;
-    if (yy < 0 || yy >= f.rows || yy >= cy) continue;
+    if (yy < 0 || yy >= f.rows || yy >= cy || yy < cy0) continue;
     for (let x = 0; x < G.w; x++) {
       const xx = x0 + x;
       if (xx < cx0 || xx >= cx1 || xx < 0 || xx >= f.cols) continue;
@@ -656,6 +657,27 @@ export function xlSlideProgress(p) {
   return 1;
 }
 
+// The full tier below the extra-large one (88 x 39 up to 175 x 57): the cartridge band is up to 46% of the screen and a
+// frame in which the whole shelf moves rewrites about 70% of it, so 33% of all cells at 88 x 39 (the photosensitivity
+// rule is 30%). So the shelf moves in two halves that take turns: the upper nine rows of the cartridges move on one
+// frame, the lower nine on the next, each to where the whole shelf would be at that frame. A frame then rewrites half
+// the band (about 21% at 88 x 39) and the halves are never more than one frame's step apart (7 columns at most, for
+// one frame, mid-slide). It also halves the bytes: a half moves on every other frame. The cuts sit half-way between
+// frames (0.154 s apart / 0.36 s = 1/6.48 of the slide), like XL_SLIDE_STEPS. At 18 fps the upper half moves on the
+// 1st, 3rd and 5th frame (progress 0.154, 0.463, 0.772) and the lower on the 2nd, 4th and 6th (0.309, 0.617, 0.926);
+// the 7th frame settles both.
+export const BAND_ROWS = 9; // rows of the cartridge in the upper half
+export const BAND_STEPS = Object.freeze([
+  Object.freeze([[0.077, 0], [0.386, 0.154], [0.694, 0.463], [0.963, 0.772]]),
+  Object.freeze([[0.231, 0], [0.54, 0.309], [0.849, 0.617], [0.963, 0.926]]),
+]);
+export function bandProgress(p, band) {
+  if (!(p > 0)) return 0;
+  if (p >= 1) return 1;
+  for (const [upTo, at] of BAND_STEPS[band]) if (p < upTo) return at;
+  return 1;
+}
+
 // The locked "dip and spring back": rows the selected cartridge is pressed down t seconds after Enter. A sine
 // half-wave over DIP_SECONDS rounded to whole rows: 0 for the first 0.05 s, 1 for 0.2 s, 0 again for the last 0.05 s.
 export const DIP_SECONDS = 0.3;
@@ -815,12 +837,13 @@ export function drawShelf(f, view, skin, o = {}) {
   const idle = view.idle > 0 ? view.idle : 0;
   // compact: the one cartridge on show is swapped in place, so its chrome stays at the selected shade (a ramp would
   // flip every border cell from silver to graphite in one frame when the cursor moves)
-  const cartAt = (i, selected, compact = false) => {
+  const cartAtFor = (lk) => (i, selected, compact = false) => {
     const co = {
-      selected, level: levelOf(look, i), chrome: compact ? 13 : chromeShadeOf(look, i) ?? undefined, ui, led: selected && idle ? ledLevelAt(idle) : undefined, ripple: selected && idle ? rippleColAt(idle) : -1,
+      selected, level: levelOf(lk, i), chrome: compact ? 13 : chromeShadeOf(lk, i) ?? undefined, ui, led: selected && idle ? ledLevelAt(idle) : undefined, ripple: selected && idle ? rippleColAt(idle) : -1,
     };
     return memo ? memoCart(memo, view.cartridges[i], co) : cartridgeGrid(view.cartridges[i], co);
   };
+  const cartAt = cartAtFor(look);
 
   // the console, then the takeover band over it
   const makeConsole = (style) => {
@@ -845,10 +868,10 @@ export function drawShelf(f, view, skin, o = {}) {
     const shift = sliding ? slideOffset(L.xl ? xlSlideProgress(view.slide) : view.slide, dir) : 0;
     const win0 = L.cartX - 2 * L.step, win1 = L.cartX + CART_W + 2 * L.step;
     const spread = o.spread || 0;
-    const drawNeighbour = (idx, x) => {
+    const drawNeighbour = (idx, x, shiftNow = shift, at = cartAt, rows = {}) => {
       const visible = Math.min(x + CART_W, f.cols, win1) - Math.max(x, 0, win0);
-      if (visible < (shift ? 1 : 3)) return;
-      blit(f, cartAt(idx, false), x, L.cartTop, { fadeP, all: true, clipX0: win0, clipX1: win1 });
+      if (visible < (shiftNow ? 1 : 3)) return;
+      blit(f, at(idx, false), x, L.cartTop, { fadeP, all: true, clipX0: win0, clipX1: win1, ...rows });
     };
     if (n > 1 && L.xl && shift !== 0) {
       // Extra-large slide: only the centre three slide (the cartridge before, the new one and the one after, each
@@ -865,21 +888,36 @@ export function drawShelf(f, view, skin, o = {}) {
       for (const k of [1, 2]) want(wrapIdx(view.prev + ahead * k, n), L.cartX + ahead * k * L.step + ahead * spread, 0);
       for (const layer of [0, 1]) for (const p of plan) if (p.layer === layer) drawNeighbour(p.idx, p.x);
       drawSpines(f, look, ui, L, fadeP, cartAt);
-    } else if (n > 1) {
-      // neighbours: each cartridge at most once, nearest first, the right side winning a tie; slivers at the edges
-      const seen = new Set([view.index]);
-      const maxR = shift ? 3 : 2;
-      for (let r = 1; r <= maxR; r++) {
-        for (const side of [1, -1]) {
-          const idx = wrapIdx(view.index + side * r, n);
-          if (seen.has(idx)) continue;
-          seen.add(idx);
-          drawNeighbour(idx, L.cartX + side * r * L.step + shift + side * spread);
+    } else {
+      // Below the extra-large tier a slide moves the cartridge band in two halves that take turns (bandProgress);
+      // otherwise (at rest, or extra-large with nothing to move) it is one band with the whole shelf.
+      const split = sliding && !L.xl;
+      const bandY = L.cartTop + BAND_ROWS;
+      const bands = split
+        ? [0, 1].map((b) => ({ lk: { ...view, slide: bandProgress(view.slide, b) }, rows: b ? { clipY0: bandY } : { clipY: bandY } }))
+        : [{ lk: look, rows: {} }];
+      for (const { lk, rows } of bands) {
+        const at = split ? cartAtFor(lk) : cartAt;
+        const shiftNow = split ? slideOffset(lk.slide, dir) : shift;
+        if (n > 1) {
+          // neighbours: each cartridge at most once, nearest first, the right side winning a tie; slivers at the edges
+          const seen = new Set([view.index]);
+          const maxR = shiftNow ? 3 : 2;
+          for (let r = 1; r <= maxR; r++) {
+            for (const side of [1, -1]) {
+              const idx = wrapIdx(view.index + side * r, n);
+              if (seen.has(idx)) continue;
+              seen.add(idx);
+              drawNeighbour(idx, L.cartX + side * r * L.step + shiftNow + side * spread, shiftNow, at, rows);
+            }
+          }
         }
+        if (L.xl && n > 1) drawSpines(f, look, ui, L, fadeP, cartAt);
+        const sy = rows.clipY === undefined ? L.consoleTop + 2 : Math.min(rows.clipY, L.consoleTop + 2);
+        blit(f, at(view.index, true), L.cartX + shiftNow, L.cartTop + offset, { clipY: sy, clipY0: rows.clipY0 });
       }
-      if (L.xl) drawSpines(f, look, ui, L, fadeP, cartAt);
     }
-    blit(f, cartAt(view.index, true), L.cartX + shift, L.cartTop + offset, { clipY: L.consoleTop + 2 });
+    if (n > 1 && L.xl && shift !== 0) blit(f, cartAt(view.index, true), L.cartX + shift, L.cartTop + offset, { clipY: L.consoleTop + 2 });
     if (L.xl) {
       const dw = Math.min(f.cols, CONSOLE_W + 16), dx = centerX(f.cols, dw);
       for (let i = 0; i < dw; i++) put(f, dx + i, L.deskY, 0x2594, DRIFTMAN_COLOURS.housing);

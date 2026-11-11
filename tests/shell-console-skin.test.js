@@ -172,7 +172,10 @@ const digests = () => ({
 const GOLDEN = {
   insertSkinned: 'bb7474c93f67454444eec5ca6031b3759a49acbb',
   insertClassic: '54d028d23be6d9a8499d8e4900d3711e2bd76fe9',
-  boot: 'e25276f4631c8574cfe955a3a91e07d3b5788e0d',
+  // DRIFT-4 flash fix: the 40x12 (list tier) boot frames of the rectangle opening and zooming are now a dissolve, not
+  // moving edges (tests/shell-flash-sizes.test.js); the 120x40 and 80x24 frames in this hash are byte-identical to before
+  // (the old digest e25276f4631c8574cfe955a3a91e07d3b5788e0d is the same three sizes with the old 40x12 frames).
+  boot: '0450278317c0c67ba8816c85fc75e94ccc09aad5',
 };
 
 test('the no-console-block arm: insert, Classic insert and boot frames are byte-identical to the ones drawn before this change', () => {

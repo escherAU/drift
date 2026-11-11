@@ -75,6 +75,10 @@ export function createShell(o) {
   let lastDir = 1, dial = index, queued = 0; // the way the last move went, the TUNE dial's step count, one waiting key press (+1 / -1)
   let helpOpen = false; // library help (the runtime keeps its own)
   let enterT = o.from === 'classic' ? 0 : LIBRARY_FADE_SECONDS; // seconds since the library was opened from Classic
+  // The library takes over from the eject animation (or the error card) by dissolve: at the list tier those are text
+  // screens and the library a different picture, and a cut between them changed up to 55% of a 40 x 10 screen. The
+  // last frame the eject/error drew is kept, and the library's first LIBRARY_FADE_SECONDS dissolve from it.
+  let handT = LIBRARY_FADE_SECONDS, handFrom = null;
   let from = o.from === undefined ? null : o.from;
   let forced = true;
 
@@ -257,6 +261,7 @@ export function createShell(o) {
     switch (screen) {
       case 'library':
         if (enterT < LIBRARY_FADE_SECONDS) { enterT += d; forced = true; }
+        if (handT < LIBRARY_FADE_SECONDS) { handT += d; forced = true; }
         if (helpOpen) break;
         if (slideT < SLIDE_SECONDS) {
           slideT += d; forced = true;
@@ -288,11 +293,11 @@ export function createShell(o) {
       }
       case 'error':
         st += d; forced = true;
-        if (st >= ERROR_SECONDS) resetLibrary();
+        if (st >= ERROR_SECONDS) { resetLibrary(); handT = 0; }
         break;
       case 'eject':
         st += d; forced = true;
-        if (st >= EJECT_SECONDS) resetLibrary();
+        if (st >= EJECT_SECONDS) { resetLibrary(); handT = 0; }
         break;
       case 'running':
         if (runtime) runtime.advance(d);
@@ -326,6 +331,11 @@ export function createShell(o) {
     };
   }
 
+  function keepForHandover(f) {
+    if (!handFrom || handFrom.cols !== cols || handFrom.rows !== rows) handFrom = { glyphs: new Uint16Array(cols * rows), shades: new Uint8Array(cols * rows), cols, rows };
+    handFrom.glyphs.set(f.glyphs); handFrom.shades.set(f.shades);
+  }
+
   function frame() {
     const f = fb;
     switch (screen) {
@@ -336,6 +346,10 @@ export function createShell(o) {
           const p = ramp(enterT, 0, LIBRARY_FADE_SECONDS), thr = dissolveThresholds(cols * rows);
           for (let i = 0; i < f.glyphs.length; i++) if (p < thr[i]) { f.glyphs[i] = 32; f.shades[i] = 0; }
         }
+        if (handT < LIBRARY_FADE_SECONDS && handFrom && handFrom.cols === cols && handFrom.rows === rows) {
+          const p = ramp(handT, 0, LIBRARY_FADE_SECONDS), thr = dissolveThresholds(cols * rows);
+          for (let i = 0; i < f.glyphs.length; i++) if (p < thr[i]) { f.glyphs[i] = handFrom.glyphs[i]; f.shades[i] = handFrom.shades[i]; }
+        }
         if (helpOpen) drawHelp(f.glyphs, f.shades, cols, rows, helpInfo('library'));
         break;
       case 'insert':
@@ -343,9 +357,11 @@ export function createShell(o) {
         break;
       case 'eject':
         drawInsert(f, { item: insertItem(), t: INSERT_END * (1 - ramp(st, 0, EJECT_SECONDS)) }, driftmanSkin);
+        keepForHandover(f);
         break;
       case 'error':
         drawBoot(f, { skin: bootSkin, t: 0, error: errorText, title: cart && cart.title }, driftmanSkin);
+        keepForHandover(f);
         break;
       case 'boot': {
         const P = bootPhases(bootSkin);
