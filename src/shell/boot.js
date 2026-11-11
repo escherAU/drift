@@ -30,6 +30,7 @@
 // step or a dissolve; the background never changes.
 import { INSERT_END, drawInsert } from './insert.js';
 import { screenRect } from './library.js';
+import { cartridgeLines } from './driftman.js';
 import { drawChrome } from './chrome.js';
 import { FONT } from '../scenes/blockfont.js';
 import {
@@ -66,10 +67,13 @@ export function bootSeconds(skin) {
 
 // ---- the boot text
 
-// The lines the console types: the console's own, then the cartridge's. (Commit 3 of A3 adds the core lines.)
-export function bootLines(skin, consoleSkin) {
-  const own = skin && skin.boot && skin.boot.lines;
-  return (own || (consoleSkin && consoleSkin.boot && consoleSkin.boot.lines) || []).slice();
+// The lines the console types: its core lines (consoleSkin.boot.lines), then the cartridge's own (skin.boot.lines), or
+// - when it has none, or is the console skin itself - one line naming the cartridge. Only as many as the screen has
+// rows are drawn (drawBoot).
+export function bootLines(skin, consoleSkin, title) {
+  const core = (consoleSkin && consoleSkin.boot && consoleSkin.boot.lines) || [];
+  const own = skin && skin !== consoleSkin && skin.boot && skin.boot.lines;
+  return [...core, ...(own && own.length ? own : cartridgeLines(title))];
 }
 
 // A line as runs of text, so each run can have its own colour: the text up to a run of three or more dots and a space

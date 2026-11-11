@@ -11,6 +11,11 @@ export const DRIFTMAN_COLOURS = Object.freeze({
   dark: 3, // silver level 3: darker than graphite, for the empty slot mouth
 });
 
+// The boot text is the console's voice. boot.lines of the console skin are the CORE lines every cartridge starts
+// with; the boot draws core lines first and then the cartridge's own skin.boot.lines (bootLines in boot.js).
+// Text after a run of three or more dots and a space ('OK') is drawn in the accent colour.
+export const CORE_BOOT_LINES = Object.freeze(['DRIFTMAN 2000 · CORE 2.0', 'MEMORY 64K ..... OK']);
+
 export const driftmanSkin = Object.freeze({
   palette: {
     hue: '#C8CCD4',
@@ -21,13 +26,26 @@ export const driftmanSkin = Object.freeze({
   frame: { show: 'always', glyphs: '┌─┐│┘─└│', title: 'DRIFTMAN 2000', colour: 18 },
   menu: { layout: 'list', anchor: 'center', cursor: '▶', title: 'DRIFTMAN 2000', box: '┌─┐│┘─└│' },
   help: { title: 'DRIFTMAN 2000  keys', box: '╔═╗║╝═╚║' },
-  boot: { lines: ['DRIFTMAN 2000 BIOS 1.0', 'Reading cartridge ...', 'Checking memory ... ok', 'Loading scenes ...'], art: false, seconds: 1.5 },
+  boot: { lines: CORE_BOOT_LINES.slice(), art: false, seconds: 0.5 },
   insert: { text: 'Inserting cartridge' },
   wording: { menuHint: 'Up and down choose, Enter selects, Esc closes' },
 });
 
-// What the Classic cartridge boots with: the console's own skin and a one-line boot.
+// What the Classic cartridge boots with: the console's own skin and its three lines after the core ones. Five lines
+// at 0.25 s each: boot.seconds is the time the lines take to type.
 export const classicBootSkin = Object.freeze({
   ...driftmanSkin,
-  boot: { lines: ['DRIFT CLASSIC'], art: false, seconds: 0.5 },
+  boot: { lines: ['CARTRIDGE ...... DRIFT CLASSIC', 'SIGNAL ......... CALM', 'Nothing to do. Watch it drift.'], art: false, seconds: 1.25 },
 });
+
+// What a cartridge with no skin boots with: the console's skin and one line naming the cartridge. No boot.seconds,
+// so the timeline is the normal 5.8 s.
+export function plainBootSkin(title) {
+  return Object.freeze({ ...driftmanSkin, boot: { lines: cartridgeLines(title), art: false } });
+}
+
+// The line that names a cartridge in the boot text (none without a title); 40 characters at most.
+export function cartridgeLines(title) {
+  const name = [...String(title || '').toUpperCase()].slice(0, 22).join('');
+  return name ? [`CARTRIDGE ...... ${name}`] : [];
+}

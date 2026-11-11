@@ -17,7 +17,7 @@ import { drawHelp } from '../overlay.js';
 import { makeSkinPalette } from '../cartridge/palette.js';
 import { loadScenes as defaultLoadScenes } from '../cartridge/loader.js';
 import { parseHex, sgrFor } from '../color.js';
-import { driftmanSkin, classicBootSkin } from './driftman.js';
+import { driftmanSkin, classicBootSkin, plainBootSkin } from './driftman.js';
 import { drawLibrary, idleSignature, dipAt, DIP_SECONDS } from './library.js';
 import { drawInsert, INSERT_END } from './insert.js';
 import { drawBoot, bootPhases, mergeBootPalette } from './boot.js';
@@ -133,7 +133,7 @@ export function createShell(o) {
 
   function toBoot() {
     screen = 'boot'; st = 0; bt = 0; forced = true;
-    bootSkin = classic ? classicBootSkin : (cart.skin || driftmanSkin);
+    bootSkin = classic ? classicBootSkin : (cart.skin || plainBootSkin(cart.title));
     bootMap = null;
     if (classic || !cart.skin) { cartPal = libPal; bootPal = libPal; return; }
     // a skinned boot draws the console (library colours) and the cartridge's screen (skin colours) in one frame

@@ -15,7 +15,8 @@ import { makeSkinPalette } from '../src/cartridge/palette.js';
 import {
   drawInsert, INSERT_END, INSERT_LIFT_END, INSERT_SLIDE_END, INSERT_DROP_END, INSERT_CLICK_END, BAND_W, cartridgeOffset, spreadAt, sweepStyle,
 } from '../src/shell/insert.js';
-import { driftmanSkin, classicBootSkin, DRIFTMAN_COLOURS } from '../src/shell/driftman.js';
+import { driftmanSkin, classicBootSkin, plainBootSkin, DRIFTMAN_COLOURS } from '../src/shell/driftman.js';
+import { INSTALL_DIR } from '../src/cartridge/loader.js';
 import { libraryPalette, createShell, EJECT_SECONDS } from '../src/shell/shell.js';
 import { SPEEDS, DISSOLVE_SECONDS, DEFAULT_FADE_SECONDS } from '../src/app.js';
 import { newFrame, ramp } from '../src/shell/ui.js';
@@ -581,7 +582,7 @@ test('boot, Classic: the console keeps its own frame (a shimmer only), and the z
 
 test('boot without an item behaves as before: the centred rectangle, no console, the same phases', () => {
   const f = newFrame(120, 40);
-  drawBoot(f, { skin: BOOT_SKIN, t: P.on + 0.3, title: 'Fixture' }, driftmanSkin);
+  drawBoot(f, { skin: BOOT_SKIN, t: P.linesEnd, title: 'Fixture' }, driftmanSkin);
   assert.ok(text(f).includes('CARTRIDGE'));
   assert.ok(!text(f).includes('PWR'), 'no console');
   const z = newFrame(120, 40);
@@ -626,6 +627,77 @@ test('boot timeline: bootPhases (skin.boot.seconds) is unchanged', () => {
   assert.equal(Math.round(bootPhases({ palette: driftmanSkin.palette, boot: { seconds: 3 } }).linesEnd * 100) / 100, 3.4);
 });
 
+// ---- the boot text (designer section 3): the console's voice
+
+const CORE = ['DRIFTMAN 2000 · CORE 2.0', 'MEMORY 64K ..... OK'];
+const CLASSIC_OWN = ['CARTRIDGE ...... DRIFT CLASSIC', 'SIGNAL ......... CALM', 'Nothing to do. Watch it drift.'];
+
+test('boot text: every cartridge starts with the console\'s two core lines; Classic continues with its three; lines are at most 40 characters', () => {
+  assert.deepEqual(driftmanSkin.boot.lines, CORE);
+  assert.deepEqual(classicBootSkin.boot.lines, CLASSIC_OWN);
+  assert.deepEqual(bootLines(classicBootSkin, driftmanSkin, 'Drift Classic'), [...CORE, ...CLASSIC_OWN], 'core lines first, then the cartridge\'s');
+  for (const l of [...CORE, ...CLASSIC_OWN]) assert.ok([...l].length <= 40, l);
+  assert.equal(validateSkin(JSON.parse(JSON.stringify(driftmanSkin))).ok, true, 'the console skin still validates');
+  assert.equal(validateSkin(JSON.parse(JSON.stringify(classicBootSkin))).ok, true);
+  // every one of the install's cartridges (and Delza's, when it comes): own boot lines fit the 40 characters and the validator's limit of 4 extra lines
+  for (const c of discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] }).cartridges) {
+    if (c.skin && c.skin.boot && c.skin.boot.lines) assert.ok(c.skin.boot.lines.length <= 4 && c.skin.boot.lines.every((l) => [...l].length <= 40), c.id);
+  }
+});
+
+test('boot text: a cartridge with its own lines gets core + own; one without gets core + a CARTRIDGE line from its title; the console skin alone is core + that line', () => {
+  assert.deepEqual(bootLines(BOOT_SKIN, driftmanSkin, 'Fixture'), [...CORE, ...BOOT_SKIN.boot.lines]);
+  assert.equal(bootLines(BOOT_SKIN, driftmanSkin, 'Fixture').length, 6, 'two core lines and four of its own is the six lines the timeline is built on');
+  const bare = { ...BOOT_SKIN, boot: undefined };
+  assert.deepEqual(bootLines(bare, driftmanSkin, 'Fixture'), [...CORE, 'CARTRIDGE ...... FIXTURE']);
+  assert.deepEqual(bootLines(bare, driftmanSkin, undefined), CORE, 'no title, no cartridge line');
+  assert.deepEqual(bootLines(driftmanSkin, driftmanSkin, 'Fixture'), [...CORE, 'CARTRIDGE ...... FIXTURE'], 'the console skin is not counted twice');
+  assert.deepEqual(bootLines(bare, undefined, 'Fixture'), ['CARTRIDGE ...... FIXTURE'], 'no console skin: just the cartridge line');
+  assert.deepEqual(bootLines(plainBootSkin('A very long cartridge title indeed, longer than the screen'), driftmanSkin, 'x').slice(2).map((l) => [...l].length <= 40), [true]);
+  assert.equal(plainBootSkin('Fixture').boot.seconds, undefined, 'a cartridge without a boot section keeps the normal 5.8 s timeline');
+  assert.deepEqual(bootLines(plainBootSkin('Fixture'), driftmanSkin, 'Fixture'), [...CORE, 'CARTRIDGE ...... FIXTURE']);
+  assert.equal(validateSkin(JSON.parse(JSON.stringify(plainBootSkin('Fixture')))).ok, true);
+});
+
+test('boot text, Classic: five lines at 0.25 s each (boot.seconds = 1.25), so the Classic boot ends with its five lines done; the shell passes it the whole sequence', () => {
+  assert.equal(classicBootSkin.boot.seconds, 5 * LINE_SECONDS);
+  const PC = bootPhases(classicBootSkin);
+  assert.equal(PC.linesEnd - PC.on, 5 * LINE_SECONDS);
+  // all five lines are on the console screen when the bar starts, the values in the accent colour
+  const f = newFrame(120, 40);
+  drawBoot(f, { skin: classicBootSkin, item: classicItem, t: PC.linesEnd + 0.01, title: 'Drift Classic' }, driftmanSkin);
+  const ls = frameLines(f);
+  for (const l of [...CORE, ...CLASSIC_OWN]) assert.ok(ls.some((x) => x.includes(l)), `on screen: ${l}`);
+  const shadeOf = (word) => { const y = ls.findIndex((x) => x.includes(word) && x.includes('...')); return f.shades[y * 120 + ls[y].indexOf(word)]; };
+  assert.equal(shadeOf('CALM'), driftmanSkin.palette.ui.accent);
+  assert.equal(shadeOf('OK'), driftmanSkin.palette.ui.accent);
+  assert.equal(shadeOf('DRIFT CLASSIC'), driftmanSkin.palette.ui.accent);
+  const y1 = ls.findIndex((x) => x.includes('Nothing to do.'));
+  assert.equal(f.shades[y1 * 120 + ls[y1].indexOf('Nothing')], driftmanSkin.palette.ui.text, 'a line with no dots stays in the text colour');
+  // five lines then the bar: the Classic boot lasts the lines plus the 1.8 s of bar, zoom and title
+  assert.ok(Math.abs(bootSeconds(classicBootSkin) - (0.4 + 1.25 + 0.4 + 0.8 + 0.6 + 0.6)) < 1e-9);
+  // 80x24: the lines are clipped to the blurb box (34 columns), never wrapped over the edge
+  const g = newFrame(80, 24);
+  drawBoot(g, { skin: classicBootSkin, item: classicItem, t: PC.linesEnd + 0.01, title: 'Drift Classic' }, driftmanSkin);
+  assert.ok(frameLines(g).some((x) => x.includes('Nothing to do. Watch it drift.')));
+});
+
+test('boot text: a line of more than 40 characters or more lines than the screen has rows are clipped, never overflow', () => {
+  const sk = { ...BOOT_SKIN, boot: { lines: ['x'.repeat(60), ...Array.from({ length: 7 }, (_, i) => 'LINE ' + i)], art: false } };
+  for (const [w, h] of [[120, 40], [80, 24], [30, 10]]) {
+    const f = newFrame(w, h);
+    assert.doesNotThrow(() => drawBoot(f, { skin: sk, item: skinnedItem, consoleMap: MAP, t: bootPhases(sk).linesEnd, title: 'T' }, driftmanSkin));
+    assert.deepEqual(problems(f, merged.pal.sgr.length, `clip ${w}x${h}`), []);
+  }
+  const f = newFrame(120, 40);
+  drawBoot(f, { skin: sk, item: skinnedItem, consoleMap: MAP, t: bootPhases(sk).linesEnd, title: 'T' }, driftmanSkin);
+  const R = screenRect(120, 40);
+  assert.equal(rowText(f, R.y + 3, R.x + 2, R.x + R.w - 3).trim(), 'x'.repeat(R.w - 4), 'the 60-character line is cut at the screen text width');
+  assert.equal(rowText(f, R.y + 4, R.x + 2, R.x + R.w - 3).trim(), 'LINE 0');
+  assert.equal(rowText(f, R.y + 6, R.x + 2, R.x + R.w - 3).trim(), 'LINE 2', 'six rows of text; the rest are dropped');
+  assert.equal(cellAt(f, R.x + 2, R.y + 7).g, '[', 'and the last row is for the bar');
+  assert.equal(cellAt(f, R.x + R.w - 1, R.y + 3).g, '|', 'the right edge of the screen is still the edge');});
+
 // ---- through the real shell: it hands the boot the console and a palette that holds both
 
 function directShell(startId, cols = 120, rows = 40) {
@@ -667,6 +739,9 @@ test('the shell boots Classic on the console too, in the library palette, and ha
   assert.ok(frameLines(shot).join('\n').includes('PWR'));
   assert.equal(shot.palette.sgr.length, LIB_LEN);
   assert.equal(log.left, false);
-  tickFor(sh, bootSeconds(classicBootSkin) - 0.5 + 0.1);
+  tickFor(sh, bootSeconds(classicBootSkin) - 0.5 - 0.15);
+  assert.equal(log.left, false, 'still booting 0.15 s before the end (INSERT_END + the five lines, the bar, the zoom and the title)');
+  assert.equal(sh.screen, 'boot');
+  tickFor(sh, 0.3);
   assert.equal(log.left, true, 'the Classic path takes over when the boot ends');
 });
