@@ -6,6 +6,7 @@ import { isAllowedGlyph } from '../glyphs.js';
 import { PLAYLISTS } from '../scenes/index.js';
 import { relLuminance } from './palette.js';
 import { parseHex } from '../color.js';
+import { knownKeyIds } from '../keymap.js';
 
 export const FORMAT = 1;
 
@@ -288,7 +289,7 @@ function exactChars(v, name, n) {
 
 export function validateSkin(obj) {
   if (!isObj(obj)) return fail('skin.json must hold an object');
-  const uk = unknownKey(obj, ['palette', 'frame', 'menu', 'help', 'boot', 'insert', 'wording'], '');
+  const uk = unknownKey(obj, ['palette', 'frame', 'menu', 'help', 'boot', 'insert', 'wording', 'seasons'], '');
   if (uk) return fail(uk);
   const out = {};
 
@@ -389,6 +390,7 @@ export function validateSkin(obj) {
       o.keys = {};
       for (const id of Object.keys(w.keys)) {
         if (!KEY_ID_RE.test(id)) return fail(`wording.keys: '${id}' is not a key id`);
+        if (!knownKeyIds().has(id)) return fail(`wording.keys: '${id}' is not a key of the console or of Drift Classic`);
         const e = strErr(w.keys[id], `wording.keys.${id}`, 28);
         if (e) return fail(e);
         o.keys[id] = w.keys[id];
@@ -396,6 +398,21 @@ export function validateSkin(obj) {
     }
     if (w.menuHint !== undefined) { const e = strErr(w.menuHint, 'wording.menuHint', 60); if (e) return fail(e); o.menuHint = w.menuHint; }
     out.wording = o;
+  }
+  if (obj.seasons !== undefined) {
+    // optional: up to 4 named hues the c key cycles through while the cartridge runs
+    if (!Array.isArray(obj.seasons) || obj.seasons.length < 1 || obj.seasons.length > 4) return fail('seasons must list 1 to 4 seasons');
+    out.seasons = [];
+    for (let i = 0; i < obj.seasons.length; i++) {
+      const s = obj.seasons[i];
+      if (!isObj(s)) return fail(`seasons[${i}] must be an object`);
+      const k = unknownKey(s, ['name', 'hue'], `seasons[${i}]`);
+      if (k) return fail(k);
+      const e = strErr(s.name, `seasons[${i}].name`, 16);
+      if (e) return fail(e);
+      if (typeof s.hue !== 'string' || !HEX_RE.test(s.hue)) return fail(`seasons[${i}].hue must be a colour like #7FB069`);
+      out.seasons.push({ name: s.name, hue: s.hue });
+    }
   }
   return { ok: true, skin: out };
 }

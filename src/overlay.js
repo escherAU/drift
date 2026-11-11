@@ -13,25 +13,44 @@ import { helpLines } from './keymap.js';
 const PAD = 2; // blank columns between border and text
 
 // info = { mode, modeName, sceneName, ui: { text, dim, head } }  (ui = palette indexes)
-function head(info, withBlank) {
-  const out = [
-    { text: 'DRIFT  keys', style: 'head' },
-    { text: `mode: ${info.modeName}    scene: ${info.sceneName}`, style: 'text' },
-  ];
+// Optional (the console's skinned help uses them; the defaults are the Classic panel):
+//   title     heading line                       (default 'DRIFT  keys')
+//   box       8 characters: tl t tr r br b bl l   (default the single-line box)
+//   lines     body lines [{ text, style }]       (default helpLines(info.mode))
+//   modeLine  the line under the title           (default 'mode: ...    scene: ...'; '' = none)
+// The tight layout merges the title and the mode line into ONE row, which keeps 80x23 free of the
+// truncation hint now that the key table has one more row.
+const DEFAULT_BOX = '┌─┐│┘─└│';
+
+function headParts(info) {
+  const title = info.title === undefined ? 'DRIFT  keys' : info.title;
+  const modeLine = info.modeLine === undefined ? `mode: ${info.modeName}    scene: ${info.sceneName}` : info.modeLine;
+  return { title, modeLine };
+}
+
+function head(info, withBlank, merged = false) {
+  const { title, modeLine } = headParts(info);
+  const out = [];
+  if (merged && modeLine !== '') out.push({ text: title + '  ' + modeLine, style: 'head' });
+  else {
+    out.push({ text: title, style: 'head' });
+    if (modeLine !== '') out.push({ text: modeLine, style: 'text' });
+  }
   if (withBlank) out.push({ text: '', style: 'text' });
   return out;
 }
 
 const withoutBlanks = (lines) => lines.filter((l) => l.text !== '');
+const bodyOf = (info) => info.lines || helpLines(info.mode);
 
 // { lines, pad } for a terminal of `rows` rows (rows omitted = the roomy layout).
 export function layoutFor(info, rows = Infinity) {
-  const roomy = { lines: [...head(info, true), ...helpLines(info.mode)], pad: 1 };
+  const roomy = { lines: [...head(info, true), ...bodyOf(info)], pad: 1 };
   if (roomy.lines.length + 4 <= rows) return roomy;
-  const body = withoutBlanks(helpLines(info.mode));
+  const body = withoutBlanks(bodyOf(info));
   const compact = { lines: [...head(info, true), ...body], pad: 0 };
   if (compact.lines.length + 2 <= rows) return compact;
-  const tight = { lines: [...head(info, false), ...body], pad: 0 };
+  const tight = { lines: [...head(info, false, true), ...body], pad: 0 };
   if (tight.lines.length + 2 <= rows) return tight;
   // below the minimum: keep the top of the tight layout and end with a hint line
   const room = Math.max(0, rows - 2); // text rows inside the border
@@ -64,10 +83,11 @@ export function drawHelp(glyphs, shades, cols, rows, info) {
   const put = (x, y, cp, shade) => { const i = (top + y) * cols + left + x; glyphs[i] = cp; shades[i] = shade; };
   // interior and border
   for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) put(x, y, 32, 0);
-  for (let x = 1; x < bw - 1; x++) { put(x, 0, 0x2500, ui.text); put(x, bh - 1, 0x2500, ui.text); }
-  for (let y = 1; y < bh - 1; y++) { put(0, y, 0x2502, ui.text); put(bw - 1, y, 0x2502, ui.text); }
-  put(0, 0, 0x250c, ui.text); put(bw - 1, 0, 0x2510, ui.text);
-  put(0, bh - 1, 0x2514, ui.text); put(bw - 1, bh - 1, 0x2518, ui.text);
+  const bx = [...(info.box || DEFAULT_BOX)].map((ch) => ch.codePointAt(0)); // tl t tr r br b bl l
+  for (let x = 1; x < bw - 1; x++) { put(x, 0, bx[1], ui.text); put(x, bh - 1, bx[5], ui.text); }
+  for (let y = 1; y < bh - 1; y++) { put(0, y, bx[7], ui.text); put(bw - 1, y, bx[3], ui.text); }
+  put(0, 0, bx[0], ui.text); put(bw - 1, 0, bx[2], ui.text);
+  put(0, bh - 1, bx[6], ui.text); put(bw - 1, bh - 1, bx[4], ui.text);
   // text rows start under the border (and the pad row, when the layout has one)
   const rowEnd = bh - 1 - pad; // exclusive
   for (let k = 0; k < lines.length; k++) {
