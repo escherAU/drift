@@ -13,7 +13,7 @@ import { mkShell, makeRoot, DT } from './helpers-shell.js';
 import { INSERT_END } from '../src/shell/insert.js';
 import { BOOT_END } from '../src/shell/boot.js';
 import { validateSkin } from '../src/cartridge/schema.js';
-import { INSTALL_DIR } from '../src/cartridge/loader.js';
+import { INSTALL_DIR, discoverCartridges } from '../src/cartridge/loader.js';
 
 const SIZES = [[120, 40], [80, 24], [240, 67]];
 
@@ -141,7 +141,8 @@ function realRun(cols, rows) {
   const r = recorder(c, cols);
   r.run(30);
   assert.equal(c.sh().cartridge, 'classic');
-  for (let i = 0; i < 4; i++) { r.press('\x1b[C'); r.run(0.9); } // a full lap of the four installed cartridges, back to Classic
+  const shelf = discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] }).cartridges.length;
+  for (let i = 0; i < shelf; i++) { r.press('\x1b[C'); r.run(0.9); } // a full lap of the installed cartridges, back to Classic
   assert.equal(c.sh().cartridge, 'classic');
   r.press('\x1b[C'); r.run(0.9);
   r.press('\r'); r.run(1.2); // the locked dip on a real locked cartridge

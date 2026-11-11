@@ -1,0 +1,26 @@
+{
+  "format": 1,
+  "id": "delza",
+  "title": "Delza",
+  "version": "0.1.0",
+  "author": "Drift",
+  "blurb": "A lamplighter's apprentice crosses the Hollowmere Reach.",
+  "runtime": "cartridge",
+  "code": "DM-01",
+  "facts": ["Woodsy fantasy · about 4 min"],
+  "labelHue": "#6FAE5A",
+  "scenes": [
+    { "id": "thornwell", "kind": "cells", "title": "The Thornwell Path" }
+  ],
+  "programs": [
+    { "id": "tale", "title": "The tale", "transition": "dissolve", "scenes": ["thornwell"], "sceneSeconds": 75 }
+  ],
+  "start": "tale",
+  "menu": [
+    { "label": "THE THORNWELL PATH", "program": "tale", "scene": "thornwell", "note": "about 1 min", "desc": "Orrin sets out with the Ember Lantern and a moth named Pim." },
+    { "label": "Eject the cartridge", "action": "eject" }
+  ],
+  "chapters": [
+    { "id": "thornwell", "numeral": "I", "place": "Thornwell Wood · morning", "line": "Orrin sets out with the Ember Lantern and a moth named Pim.", "icon": ["▲ ▲ ▲", "█ █ █"], "minutes": 1 }
+  ]
+}

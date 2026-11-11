@@ -51,13 +51,14 @@ function slideBytes(cols, rows, presses = 4) {
 }
 
 // [cols, rows, bound in bytes for one slide plus the 1.64 s of idle after it]. Measured here, worst of 4 slides:
-// 240x67 60617, 120x40 142756, 80x24 5118. The 240x67 bound is the budget itself (40 KB/s x 2 s, 32% above the
+// 240x67 60617, 120x40 142756, 80x24 5118 (until Delza: she is the first cartridge that is unlocked and has a coloured label,
+// and 80x24 measured 8321 with her on the shelf, 4 KB/s as a 2 s cycle, a tenth of the 40 KB/s budget). The 240x67 bound is the budget itself (40 KB/s x 2 s, 32% above the
 // measurement; it was 190-200 KB before the stepped slide); the others are the measurement + 25%. 120x40 is NOT within the 40 KB/s budget (see the report): the
 // 30% per-frame rule caps the shelf at 7 columns a frame there, so it cannot take the stepped slide.
 const BOUNDS = [
   [240, 67, 80000],
   [120, 40, 178000],
-  [80, 24, 6400],
+  [80, 24, 10400],
 ];
 
 for (const [cols, rows, bound] of BOUNDS) {

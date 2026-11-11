@@ -1,0 +1,59 @@
+{
+  "palette": {
+    "hue": "#6FAE5A",
+    "colours": ["#182E1C","#25472B","#32623B","#3F7A4A","#342216","#503422","#6E482F","#8A5A3B","#585243","#877E66","#BAAE8D","#E8D9B0","#523E19","#7E5F26","#AE8334","#D9A441","#552716","#823B22","#B3522E","#E0663A","#362944","#523E68","#71568F","#8D6BB3","#3B3E40","#595F61","#7B8286","#9AA3A8","#8F8466"],
+    "bg": "#0F1A12",
+    "ui": { "text": 27, "dim": 44, "head": 31, "accent": 31 }
+  },
+  "frame": {
+    "show": "menu",
+    "glyphs": "◆═◆║◆═◆║",
+    "title": "THE WAYFARER'S JOURNAL",
+    "colour": 29,
+    "ornament": "Ψ · Δ · Ξ · Φ · Ω"
+  },
+  "console": {
+    "frame": "◆═◆║◆═◆║",
+    "grille": "▒",
+    "stripe": "Ψ · Δ · Ξ · Φ · Ω · ",
+    "ink": { "frame": 3, "grille": 1, "stripe": 2, "led": 3, "bar": 3 },
+    "title": { "style": "block", "ornament": "Ψ · Δ · Ξ · Φ · Ω", "colour": 31, "ornamentColour": 29 }
+  },
+  "menu": {
+    "layout": "slots",
+    "anchor": "center",
+    "cursor": "▶",
+    "title": "THE WAYFARER'S JOURNAL",
+    "prompt": "Choose where the tale begins.",
+    "autostartSeconds": 15
+  },
+  "help": {
+    "title": "JOURNAL · how to travel",
+    "box": "◆═◆║◆═◆║",
+    "groups": { "Cartridge": "Chapters", "Other": "Camp" },
+    "modeLabel": "tale",
+    "sceneLabel": "chapter"
+  },
+  "boot": {
+    "lines": ["CARTRIDGE ...... DELZA", "MAP ............ UNROLLED", "LANTERN ........ TRIMMED", "The forest remembers you."],
+    "art": false,
+    "valueColour": 31
+  },
+  "insert": { "text": "Trimming the lantern" },
+  "wording": {
+    "keys": {
+      "menu": "open the journal, or choose",
+      "menu-prev": "journal: previous chapter",
+      "menu-next": "journal: next chapter",
+      "close": "close the journal or page",
+      "scene-next": "next chapter",
+      "pause": "rest (pause) or carry on",
+      "seasons": "next season (colours)",
+      "help": "show or hide these keys"
+    }
+  },
+  "seasons": [
+    { "name": "Autumn", "hue": "#C7782E" },
+    { "name": "Moonlit", "hue": "#5F8FA8" }
+  ]
+}

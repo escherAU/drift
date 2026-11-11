@@ -35,6 +35,8 @@ test('cartridge captures: the names list is the files written - library at 120x4
         const kind = m < INSERT_END ? 'insert' : 'boot';
         want.push(`cart-${kind}-${c.id}-t${ms}.txt`, `cart-${kind}-${c.id}-80x24-t${ms}.txt`);
       }
+      // a cartridge that runs in the shell (Delza) also gets eject files at both sizes; Classic has none
+      if (c.runtime !== 'classic') for (const m of EJECT_MOMENTS) { const ms = Math.round(m * 1000); want.push(`cart-eject-${c.id}-t${ms}.txt`, `cart-eject-${c.id}-80x24-t${ms}.txt`); }
     }
     assert.deepEqual(cartridgeCaptureNames().sort(), want.slice().sort());
     assert.deepEqual(fs.readdirSync(dir).sort(), want.slice().sort());
@@ -165,10 +167,11 @@ test('measure --cartridge: sampling starts after the cartridge runs; --program a
   await assert.rejects(runMeasure({ seconds: 1, cols: 80, rows: 24, cartridge: { id: 'arcade' }, dirs: [{ dir: INSTALL_DIR, trusted: true }], quiet: true }), /it is locked/);
 });
 
-test('measure --cartridge all: one target per unlocked scene (each with a program that holds it); the install has none yet', () => {
+test('measure --cartridge all: one target per unlocked scene (each with a program that holds it); the install has Delza\'s scenes', () => {
   const t = cartridgeTargets(fixtureDirs());
   assert.deepEqual(t.map((x) => x.scene).sort(), ['drops', 'haze', 'note', 'plasma-ref', 'sandbox', 'swell', 'tide']);
   assert.deepEqual(t.find((x) => x.scene === 'haze'), { cartridge: 'fixture', program: 'calm', scene: 'haze' });
   assert.deepEqual(t.find((x) => x.scene === 'tide'), { cartridge: 'fixture', program: 'mix', scene: 'tide' });
-  assert.deepEqual(cartridgeTargets(), [], 'only Classic and locked cartridges are installed so far (this fails the day a real cartridge lands: update it then)');
+  const delza = discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] }).cartridges.find((c) => c.id === 'delza');
+  assert.deepEqual(cartridgeTargets(), delza.manifest.scenes.map((s) => ({ cartridge: 'delza', program: 'tale', scene: s.id })), 'the install holds one real cartridge: Delza, one target per scene, in her tale');
 });
