@@ -37,6 +37,10 @@ function recorder(c, cols) {
 //   assertRamps: no cell that keeps its glyph moves by more than one shade step (28 L*). In the boot the moving edge
 //     of the zoom crosses cells that hold the same glyph: bootRoom is the share of the screen allowed to do that
 //     (shell-flash uses 1%; a console drawn at ink 3 measures 1.58% at 120x40, so the skinned runs allow 2%).
+//     That is a calibration, not a bug: the skinned console is drawn at the brightest ink the schema allows, so the
+//     cells the moving zoom edge crosses are more often more than one shade step apart than with the fixture's
+//     console. Measured worst: 1.58% of the screen at 120x40 (limit for the fixture: 1%); the allowance is 2%.
+//     The 30% rule (assertFlash) has no allowance in it.
 function assertFlash(r, label) {
   const steps = r.steps();
   const big = [];
@@ -125,12 +129,12 @@ test('flash 240x67: the Classic cartridge - insert, boot and the hand-back to it
   c.done();
 });
 
-// The real art is denser than the fixture's label, so a slide moves more cells. Measured on this commit (9f28f90):
-//   30% rule: 120x40, the 2nd frame of a slide changes 30.2% of the cells (the key frame itself 32.3%); 80x24 and 240x67 pass
-//   ramps:    mid-slide the leaving/arriving cartridge chrome goes silver (L* 74) -> dim (L* 42) in ONE frame: 32-35 L*
-//             against the 28 allowed, on 17 cells at 120x40, 16 at 80x24 and 60 at 240x67 (0.4 to 0.8% of the screen)
-// Both are marked todo so the suite stays green and the finding stays visible; they turn into plain passes when
-// src/shell/library.js ramps the chrome / eases the slide's first frames. Not fixed here (task C is tests and captures).
+// The real art is denser than the fixture's label, so a slide moves more cells than the fixture's does. These two runs
+// were todo findings on 9f28f90 and are plain tests now (DRIFT-4 F1):
+//   30% rule: the 2nd frame of a slide changed 30.2% of the cells at 120x40 -> the slide eases with (1 - p)^1.3 (first move 7
+//             columns, not 10) and a queued step starts from the top of its ease; worst non-key step is now 28.9%
+//   ramps:    the leaving/arriving cartridge chrome (and the spines' and the contacts') went silver (L* 74) -> graphite (42)
+//             in one frame -> chrome ramps 42, 49, 58, 66, 74 over the slide; the compact cartridge keeps one chrome shade
 function realRun(cols, rows) {
   const c = mkShell({ startScreen: { screen: 'library' }, cols, rows, dirs: [{ dir: INSTALL_DIR, trusted: true }] });
   c.app.start();
@@ -148,15 +152,13 @@ function realRun(cols, rows) {
   c.done();
   return r;
 }
-const REAL_30 = { '120x40': '30.2% on the 2nd slide frame (limit 30%)' };
-const REAL_RAMP = { '120x40': '17 cells silver -> dim in one frame (35 L* vs 28)', '80x24': '16 cells silver -> dim in one frame (32 L* vs 28)', '240x67': '60 cells silver -> dim in one frame (32 L* vs 28)' };
 for (const [cols, rows] of SIZES) {
   const k = `${cols}x${rows}`;
-  test(`flash ${k}: the REAL installed library (label ink and all) - 60 s idle, a lap of slides, a locked dip: the 30% rule`, { todo: REAL_30[k] || false }, (t) => {
+  test(`flash ${k}: the REAL installed library (label ink and all) - 60 s idle, a lap of slides, a locked dip: the 30% rule`, (t) => {
     const worst = assertFlash(realRun(cols, rows), `real ${k}`);
     t.diagnostic(`${k}: real library worst non-key step ${(worst * 100).toFixed(1)}%`);
   });
-  test(`flash ${k}: the REAL installed library - the same run, every brightness change a ramp (one shade step per frame)`, { todo: REAL_RAMP[k] || false }, () => {
+  test(`flash ${k}: the REAL installed library - the same run, every brightness change a ramp (one shade step per frame)`, () => {
     assertRamps(realRun(cols, rows), `real ${k}`);
   });
 }

@@ -148,7 +148,7 @@ export function cartridgeGrid(cart, o = {}) {
   const selected = !!o.selected;
   const level = Math.max(1, Math.min(3, o.level || (selected ? 3 : 1)));
   const H = locked ? '┄' : '─', V = locked ? '┆' : '│';
-  const chrome = level >= 3 ? 13 : level === 2 ? 9 : DRIFTMAN_COLOURS.housing;
+  const chrome = o.chrome !== undefined ? o.chrome : level >= 3 ? 13 : level === 2 ? 9 : DRIFTMAN_COLOURS.housing;
   const G = newGrid(CART_W, CART_H);
   const row = (y, s, shade = chrome) => gText(G, 0, y, s, shade);
 
@@ -188,7 +188,9 @@ export function cartridgeGrid(cart, o = {}) {
   // the tongue and its contacts
   row(15, '╰' + H.repeat(2) + '┬' + H.repeat(22) + '┬' + H.repeat(2) + '╯');
   gPut(G, 3, 16, cpOf(V), chrome); gPut(G, 26, 16, cpOf(V), chrome);
-  if (!locked) gRun(G, 4, 16, 0x258c, 22, selected ? DRIFTMAN_COLOURS.amber : DRIFTMAN_COLOURS.housing);
+  // the contacts glow amber on the selected cartridge; mid-slide they follow the chrome ramp so they never jump
+  const contacts = o.chrome !== undefined ? (o.chrome === 13 ? DRIFTMAN_COLOURS.amber : o.chrome) : selected ? DRIFTMAN_COLOURS.amber : DRIFTMAN_COLOURS.housing;
+  if (!locked) gRun(G, 4, 16, 0x258c, 22, contacts);
   row(17, '   ╰' + H.repeat(22) + '╯');
   return G;
 }
@@ -199,7 +201,7 @@ export function spineGrid(cart, o = {}) {
   const ui = o.ui || { text: 15, dim: 19, head: 15, accent: 16 };
   const locked = !!cart.locked, lit = !!o.selected;
   const H = locked ? '┄' : '─', V = locked ? '┆' : '│';
-  const chrome = lit ? 13 : DRIFTMAN_COLOURS.housing;
+  const chrome = o.chrome !== undefined ? o.chrome : lit ? 13 : DRIFTMAN_COLOURS.housing;
   const G = newGrid(SPINE_W, SPINE_H);
   gText(G, 0, 0, '╭' + H + H + '╮', chrome);
   gText(G, 0, SPINE_H - 1, '╰' + H + H + '╯', chrome);
@@ -516,10 +518,31 @@ export function screenRect(cols, rows, tier = sizeTier(cols, rows)) {
   return { x: L.listX, y: L.cartTop + 9, w: L.listW, h: 9 };
 }
 
-// Ease-out: fast first, settling softly (1 - (1 - p)^2).
+// Ease-out: fast first, settling softly (1 - (1 - p)^1.3). The exponent is 1.3, not the 2 of a quadratic ease, so
+// the first moving frame at 18 fps covers 7 columns (steps 7, 6, 6, 5, 5, 4, 1) instead of 10. With the real label art
+// a frame that moves the shelf 8 columns or more changes over 30% of the cells at 120x40 (10 columns: 30.2%, 8: 30.7%,
+// 7: under 29%), because nearly every cartridge cell differs from the frame before.
+export const SLIDE_EASE_POWER = 1.3;
 export function slideEase(p) {
   const x = p <= 0 ? 0 : p >= 1 ? 1 : p;
-  return 1 - (1 - x) * (1 - x);
+  return 1 - Math.pow(1 - x, SLIDE_EASE_POWER);
+}
+
+// The chrome (shell, name plate frame) of a cartridge ramps through grey steps while the shelf slides: silver 18
+// (graphite), 7, 9, 11, 13 = L* 42, 49, 58, 66, 74. Cells that move from one cartridge onto another with the same
+// glyph (a border landing where the neighbour's border was) then differ by one step or two small ones, never the
+// full 32 L* of graphite against silver 13. While the shelf moves 5 or more columns a frame the selected and leaving
+// chrome stay at 66 or below; the brightest step is reached only on the last, slow frames.
+export const CHROME_RAMP = Object.freeze([DRIFTMAN_COLOURS.housing, 7, 9, 11, 13]);
+// The chrome shade of cartridge i: the arriving one climbs the ramp with the slide, the leaving one comes down it
+// (one step off the top on the first moving frame), everything else is graphite. Null = use the level's own shade.
+export function chromeShadeOf(view, i) {
+  if (view.slide === undefined || view.slide >= 1 || view.prev === view.index) return null;
+  const top = CHROME_RAMP.length - 1;
+  const p = view.slide <= 0 ? 0 : view.slide;
+  if (i === view.index) return CHROME_RAMP[Math.round(p * top)];
+  if (i === view.prev) return CHROME_RAMP[Math.round((1 - p) * top)];
+  return null;
 }
 
 // Columns the shelf is still displaced at slide progress p (0..1); dir +1 = the cursor moved right, so the
@@ -682,8 +705,10 @@ export function drawShelf(f, view, skin, o = {}) {
   const st = consoleStyle(skin, o.body || {});
   const offset = (view.dip || 0) + (o.drop || 0) - (o.lift || 0);
   const idle = view.idle > 0 ? view.idle : 0;
-  const cartAt = (i, selected) => cartridgeGrid(view.cartridges[i], {
-    selected, level: levelOf(view, i), ui, led: selected && idle ? ledLevelAt(idle) : undefined, ripple: selected && idle ? rippleColAt(idle) : -1,
+  // compact: the one cartridge on show is swapped in place, so its chrome stays at the selected shade (a ramp would
+  // flip every border cell from silver to graphite in one frame when the cursor moves)
+  const cartAt = (i, selected, compact = false) => cartridgeGrid(view.cartridges[i], {
+    selected, level: levelOf(view, i), chrome: compact ? 13 : chromeShadeOf(view, i) ?? undefined, ui, led: selected && idle ? ledLevelAt(idle) : undefined, ripple: selected && idle ? rippleColAt(idle) : -1,
   });
 
   // the console, then the takeover band over it
@@ -735,7 +760,7 @@ export function drawShelf(f, view, skin, o = {}) {
   }
 
   // compact: the cartridge on the left, the list and the blurb box on the right
-  blit(f, cartAt(view.index, true), L.cartX, L.cartTop + offset, { clipY: L.miniTop + 2 });
+  blit(f, cartAt(view.index, true, true), L.cartX, L.cartTop + offset, { clipY: L.miniTop + 2 });
   drawListPane(ctx, view, skin, L.listX, L.cartTop, L.listW, LIST_SLOTS, 1);
   const by = L.cartTop + 9;
   if (!fadeP) drawBox(f, L.listX, by, L.listW, 9, null, DRIFTMAN_COLOURS.housing);
@@ -779,7 +804,7 @@ function drawSpines(f, view, ui, L, fadeP, cartAt) {
   const x0 = centerX(f.cols, total);
   for (let k = 0; k < count; k++) {
     const i = first + k;
-    blit(f, spineGrid(view.cartridges[i], { selected: i === view.index, ui }), x0 + k * pitch, L.spineY, { fadeP, all: true });
+    blit(f, spineGrid(view.cartridges[i], { selected: i === view.index, chrome: chromeShadeOf(view, i) ?? undefined, ui }), x0 + k * pitch, L.spineY, { fadeP, all: true });
   }
   const bx = Math.max(0, x0 - 2), bw = Math.min(f.cols - bx, total + 4);
   const ctx = fadeCtx(f, fadeP);

@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { driftmanSkin } from '../src/shell/driftman.js';
-import { consoleGrid, consoleStyle, gridRows, drawLibrary, shelfLayout, slideOffset, slideEase, dipAt, NEIGHBOUR_STEP, DIAL_POSITIONS } from '../src/shell/library.js';
+import { consoleGrid, consoleStyle, gridRows, drawLibrary, shelfLayout, slideOffset, slideEase, dipAt, NEIGHBOUR_STEP, DIAL_POSITIONS, chromeShadeOf, CHROME_RAMP } from '../src/shell/library.js';
 import { SLIDE_SECONDS, TYPE_SECONDS, DIP_SECONDS, MESSAGE_SECONDS, LOCKED_MESSAGE } from '../src/shell/shell.js';
 import { newFrame } from '../src/shell/ui.js';
 import { mkShell, DT } from './helpers-shell.js';
@@ -256,4 +256,38 @@ test('dip: an unlocked cartridge does not dip, it inserts (the other arm)', () =
   c.tick(DT);
   assert.equal(c.sh().screen, 'insert');
   c.done();
+});
+
+// ---- DRIFT-4 F1: a gentle first frame and a chrome that ramps
+
+test('slide: at 18 fps the shelf moves 7 columns or fewer a frame (the real art changes over 30% of the cells at 8 or more), ease-out, 34 in all', () => {
+  const frame = 1 / 18 / SLIDE_SECONDS;
+  const pos = [slideOffset(0, 1)];
+  for (let k = 1; k * frame < 1; k++) pos.push(slideOffset(k * frame, 1));
+  pos.push(0);
+  const moves = pos.slice(1).map((x, k) => pos[k] - x);
+  assert.equal(moves.reduce((a, b) => a + b, 0), 34);
+  assert.ok(Math.max(...moves) <= 7, `moves ${moves}`);
+  assert.ok(moves[0] >= moves[moves.length - 1] && moves[0] >= moves[moves.length - 2], `ease-out: ${moves}`);
+});
+
+test('slide: the arriving chrome climbs the grey ramp, the leaving chrome comes down it, nothing else is touched', () => {
+  const view = (slide) => ({ index: 2, prev: 1, slide });
+  assert.deepEqual([...CHROME_RAMP], [18, 7, 9, 11, 13]);
+  assert.equal(chromeShadeOf({ index: 2, prev: 1 }, 2), null, 'no slide in the view: the level decides');
+  assert.equal(chromeShadeOf(view(1), 2), null, 'settled: the level decides');
+  assert.equal(chromeShadeOf({ index: 2, prev: 2, slide: 0.5 }, 2), null, 'no move: the level decides');
+  assert.equal(chromeShadeOf(view(0.5), 0), null, 'a bystander keeps graphite');
+  let lastIn = -1, lastOut = 5;
+  for (let k = 0; k <= 36; k++) {
+    const p = k / 37;
+    const into = CHROME_RAMP.indexOf(chromeShadeOf(view(p), 2)), out = CHROME_RAMP.indexOf(chromeShadeOf(view(p), 1));
+    assert.ok(into >= 0 && out >= 0 && into >= lastIn && out <= lastOut, `monotone at ${p}`);
+    assert.ok(into - Math.max(lastIn, 0) <= 1 && Math.min(lastOut, 4) - out <= 1, `one rung at a time at ${p}`);
+    lastIn = into; lastOut = out;
+  }
+  assert.equal(chromeShadeOf(view(0), 1), 13, 'at the key frame the leaving cartridge is still at full chrome');
+  assert.equal(chromeShadeOf(view(0), 2), 18);
+  assert.ok(CHROME_RAMP.indexOf(chromeShadeOf(view(0.16), 1)) <= 3, 'one rung down on the first moving frame, so it is not silver 13 beside graphite');
+  assert.ok(CHROME_RAMP.indexOf(chromeShadeOf(view(0.16), 2)) <= 1);
 });

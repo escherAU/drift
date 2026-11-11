@@ -250,7 +250,9 @@ export function createShell(o) {
         if (helpOpen) break;
         if (slideT < SLIDE_SECONDS) {
           slideT += d; forced = true;
-          if (slideT >= SLIDE_SECONDS && queued) { const q = queued; queued = 0; startMove(q, slideT - SLIDE_SECONDS); }
+          // the queued step starts from the top of its ease, not part-way in: it is a key press that was waiting, and
+          // starting part-way put a big move in its very first frame
+          if (slideT >= SLIDE_SECONDS && queued) { const q = queued; queued = 0; startMove(q, 0); }
         }
         if (dipT < DIP_SECONDS) { dipT += d; forced = true; }
         if (slideT >= SLIDE_SECONDS && dipT >= DIP_SECONDS) {
