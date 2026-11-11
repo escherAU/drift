@@ -185,9 +185,11 @@ test('night-drive manifest (C6): every scene file exists and is the kind the man
     assert.equal(entry.scene.id, s.id);
     assert.ok(s.title && width(s.title) <= 23, `${s.id}: title '${s.title}' fits the help panel's mode line`);
   }
-  // the scenes the design lists, in the design's order (a slice has a prefix of them)
+  // the scenes the design lists, in the design's order (a slice has an in-order subsequence of them: sundown comes before skyline exists)
   const ORDER = ['onramp', 'skyline', 'sundown', 'coast', 'redlight', 'diner', 'caller', 'overdrive'];
-  assert.deepEqual(ids, ORDER.slice(0, ids.length), 'a prefix of the eight tracks, in tape order');
+  const at = ids.map((id) => ORDER.indexOf(id));
+  assert.ok(at.every((i) => i >= 0), 'every scene is one of the eight tracks');
+  assert.ok(at.every((i, k) => k === 0 || i > at[k - 1]), 'in tape order (their indexes strictly increase)');
   assert.equal(manifest.programs.length, 1);
   const tape = manifest.programs[0];
   assert.equal(tape.id, 'tape');

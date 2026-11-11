@@ -370,13 +370,17 @@ inside the running cartridge are checked against the real process in `tests/real
 
 Night Drive (DM-02) is an 80s neon highway: the Vantra Halcyon, a low coupe with the plate NITE86, driving out of the made-up Port Solace
 on Shoreline 9, with late-night radio on 88.1 Moonlow FM. Everything in it is original. It is built as one tape of eight tracks (sides A
-and B, 90 s each, about 12 minutes), added a few at a time; today the tape holds track A1, `onramp` Midnight On-Ramp. The skin gives it a
+and B, 90 s each, about 12 minutes), added a few at a time; today the tape holds track A1, `onramp` Midnight On-Ramp, and track A3, `sundown` Sundown Grid. The skin gives it a
 violet-black background (#0D0820), a heavy-line magenta console (`┏━┓┃┛━┗┃`, a stacked-vent grille, an equaliser
 stripe), the tape deck menu (the `list` layout with a 15 s countdown), an Owner's Manual help panel (groups Tracks and Glovebox) and a
 cassette on the boot screen. Its colours are in `cartridges/night-drive/lib/palette.js` (eight hues in four shades each, plus text, dim and
 two silhouette colours; the library palette is untouched). Midnight On-Ramp is a function of time: a three-lane road in perspective whose dashes
 take 1.2 s from the horizon to the car, a street lamp every 2.4 s, one star at a time ramping, the car swaying a column every 7 to 11 s, and
 from 41 s a car ahead that closes and slides past. Under 100 columns or 32 rows (80x24) it drops to a one-row ridge, no lamps and the 20x4 car.
+Sundown Grid is a half-disc sun on a horizon, cut by gaps that slide down it a half-row a second, over a neon grid whose horizontals arrive every
+0.8 s; the sun steps down a row every 15 s for 60 s and back up for 60 s, so the scene loops every 120 s (palms at the edges, a frond swaying every
+20 s; under 100 columns or 32 rows a 34x8 sun, four horizontals and no palms). Everything in it moves on a 15 Hz tick (`lib/grid.js`) so a frame never
+takes more than about a tenth of its cells changing.
 `tests/night-drive-*.test.js` check the skin, palette, label, boot art, manifest, help panel and the scene's promises on rendered frames.
 
 `node bin\drift.js --cartridge night-drive` goes straight in.
@@ -536,7 +540,7 @@ install cartridge's scenes through the size, glyph, colour, determinism and flas
 that must fail), `cartridges` (glyph and import scans over `cartridges/`), `config-extras`, `shell-app`
 (the console at app level on a fake clock), `shell-draw` and `shell-flash` (every screen at every size,
 and the photosensitivity checks), `tools-cartridges` (the cartridge captures and `measure.mjs` options),
-`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge` and `night-drive-onramp` (Night Drive's skin, palette, label, boot art, manifest, help panel, and the road, sprites and calm bounds of its first track), and the cartridge arms of `real-process` (below).
+`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge`, `night-drive-onramp` and `night-drive-sundown` (Night Drive's skin, palette, label, boot art, manifest, help panel, the road, sprites and calm bounds of its first track, and the sun, grid, loop and calm bounds of Sundown Grid), and the cartridge arms of `real-process` (below).
 
 Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 `tests/real-process.test.js`, which spawns the real `bin/drift.js` with piped stdio):

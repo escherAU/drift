@@ -10,14 +10,16 @@
   "facts": ["80s neon highway · about 12 min", "8 tracks on one tape, sides A and B"],
   "labelHue": "#FF3EC8",
   "scenes": [
-    { "id": "onramp", "kind": "cells", "title": "Midnight On-Ramp" }
+    { "id": "onramp", "kind": "cells", "title": "Midnight On-Ramp" },
+    { "id": "sundown", "kind": "cells", "title": "Sundown Grid" }
   ],
   "programs": [
-    { "id": "tape", "title": "The tape", "transition": "dissolve", "scenes": ["onramp"], "sceneSeconds": 90 }
+    { "id": "tape", "title": "The tape", "transition": "dissolve", "scenes": ["onramp", "sundown"], "sceneSeconds": 90 }
   ],
   "start": "tape",
   "menu": [
     { "label": "A1  MIDNIGHT ON-RAMP", "program": "tape", "scene": "onramp", "note": "1:30", "desc": "Out of Port Solace on Shoreline 9, lamps sliding past." },
+    { "label": "A3  SUNDOWN GRID", "program": "tape", "scene": "sundown", "note": "1:30", "desc": "The sun going down over the neon grid, one row every fifteen seconds." },
     { "label": "▲   EJECT THE TAPE", "action": "eject", "desc": "Back to the cartridge library." }
   ]
 }
