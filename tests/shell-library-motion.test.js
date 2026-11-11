@@ -3,8 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { driftmanSkin } from '../src/shell/driftman.js';
-import { consoleGrid, consoleStyle, gridRows, drawLibrary, shelfLayout, slideOffset, slideEase, NEIGHBOUR_STEP, DIAL_POSITIONS } from '../src/shell/library.js';
-import { SLIDE_SECONDS, TYPE_SECONDS } from '../src/shell/shell.js';
+import { consoleGrid, consoleStyle, gridRows, drawLibrary, shelfLayout, slideOffset, slideEase, dipAt, NEIGHBOUR_STEP, DIAL_POSITIONS } from '../src/shell/library.js';
+import { SLIDE_SECONDS, TYPE_SECONDS, DIP_SECONDS, MESSAGE_SECONDS, LOCKED_MESSAGE } from '../src/shell/shell.js';
 import { newFrame } from '../src/shell/ui.js';
 import { mkShell, DT } from './helpers-shell.js';
 import { frameLines } from './helpers-help.js';
@@ -166,4 +166,94 @@ test('retype: TYPE_SECONDS is about 0.3 and the view field drives drawLibrary', 
   drawLibrary(b, v, driftmanSkin);
   assert.ok(!frameLines(a).join('\n').includes('A short blurb'));
   assert.ok(frameLines(b).join('\n').includes('A short blurb'));
+});
+
+// ---- locked Enter: dip, spring back, message
+
+const L40 = shelfLayout(120, 40, 'full');
+const plateRow = (c, y = L40.cartTop + 14) => frameLines(c.app.screenshot())[y];
+
+test('dip: the offset goes 0 -> 1 -> 0 inside 0.3 s, never more than one row, and is 0 outside the window', () => {
+  assert.equal(DIP_SECONDS, 0.3);
+  assert.equal(dipAt(0), 0);
+  assert.equal(dipAt(-1), 0);
+  assert.equal(dipAt(DIP_SECONDS), 0);
+  assert.equal(dipAt(5), 0);
+  const seq = [];
+  for (let t = 0; t <= 0.3001; t += 0.005) { const d = dipAt(t); assert.ok(d === 0 || d === 1); if (seq[seq.length - 1] !== d) seq.push(d); }
+  assert.deepEqual(seq, [0, 1, 0]);
+  assert.equal(dipAt(0.15), 1, 'down in the middle');
+  // down for most of it, with a lead-in and a lead-out of 0.05 s each (the ramps)
+  const down = []; for (let t = 0; t < 0.3; t += 0.005) if (dipAt(t) === 1) down.push(t);
+  assert.ok(down[0] >= 0.04 && down[0] <= 0.06 && down[down.length - 1] <= 0.26 && down[down.length - 1] >= 0.24);
+});
+
+test('dip: Enter on a locked cartridge moves it one row down and back within 0.3 s, shows the message, and never inserts', () => {
+  const c = mkShell({ startScreen: LIB, cols: 120, rows: 40 });
+  c.app.start();
+  assert.ok(c.goto('locker'));
+  c.tick(1);
+  const rest = frameLines(c.app.screenshot());
+  const platesAt = (lines, y) => lines[y].includes('LOCKER');
+  assert.ok(platesAt(rest, L40.cartTop + 14), 'the locker plate sits on its resting row');
+  c.key('\r');
+  const rows = [];
+  const seen = [];
+  for (let t = 0; t < 0.5; t += DT) {
+    c.app.tick(DT);
+    const lines = frameLines(c.app.screenshot());
+    const y = lines.findIndex((l, i) => i >= L40.cartTop + 10 && l.includes('LOCKER') && l.includes('SOON'));
+    rows.push(y - (L40.cartTop + 14));
+    seen.push(c.sh().screen);
+  }
+  assert.ok(seen.every((s) => s === 'library'), 'never inserted');
+  assert.ok(rows.every((r) => r === 0 || r === 1), `only rows 0 and 1: ${rows}`);
+  const downAt = rows.map((r, i) => (r === 1 ? i * DT : -1)).filter((v) => v >= 0);
+  assert.ok(downAt.length >= 3, `dipped for ${downAt.length} frames`);
+  assert.ok(downAt[downAt.length - 1] < DIP_SECONDS, 'and sprang back inside 0.3 s');
+  assert.equal(rows[rows.length - 1], 0, 'at rest again');
+  assert.ok(c.text().includes(LOCKED_MESSAGE), 'the message is on screen');
+  assert.equal(c.has(), false, 'nothing saved: no insert');
+  c.done();
+});
+
+test('dip: the message clears after 2.5 s, or on the next key (both arms)', () => {
+  assert.equal(MESSAGE_SECONDS, 2.5);
+  const a = mkShell({ startScreen: LIB, cols: 120, rows: 40 });
+  a.app.start();
+  assert.ok(a.goto('locker'));
+  a.key('\r');
+  a.tick(2.3);
+  assert.ok(a.text().includes(LOCKED_MESSAGE), 'still there at 2.3 s');
+  a.tick(0.4);
+  assert.ok(!a.text().includes(LOCKED_MESSAGE), 'gone by 2.7 s');
+  a.done();
+  const b = mkShell({ startScreen: LIB, cols: 120, rows: 40 });
+  b.app.start();
+  assert.ok(b.goto('locker'));
+  b.key('\r');
+  b.tick(0.6);
+  assert.ok(b.text().includes(LOCKED_MESSAGE));
+  b.key('x'); // any key, even one that is not bound
+  b.tick(DT);
+  assert.ok(!b.text().includes(LOCKED_MESSAGE), 'the next key clears it');
+  assert.equal(b.sh().cartridge, 'locker');
+  // Enter again: the message comes back and clears on its own clock
+  b.key('\r');
+  b.tick(0.2);
+  assert.ok(b.text().includes(LOCKED_MESSAGE));
+  b.tick(2.6);
+  assert.ok(!b.text().includes(LOCKED_MESSAGE));
+  b.done();
+});
+
+test('dip: an unlocked cartridge does not dip, it inserts (the other arm)', () => {
+  const c = mkShell({ startScreen: LIB, cols: 120, rows: 40 });
+  c.app.start();
+  assert.ok(c.goto('fixture'));
+  c.tick(0.6);
+  c.key('\r');
+  c.tick(DT);
+  assert.equal(c.sh().screen, 'insert');
+  c.done();
 });

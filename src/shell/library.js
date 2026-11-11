@@ -484,6 +484,14 @@ export function slideOffset(p, dir) {
   return o === 0 ? 0 : d * o;
 }
 
+// The locked "dip and spring back": rows the selected cartridge is pressed down t seconds after Enter. A sine
+// half-wave over DIP_SECONDS rounded to whole rows: 0 for the first 0.05 s, 1 for 0.2 s, 0 again for the last 0.05 s.
+export const DIP_SECONDS = 0.3;
+export function dipAt(t) {
+  if (!(t > 0) || t >= DIP_SECONDS) return 0;
+  return Math.round(Math.sin(Math.PI * t / DIP_SECONDS));
+}
+
 // The way the cursor last moved: view.dir, else the shorter way round from prev to index.
 export function slideDir(view) {
   if (view.dir === 1 || view.dir === -1) return view.dir;

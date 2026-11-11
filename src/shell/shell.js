@@ -18,7 +18,7 @@ import { makeSkinPalette } from '../cartridge/palette.js';
 import { loadScenes as defaultLoadScenes } from '../cartridge/loader.js';
 import { parseHex, sgrFor } from '../color.js';
 import { driftmanSkin, classicBootSkin } from './driftman.js';
-import { drawLibrary, idleSignature } from './library.js';
+import { drawLibrary, idleSignature, dipAt, DIP_SECONDS } from './library.js';
 import { drawInsert, INSERT_END } from './insert.js';
 import { drawBoot, bootPhases } from './boot.js';
 import { createCartridgeRuntime, dissolveFrames } from './runtime.js';
@@ -29,9 +29,9 @@ export const EJECT_SECONDS = 1.6;
 export const LOCKED_MESSAGE = 'This cartridge isn\'t ready yet. Pick another with ◀ ▶.';
 export const SLIDE_SECONDS = 0.36; // the carousel slide (34 columns, ease-out)
 export const TYPE_SECONDS = 0.3; // the console screen retypes left to right
-export const DIP_SECONDS = 0.3;
+export { DIP_SECONDS };
 export const LIBRARY_FADE_SECONDS = 0.3; // the library dissolves in when opened from Classic (a hard cut would flash)
-export const MESSAGE_SECONDS = 5;
+export const MESSAGE_SECONDS = 2.5; // the locked-cartridge message (it also clears on the next key)
 const TINT_LEVELS = [4, 8, 12, 15];
 const DEFAULT_HUE = '#9DB8A8';
 
@@ -93,7 +93,7 @@ export function createShell(o) {
 
   const view = () => ({
     cartridges: libCarts, index, prev, slide: Math.min(1, slideT / SLIDE_SECONDS), dir: lastDir, dial, type: Math.min(1, slideT / TYPE_SECONDS), idle: idleT, message,
-    dip: dipT < DIP_SECONDS / 2 ? 1 : 0, tier: sizeTier(cols, rows),
+    dip: dipAt(dipT), tier: sizeTier(cols, rows),
   });
 
   function resetLibrary(newFrom) {
@@ -221,6 +221,7 @@ export function createShell(o) {
   function key(token) {
     if (disposed) return;
     forced = true;
+    if (screen === 'library') message = ''; // the locked-cartridge message goes on the next key
     const map = SHELL_KEYS[screen];
     const e = map && map.get(token);
     if (e && e.action === 'quit') { actions.quit(token); return; }
