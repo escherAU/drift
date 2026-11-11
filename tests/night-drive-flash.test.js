@@ -45,6 +45,8 @@ const HOLD = TAPE.sceneSeconds; // 90
 const holdOf = (id) => (TAPE.seconds && TAPE.seconds[id]) ?? HOLD; // a scene with its own seconds (the 75 s call) is held for that long
 const FADE = 2;
 const nextOf = (i) => (i + 1) % ORDER.length;
+const B_SIZES = [[120, 40], [80, 24], [41, 11]], B_SPEEDS = [1, 4]; // what (b) runs every pair at
+const PAIRS = ORDER.map((a, k) => [a, ORDER[nextOf(k)]]); // every consecutive pair of the tape, the wrap included: what (b) runs
 
 // ---- (a) Overdrive's share of changed cells, every frame
 
@@ -119,8 +121,7 @@ test('flash (b) dissolves: every consecutive pair of the tape in manifest order,
   // caller before overdrive the pair re-points to caller -> overdrive (and the wrap, overdrive -> onramp, becomes the new last -> first).
   assert.ok(ORDER.length >= 2, 'the tape has at least two scenes');
   assert.ok(ORDER.includes('overdrive'), 'overdrive is on the tape');
-  const pairs = [];
-  for (let k = 0; k < ORDER.length; k++) pairs.push([ORDER[k], ORDER[nextOf(k)]]);
+  const pairs = PAIRS;
   assert.deepEqual(pairs[pairs.length - 1], [ORDER[ORDER.length - 1], ORDER[0]], 'the wrap is a pair');
   // the 75 s call is held for its own length, and the pairs on either side of it are run
   if (ORDER.includes('caller')) {
@@ -130,8 +131,8 @@ test('flash (b) dissolves: every consecutive pair of the tape in manifest order,
   }
   const rows = [], bad = [];
   for (const [a, b] of pairs) {
-    for (const [w, h] of [[120, 40], [80, 24], [41, 11]]) {
-      for (const speed of [1, 4]) {
+    for (const [w, h] of B_SIZES) {
+      for (const speed of B_SPEEDS) {
         const r = pairRun(a, b, w, h, speed);
         rows.push(`${r.key} worst ${pct(r.worst)} at ${r.where.toFixed(2)} s`);
         if (!(r.worst < FLASH_FRACTION)) bad.push(rows[rows.length - 1]);
@@ -140,6 +141,37 @@ test('flash (b) dissolves: every consecutive pair of the tape in manifest order,
   }
   console.log('TABLE flash (b)\n  ' + rows.join('\n  '));
   assert.deepEqual(bad, [], 'a frame of a dissolve at or over 30%');
+});
+
+// ---- coverage: the lists the suites iterate are the manifest's eight scenes, so nobody can quietly drop one
+
+const EIGHT = ['onramp', 'skyline', 'sundown', 'coast', 'redlight', 'diner', 'caller', 'overdrive'];
+
+test('flash coverage: the scenes, the tape order, the (b) pairs and the (c)/(d) scan jobs are the manifest\'s eight ids (8 pairs including the wrap, holds 90 and 75, caller -> overdrive among them)', () => {
+  assert.deepEqual(manifest.scenes.map((s) => s.id), EIGHT, 'the manifest lists the eight');
+  assert.deepEqual(SCENES.map((s) => s.id), EIGHT, 'the scenes every suite here loads');
+  assert.deepEqual(ORDER, EIGHT, 'the tape order (b) walks');
+  // (b): 8 pairs, each scene once as the first and once as the second, the wrap last, and the holds the pair runs with
+  assert.equal(PAIRS.length, 8);
+  assert.deepEqual(PAIRS.map(([a]) => a), EIGHT);
+  assert.deepEqual(PAIRS.map(([, b]) => b), [...EIGHT.slice(1), EIGHT[0]]);
+  assert.deepEqual(PAIRS[7], ['overdrive', 'onramp'], 'the wrap');
+  assert.ok(PAIRS.some(([a, b]) => a === 'caller' && b === 'overdrive') && PAIRS.some(([a, b]) => a === 'diner' && b === 'caller'));
+  assert.deepEqual(EIGHT.map(holdOf), [90, 90, 90, 90, 90, 90, 75, 90]);
+  // (b) runs every pair at 1x and 4x, at 120x40, 80x24 and 41x11 (the same constants (b) iterates)
+  assert.deepEqual(B_SPEEDS, [1, 4]);
+  assert.deepEqual(B_SIZES, [[120, 40], [80, 24], [41, 11]]);
+  assert.equal(PAIRS.length * B_SIZES.length * B_SPEEDS.length, 48, '48 pair runs');
+  // (c) and (d): the scan jobs cover every scene at both sizes, and the sims at 4x as well
+  const jobs = SCAN_JOBS.map(([s, w, h, speed]) => `${s.id} ${w}x${h} ${speed}x`);
+  for (const id of EIGHT) {
+    for (const size of ['120x40', '80x24']) assert.ok(jobs.includes(`${id} ${size} 1x`), `${id} ${size} 1x is scanned`);
+  }
+  assert.deepEqual([...new Set(SCAN_JOBS.map(([s]) => s.id))], EIGHT);
+  assert.deepEqual([...new Set(SCAN_JOBS.filter(([, , , speed]) => speed === 4).map(([s]) => s.id))], ['redlight', 'overdrive'], 'the sims also at 4x');
+  assert.equal(SCAN_JOBS.length, 8 * 2 + 2 * 2);
+  // control: a list with a scene dropped is not the eight
+  assert.notDeepEqual(EIGHT.filter((id) => id !== 'caller'), SCENES.map((s) => s.id));
 });
 
 // ---- (c) and (d): one pass over a scene alone gives both

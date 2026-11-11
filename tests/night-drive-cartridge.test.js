@@ -15,7 +15,10 @@ import { renderScene } from '../src/cells.js';
 import { isAllowedGlyph } from '../src/glyphs.js';
 import { shellHelpLines } from '../src/keymap.js';
 import { layoutFor } from '../src/overlay.js';
+import { Scheduler } from '../src/compose.js';
+import { DISSOLVE_SECONDS } from '../src/app.js';
 import { mkShell } from './helpers-shell.js';
+import { helpFrame, frameLines } from './helpers-help.js';
 import { cartridgeCodeProblems } from './cartridges.test.js';
 import * as P from '../cartridges/night-drive/lib/palette.js';
 
@@ -347,4 +350,127 @@ test('night-drive palette (C10): none of its colours is in the library palette o
     for (const hex of mine) assert.ok(!text.includes(hex), `${path.basename(f)} holds ${hex}`);
     assert.ok(!text.includes('NITE86') && !text.includes('NIGHT-DRIVE'), `${path.basename(f)} names the cartridge`);
   }
+});
+
+// ---- the full manifest (DRIFT-5: all eight tracks are on the tape)
+//
+// C6 above keeps its checks conditional on how many scenes a slice had; these are the full-tape facts, asserted outright. The literals
+// are the point of each test: the design's eight tracks, their order and kinds, the 90 s and 75 s holds, the 11:45 loop.
+
+const TRACKS = ['onramp', 'skyline', 'sundown', 'coast', 'redlight', 'diner', 'caller', 'overdrive'];
+const KINDS = { onramp: 'cells', skyline: 'cells', sundown: 'cells', coast: 'cells', redlight: 'sim', diner: 'cells', caller: 'cells', overdrive: 'sim' };
+const mmss = (secs) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+const holdOf = (tape, id) => (tape.seconds && tape.seconds[id]) ?? tape.sceneSeconds;
+
+test('night-drive manifest (C11): eight scenes in tape order with their kinds (six cells, two sims), exactly one program, the tape, which starts the cartridge', () => {
+  assert.deepEqual(manifest.scenes.map((s) => s.id), TRACKS, 'the eight scenes, in tape order');
+  assert.deepEqual(Object.fromEntries(manifest.scenes.map((s) => [s.id, s.kind])), KINDS);
+  assert.equal(manifest.scenes.filter((s) => s.kind === 'cells').length, 6, 'cells x6 (the call included)');
+  assert.equal(manifest.scenes.filter((s) => s.kind === 'sim').length, 2, 'sim x2');
+  assert.deepEqual(manifest.scenes.filter((s) => s.kind === 'sim').map((s) => s.id), ['redlight', 'overdrive']);
+  assert.equal(manifest.programs.length, 1, 'exactly one program');
+  assert.equal(manifest.programs[0].id, 'tape');
+  assert.equal(manifest.start, 'tape');
+  assert.deepEqual(manifest.programs[0].scenes, TRACKS, 'the tape plays the eight in order');
+  // controls: a swapped pair or a changed kind is not equal to the table
+  const swapped = [...TRACKS]; [swapped[1], swapped[2]] = [swapped[2], swapped[1]];
+  assert.notDeepEqual(swapped, manifest.scenes.map((s) => s.id));
+  assert.notEqual(KINDS.caller, 'sim');
+});
+
+test('night-drive manifest (C12): every scene holds 90 s but the call, which holds 75 s: from the data, and as the scheduler plays them (the dissolve is 2 s)', () => {
+  const tape = manifest.programs[0];
+  assert.equal(tape.sceneSeconds, 90);
+  assert.deepEqual(tape.seconds, { caller: 75 });
+  for (const id of TRACKS) assert.equal(holdOf(tape, id), id === 'caller' ? 75 : 90, `${id}: hold`);
+  // the scheduler, built as the shell builds it (runtime.js mkSched): scene k hands over to k+1 at the sum of the holds so far plus k+1 dissolves
+  const sched = new Scheduler({ count: TRACKS.length, durationSec: tape.sceneSeconds, fadeSec: DISSOLVE_SECONDS, start: 0, durations: TRACKS.map((id) => holdOf(tape, id)) });
+  const handOver = [];
+  const STEP = 0.25;
+  let t = 0, last = 0;
+  while (handOver.length < TRACKS.length && t < 800) {
+    sched.advance(STEP); t += STEP;
+    if (sched.state().a !== last) { handOver.push({ to: sched.state().a, t }); last = sched.state().a; }
+  }
+  assert.equal(handOver.length, TRACKS.length, 'it hands over eight times in the loop (the last one wraps)');
+  let sum = 0;
+  TRACKS.forEach((id, k) => {
+    sum += holdOf(tape, id) + DISSOLVE_SECONDS;
+    assert.equal(handOver[k].to, (k + 1) % TRACKS.length, `${id}: hands over to the next track`);
+    assert.ok(Math.abs(handOver[k].t - sum) <= STEP + 1e-9, `${id}: handed over at ${handOver[k].t} s, expected ${sum} s (its effective length ${holdOf(tape, id)} s plus the dissolve)`);
+  });
+  assert.equal(handOver[TRACKS.length - 1].t, 721, 'the loop, dissolves included, is 721 s');
+  // control: the call is 15 s shorter than a 90 s scene
+  assert.ok(Math.abs((handOver[6].t - handOver[5].t) - (75 + DISSOLVE_SECONDS)) <= STEP + 1e-9);
+  assert.ok(Math.abs((handOver[5].t - handOver[4].t) - (90 + DISSOLVE_SECONDS)) <= STEP + 1e-9);
+});
+
+test('night-drive menu entries (C13): every entry with a scene names the tape and a scene in it, one each, in order; every note is that scene\'s length as m:ss (1:30, the call 1:15)', () => {
+  const tape = manifest.programs[0];
+  const withScene = manifest.menu.filter((e) => e.scene !== undefined);
+  assert.equal(withScene.length, 8);
+  assert.deepEqual(withScene.map((e) => e.scene), TRACKS, 'one entry per scene, in tape order');
+  for (const e of withScene) {
+    assert.equal(e.program, tape.id, `${e.label}: names the tape`);
+    assert.ok(tape.scenes.includes(e.scene), `${e.label}: ${e.scene} is in the program`);
+    assert.equal(e.note, mmss(holdOf(tape, e.scene)), `${e.label}: the note is the length`);
+    assert.equal(e.note, e.scene === 'caller' ? '1:15' : '1:30', `${e.label}: 1:30, the call 1:15`);
+  }
+  const noScene = manifest.menu.filter((e) => e.scene === undefined);
+  assert.deepEqual(noScene.map((e) => e.action), ['eject'], 'the only entry without a scene is Eject');
+  // controls: a scene that is not in the program, and a note that is not the length, would be caught by the same comparisons
+  assert.ok(!tape.scenes.includes('bonus'));
+  assert.notEqual(mmss(75), '1:30');
+  assert.equal(mmss(90), '1:30');
+  assert.equal(mmss(75), '1:15');
+});
+
+// "about N min" / "N minutes" claims in a text
+const minuteClaims = (text) => [...String(text).matchAll(/(\d+)\s*min/g)].map((m) => +m[1]);
+
+test('night-drive manifest (C14): the tape loops in 705 s = 11:45, and the facts and the shelf blurb say about 12 minutes, never another length', () => {
+  const tape = manifest.programs[0];
+  const total = TRACKS.reduce((n, id) => n + holdOf(tape, id), 0);
+  assert.equal(total, 705);
+  assert.equal(mmss(total), '11:45');
+  assert.equal(Math.round(total / 60), 12);
+  const texts = [...manifest.facts, manifest.blurb];
+  const claims = texts.flatMap(minuteClaims);
+  assert.ok(claims.length >= 1, 'the facts do say how long it is');
+  assert.deepEqual([...new Set(claims)], [12], `every claim is 12 minutes (found ${claims})`);
+  assert.ok(manifest.facts.some((f) => /about 12 min/.test(f)), 'about 12 min');
+  // controls: the checker reads other lengths too
+  assert.deepEqual(minuteClaims('80s neon highway · about 9 min'), [9]);
+  assert.deepEqual(minuteClaims('about 12 minutes'), [12]);
+  assert.deepEqual(minuteClaims('no length here'), []);
+});
+
+test('night-drive manifest (C15): every scene title is 23 characters or fewer', () => {
+  for (const s of manifest.scenes) assert.ok([...s.title].length <= 23, `${s.id}: '${s.title}' is ${[...s.title].length} characters`);
+  assert.ok(Math.max(...manifest.scenes.map((s) => [...s.title].length)) >= 15, 'the titles are read (the longest is not trivial)');
+  assert.ok([...'A title of twenty-four ch'].length > 23, 'control: 24 characters is over');
+});
+
+test('night-drive help (C16): at 80x23 the Owner\'s Manual drawn for EVERY scene title shows the whole mode line, every key row, no truncation and no "enlarge window" line; at 14 rows the same panel is cut', () => {
+  const lines = shellHelpLines('running', skin);
+  const draw = (s, rows) => {
+    const info = {
+      mode: 'running', modeName: 'running', sceneName: s.id, ui: skin.palette.ui,
+      title: skin.help.title, box: skin.help.box, lines,
+      modeLine: `${skin.help.modeLabel}: ${manifest.title}    ${skin.help.sceneLabel}: ${s.title}`,
+    };
+    return { info, text: frameLines(helpFrame('running', 80, rows, info)).join('\n') };
+  };
+  assert.equal(manifest.scenes.length, 8);
+  for (const s of manifest.scenes) {
+    const { info, text } = draw(s, 23);
+    assert.ok(text.includes(info.modeLine), `${s.id} ('${s.title}'): the whole mode line is on the panel at 80x23`);
+    assert.ok(text.includes(skin.help.title), `${s.id}: the panel title`);
+    assert.ok(!/enlarge window/.test(text), `${s.id}: no "enlarge window" line`);
+    assert.ok(!/\(\+\d+ more/.test(text), `${s.id}: nothing cut`);
+    for (const label of Object.values(skin.wording.keys)) assert.ok(text.includes(label), `${s.id}: '${label}' is on the panel`);
+  }
+  // control: at 14 rows the same panel is cut and says so, so the checks above can fail
+  const cut = draw(manifest.scenes[0], 14);
+  assert.ok(/enlarge window/.test(cut.text), 'control: 14 rows gives the "enlarge window" line');
 });
