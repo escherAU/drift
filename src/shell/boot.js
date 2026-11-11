@@ -89,15 +89,15 @@ export function lineRuns(line) {
   return runs;
 }
 
-// The shade of each kind of run. Schema item 8 makes the value colour a skin field (boot.valueColour): this is
-// the one place that changes.
+// The shade of each kind of run. The value colour is the skin field boot.valueColour (schema item 8).
 function runShade(kind, ui, skin) {
   if (kind === 'value') return valueColour(skin, ui);
   return kind === 'dots' ? ui.dim : ui.text;
 }
-// HOOK (schema item 8): the colour of the value words. Today the skin's accent.
+// The colour of the value words: the skin's boot.valueColour (a palette index) when it sets one, else its accent.
 function valueColour(skin, ui) {
-  return ui.accent;
+  const v = skin && skin.boot && skin.boot.valueColour;
+  return Number.isInteger(v) ? v : ui.accent;
 }
 
 // One shade per character of the line.

@@ -482,7 +482,7 @@ export function validateSkin(obj) {
   if (obj.boot !== undefined) {
     const b = obj.boot;
     if (!isObj(b)) return fail('boot must be an object');
-    const k = unknownKey(b, ['lines', 'art', 'seconds'], 'boot');
+    const k = unknownKey(b, ['lines', 'art', 'seconds', 'valueColour'], 'boot');
     if (k) return fail(k);
     const o = {};
     if (b.lines !== undefined) {
@@ -492,6 +492,7 @@ export function validateSkin(obj) {
     }
     if (b.art !== undefined) { if (typeof b.art !== 'boolean') return fail('boot.art must be true or false'); o.art = b.art; }
     if (b.seconds !== undefined) { if (!Number.isFinite(b.seconds) || b.seconds < 0.5 || b.seconds > 10) return fail('boot.seconds must be 0.5 to 10'); o.seconds = b.seconds; }
+    if (b.valueColour !== undefined) { const e = idx(b.valueColour, 'boot.valueColour'); if (e) return fail(e); o.valueColour = b.valueColour; }
     out.boot = o;
   }
   if (obj.insert !== undefined) {

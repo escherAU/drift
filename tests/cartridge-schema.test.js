@@ -171,6 +171,12 @@ test('validateSkin: frame, menu, help, boot, insert and wording sections', () =>
   bad({ boot: { lines: ['x'.repeat(61)] } }, /boot\.lines\[0\] is 61 characters, max 60/);
   bad({ boot: { seconds: 11 } }, /boot\.seconds must be 0\.5 to 10/);
   bad({ boot: { art: 'yes' } }, /boot\.art must be true or false/);
+  assert.equal(validateSkin({ ...full, boot: { ...full.boot, valueColour: 3 } }).skin.boot.valueColour, 3, 'boot.valueColour is kept');
+  assert.equal(validateSkin(full).skin.boot.valueColour, undefined, 'absent stays absent');
+  bad({ boot: { valueColour: 16 } }, /boot.valueColour must be a palette index from 0 to 15/);
+  bad({ boot: { valueColour: -1 } }, /boot.valueColour must be a palette index/);
+  bad({ boot: { valueColour: 1.5 } }, /boot.valueColour must be a palette index/);
+  bad({ boot: { valueColour: '3' } }, /boot.valueColour must be a palette index/);
   bad({ insert: { text: 'x'.repeat(41) } }, /insert\.text is 41 characters, max 40/);
   bad({ wording: { keys: { 'Bad Id': 'x' } } }, /is not a key id/);
   bad({ wording: { keys: { eject: 'x'.repeat(29) } } }, /wording\.keys\.eject is 29 characters, max 28/);

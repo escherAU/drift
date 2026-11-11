@@ -745,3 +745,60 @@ test('the shell boots Classic on the console too, in the library palette, and ha
   tickFor(sh, 0.3);
   assert.equal(log.left, true, 'the Classic path takes over when the boot ends');
 });
+
+// ---- boot.valueColour (schema item 8): the words after a run of dots and a space take the skin's own shade
+
+const VC = 5; // a palette index that is none of the fixture's text, dim or accent
+const VC_SKIN = { ...BOOT_SKIN, boot: { ...BOOT_SKIN.boot, valueColour: VC } };
+const vcBoot = (skin, t, cols = 120, rows = 40) => {
+  const f = newFrame(cols, rows);
+  drawBoot(f, { skin, item: skinnedItem, labelArt: fixture.label, t, loading: false, title: 'Fixture', consoleMap: MAP }, driftmanSkin);
+  return f;
+};
+const shadesOf = (f, word, rowHas = word) => {
+  const ls = frameLines(f);
+  const y = ls.findIndex((l) => l.includes(rowHas));
+  assert.ok(y >= 0, word + ' is on screen');
+  const x = ls[y].indexOf(word);
+  return [...word].map((_, i) => f.shades[y * f.cols + x + i]);
+};
+
+test('boot.valueColour: the skin validates, and the colour is distinct from text, dim and accent in the fixture (so the test can tell)', () => {
+  assert.equal(validateSkin(JSON.parse(JSON.stringify(VC_SKIN))).ok, true);
+  assert.equal(validateSkin(JSON.parse(JSON.stringify({ ...driftmanSkin, boot: { ...driftmanSkin.boot, valueColour: 17 } }))).ok, true, 'the console skin may set it too');
+  assert.ok(![cartPal.ui.text, cartPal.ui.dim, cartPal.ui.accent].includes(VC));
+});
+
+test('boot.valueColour: "MEMORY 64K ..... OK" has its OK in that shade; the words, dots and plain lines keep text and dim', () => {
+  const f = vcBoot(VC_SKIN, P.on + LINES.length * LINE_SECONDS + 0.01);
+  assert.deepEqual(shadesOf(f, 'OK', 'MEMORY 64K'), [VC, VC]);
+  assert.deepEqual(shadesOf(f, 'FIXTURE', 'CARTRIDGE ...'), Array(7).fill(VC));
+  assert.deepEqual(shadesOf(f, 'UNROLLED', 'MAP ...'), Array(8).fill(VC));
+  assert.deepEqual(shadesOf(f, 'MEMORY', 'MEMORY 64K'), Array(6).fill(cartPal.ui.text), 'the text before the dots is untouched');
+  assert.deepEqual(shadesOf(f, '.....'), Array(5).fill(cartPal.ui.dim), 'the dots are untouched');
+  assert.deepEqual(shadesOf(f, 'forest'), Array(6).fill(cartPal.ui.text), 'a line without dots is all text');
+});
+
+test('boot.valueColour: absent, the value words keep the accent exactly, and the frames equal those of a skin that never heard of it', () => {
+  const absent = { ...BOOT_SKIN, boot: { ...BOOT_SKIN.boot } };
+  for (const t of [P.on + 0.3, P.on + LINES.length * LINE_SECONDS + 0.01, P.linesEnd + 0.2]) {
+    const a = vcBoot(BOOT_SKIN, t), b = vcBoot(absent, t);
+    assert.deepEqual(Array.from(a.shades), Array.from(b.shades));
+    assert.deepEqual(Array.from(a.glyphs), Array.from(b.glyphs));
+  }
+  assert.deepEqual(shadesOf(vcBoot(BOOT_SKIN, P.on + LINES.length * LINE_SECONDS + 0.01), 'OK', 'MEMORY 64K'), [ACCENT, ACCENT]);
+  const withColour = vcBoot(VC_SKIN, P.on + LINES.length * LINE_SECONDS + 0.01), without = vcBoot(BOOT_SKIN, P.on + LINES.length * LINE_SECONDS + 0.01);
+  assert.deepEqual(Array.from(withColour.glyphs), Array.from(without.glyphs), 'only shades change, never glyphs');
+});
+
+test('boot.valueColour: the console skin own value colour is used when it is the boot skin (Classic path)', () => {
+  const cs = { ...classicBootSkin, boot: { ...classicBootSkin.boot, valueColour: 17 } };
+  const f = newFrame(120, 40);
+  const PC = bootPhases(cs);
+  drawBoot(f, { skin: cs, item: classicItem, t: PC.linesEnd + 0.01, title: 'Drift Classic' }, driftmanSkin);
+  const ls = frameLines(f);
+  const y = ls.findIndex((x) => x.includes('CALM') && x.includes('...'));
+  assert.equal(f.shades[y * 120 + ls[y].indexOf('CALM')], 17);
+  const y0 = ls.findIndex((x) => x.includes('Nothing to do.'));
+  assert.equal(f.shades[y0 * 120 + ls[y0].indexOf('Nothing')], driftmanSkin.palette.ui.text);
+});
