@@ -5,13 +5,15 @@
 // the width at the bottom (k = 2.33 * w/120 * 24/rows-below-the-horizon). The right edge is the mirror of the left, so the road
 // is exactly symmetric about the middle.
 //
-// A thing in flight has a phase u from 0 (at the horizon) to 1 (at the car). Its depth z runs linearly from `below` (rows under
-// the horizon) down to 1, and its row is horizon + below / z, which is what makes the far part crawl and the near part rush.
+// A thing in flight has a phase u from 0 (at the horizon) to 1 (at the car). Its distance under the horizon is
+// 1 + (below - 1) u^2 rows: it starts just under the horizon, crawls at first and gathers speed toward the car. (True perspective,
+// horizon + below / z, rushes the last 20 rows in a single frame and shows a dash at only one place at a time; the squared ease
+// keeps the same far-to-near feeling and moves a dash at most two rows a frame.)
 export const DASH_TRAVEL = 1.2; // seconds for a dash from the horizon to the car
 export const DASH_COUNT = 3; // dashes in flight per lane line, evenly spaced
 export const DASH_PERIOD = 0.4; // = DASH_TRAVEL / DASH_COUNT: the whole picture repeats
 export const LAMP_PERIOD = 2.4; // seconds between street lamps
-export const LAMP_HEIGHT = 16; // rows of a lamp at the bottom
+export const LAMP_HEIGHT = 16; // rows of a lamp at full size at 120x40 (scaled with the rows under the horizon); full size is reached at three quarters of the way down, and it leaves past the right edge
 export const POST_PERIOD = 1.2; // seconds between reflector posts
 
 export function geometry(w, h) {
@@ -45,8 +47,7 @@ const frac = (x) => x - Math.floor(x);
 // Rows under the horizon (1 .. below) of a thing at phase u (0 to 1).
 export function depthRows(g, u) {
   const uu = u < 0 ? 0 : u > 1 ? 1 : u;
-  const z = g.below - (g.below - 1) * uu;
-  return g.below / z;
+  return 1 + (g.below - 1) * uu * uu;
 }
 export function rowAtPhase(g, u) {
   return g.horizon + Math.round(depthRows(g, u));
@@ -58,12 +59,13 @@ export function dashRow(g, T, i) {
 }
 
 // The street lamp at scene time T: the row of its foot, its height in rows, the column of its pole and the arm length.
-// It starts one row tall beside the far road and leaves past the right edge of the window.
+// It starts one row tall beside the far road, grows to full height (16 rows at 120x40) and leaves past the right edge of the window.
 export function lamp(g, T) {
   const u = frac(T / LAMP_PERIOD);
   const d = depthRows(g, u);
   const foot = g.horizon + Math.round(d);
-  const height = Math.max(1, Math.round((d * LAMP_HEIGHT) / g.below));
+  const maxH = Math.round((LAMP_HEIGHT * g.below) / 24);
+  const height = Math.min(maxH, Math.max(1, Math.round((d * maxH) / (0.75 * g.below))));
   const x = edgeR(g, foot) + 2 + Math.round(d * 0.3);
   return { u, d, foot, height, x, arm: Math.round(height / 5) };
 }
@@ -74,4 +76,9 @@ export function post(g, T) {
   const d = depthRows(g, u);
   const foot = g.horizon + Math.round(d);
   return { u, d, foot, x: edgeL(g, foot) - 2 - Math.round(d * 0.2) };
+}
+
+// The width of one lane at row r, in columns.
+export function laneWidth(g, r) {
+  return (edgeR(g, r) - edgeL(g, r)) / 3;
 }
