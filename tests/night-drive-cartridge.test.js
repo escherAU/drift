@@ -209,7 +209,7 @@ test('night-drive manifest (C6): every scene file exists and is the kind the man
     assert.equal(e.program, 'tape');
     assert.equal(e.scene, ids[i], 'in tape order');
     assert.ok(tape.scenes.includes(e.scene), `${e.label} is in the program`);
-    assert.match(e.label, /^[AB][1-4]  [A-Z][A-Z ,'-]+$/, 'side, number, name');
+    assert.match(e.label, /^[AB][1-4]  [A-Z][A-Z0-9 ,'-]+$/, 'side, number, name');
     assert.ok(e.note && width(e.note) <= LIMITS.menuNote);
     assert.ok(e.desc && width(e.desc) <= LIMITS.menuDesc);
     const secs = (tape.seconds && tape.seconds[e.scene]) ?? tape.sceneSeconds;

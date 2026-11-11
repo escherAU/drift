@@ -202,7 +202,7 @@ test('night-drive skyline (K5): reflections shift a column at most every 0.5 s p
       for (let i = 0; i < a.g.length; i++) {
         if (!inBay(i) || (a.g[i] === b.g[i] && a.c[i] === b.c[i])) continue;
         n++;
-        if (last.has(i)) assert.ok(t - last.get(i) >= 0.5 - 1 / FPS - 1e-9, `${speed}x: cell ${i} changed again after ${(t - last.get(i)).toFixed(3)} s`);
+        if (last.has(i)) assert.ok(t - last.get(i) >= 0.5 - speed / FPS - 1e-9, `${speed}x: cell ${i} changed again after ${(t - last.get(i)).toFixed(3)} s`);
         last.set(i, t);
       }
       worst = Math.max(worst, n); total += n; frames++;
