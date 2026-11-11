@@ -134,8 +134,8 @@ test('library: the highlight ramps over several frames (a cursor move never swap
   };
   const classicShade = (f) => {
     const lines = frameLines(f);
-    const y = lines.findIndex((l) => l.includes('classic'));
-    return f.shades[y * f.cols + lines[y].indexOf('classic')];
+    const y = lines.findIndex((l) => l.includes('░▒▒▓▓▓▓▒▒░'));
+    return f.shades[y * f.cols + lines[y].indexOf('░▒▒▓▓▓▓▒▒░')];
   };
   const sel = [], old = [];
   for (const slide of [0, 0.25, 0.5, 0.75, 1]) {
@@ -167,7 +167,7 @@ test('insert: every phase at every size draws allowed glyphs, owns every cell, a
   // phases at 120x40: lift (t=0.2 one row up), neighbours gone by 0.45, cartridge into the slot by 0.85
   const rowOf = (f, needle) => frameLines(f).findIndex((l) => l.includes(needle));
   const at = (t, it = classicItem) => { const f = newFrame(120, 40); drawInsert(f, { item: it, t }, driftmanSkin); return f; };
-  const label = entries[0].label[0];
+  const label = entries[0].label[1];
   const r0 = rowOf(at(0), label), r1 = rowOf(at(0.2), label), r2 = rowOf(at(0.85), label);
   assert.equal(r1, r0 - 1, 'lifted one row');
   assert.equal(r2, r0 + 3, 'dropped three rows (from rest)');

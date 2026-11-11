@@ -32,3 +32,69 @@ test('driftman palette: silver, graphite, cyan, amber and dim on #0a0c10, 20 ent
   assert.equal(validateSkin(JSON.parse(JSON.stringify(classicBootSkin))).ok, true);
   assert.ok(relLuminance(parseHex(p.bg)) <= 0.02, 'dark background');
 });
+
+// ---- labels and manifests
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseTextAsset, validateManifest } from '../src/cartridge/schema.js';
+import { isAllowedGlyph } from '../src/glyphs.js';
+
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const FLAGGED = ['◍', '◎', '◑', '◢', '◣', '∫', '≡']; // the designer's glyphs we avoid
+const IDS = ['classic', 'night-drive', 'last-fantasy', 'arcade'];
+const rawLabel = (id) => {
+  const lines = fs.readFileSync(path.join(ROOT, 'cartridges', id, 'label.txt'), 'utf8').split(/\r?\n/);
+  if (lines[lines.length - 1] === '') lines.pop();
+  return lines;
+};
+
+test('label.txt files: 10 rows, nothing wider than 24, the art fills the width, allowed glyphs only', () => {
+  for (const id of IDS) {
+    const lines = rawLabel(id);
+    assert.equal(lines.length, 10, `${id} rows`);
+    const widths = lines.map((l) => [...l].length);
+    assert.ok(widths.every((w) => w <= 24), `${id} widths ${widths}`);
+    assert.equal(Math.max(...widths), 24, `${id}: some row reaches the right edge`);
+    const r = parseTextAsset(lines.join('\n'), { maxW: 24, maxH: 10 });
+    assert.equal(r.ok, true, `${id}: ${r.reason}`);
+    for (const l of lines) for (const ch of l) assert.ok(isAllowedGlyph(ch.codePointAt(0)), `${id}: U+${ch.codePointAt(0).toString(16)}`);
+  }
+});
+
+test('labels: Classic is sun over water, Last Fantasy has a beacon tower and no sword, none uses a flagged glyph', () => {
+  const classic = rawLabel('classic').join('\n');
+  assert.ok(classic.includes('▄▄▓▓▓▓▄▄') && classic.includes('≈≈≈≈≈') && classic.includes('~ ≈ ~'), 'sun, horizon, water');
+  const lf = rawLabel('last-fantasy').join('\n');
+  assert.ok(lf.includes('▐█▌') && lf.includes('●'), 'a beacon tower with its light');
+  assert.ok(!lf.includes('┼'), 'the sword cross-guard is gone');
+  assert.ok(rawLabel('arcade')[0].includes('1P 004200') && rawLabel('arcade')[1].includes('▐█▌'), 'score line and bricks');
+  assert.ok(rawLabel('night-drive')[5].includes('╱  ╲'), 'the road');
+});
+
+test('no flagged glyph anywhere in src/shell or cartridges/ (control: the scan does see a planted one)', () => {
+  const walk = (dir, out = []) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p, out); else out.push(p);
+    }
+    return out;
+  };
+  const scan = (text) => FLAGGED.filter((g) => text.includes(g));
+  const files = [...walk(path.join(ROOT, 'src', 'shell')), ...walk(path.join(ROOT, 'cartridges'))];
+  assert.ok(files.length >= 10);
+  for (const f of files) assert.deepEqual(scan(fs.readFileSync(f, 'utf8')), [], f);
+  assert.deepEqual(scan('a ◢ b'), ['◢'], 'control');
+});
+
+test('install manifests: reconciled codes, the designer copy where the schema allows it', () => {
+  const m = (id) => JSON.parse(fs.readFileSync(path.join(ROOT, 'cartridges', id, 'manifest.json'), 'utf8'));
+  for (const id of IDS) assert.equal(validateManifest(m(id), { trusted: true }).ok, true, id);
+  assert.equal(m('night-drive').code, 'DM-02');
+  assert.equal(m('arcade').code, 'DM-03');
+  assert.equal(m('last-fantasy').code, 'DM-04');
+  assert.equal(m('night-drive').blurb, 'Neon highway, endless dusk, and a car that never needs fuel.');
+  assert.ok(!/sword/i.test(JSON.stringify(m('last-fantasy'))), 'no sword in the Last Fantasy manifest');
+  assert.equal(m('classic').code, undefined, 'the schema does not allow code on a playable cartridge yet (schema item 2)');
+});

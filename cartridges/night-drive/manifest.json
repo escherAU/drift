@@ -4,9 +4,9 @@
   "title": "Night Drive",
   "version": "0.1.0",
   "author": "Drift",
-  "blurb": "Neon highways after midnight.",
+  "blurb": "Neon highway, endless dusk, and a car that never needs fuel.",
   "locked": true,
-  "code": "DM-01",
+  "code": "DM-02",
   "facts": ["Genre: racing", "Players: 1", "Status: coming soon"],
   "labelHue": "#B07CFF"
 }
