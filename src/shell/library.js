@@ -301,14 +301,15 @@ export function consoleGrid(sel, o = {}) {
   const FR = frameChars(st), BZ = bezelChars(st);
   const G = newGrid(CONSOLE_W, CONSOLE_H);
   const sh = st.shade;
+  const hs = st.housing === undefined ? sh : st.housing; // the slot housing's own shade (the insert click brightens it)
   // slot housing (rows 0-1) and its floor (row 2)
-  gRun(G, HOUSING_X, 0, 0x2584, 28, sh);
-  gPut(G, HOUSING_X, 1, 0x2588, sh); gPut(G, HOUSING_X + 1, 1, 0x258c, sh);
-  gPut(G, HOUSING_X + 26, 1, 0x2590, sh); gPut(G, HOUSING_X + 27, 1, 0x2588, sh);
+  gRun(G, HOUSING_X, 0, 0x2584, 28, hs);
+  gPut(G, HOUSING_X, 1, 0x2588, hs); gPut(G, HOUSING_X + 1, 1, 0x258c, hs);
+  gPut(G, HOUSING_X + 26, 1, 0x2590, hs); gPut(G, HOUSING_X + 27, 1, 0x2588, hs);
   gPut(G, 0, 2, FR[0], sh); gRun(G, 1, 2, FR[1], 27, sh);
-  gPut(G, HOUSING_X, 2, 0x2588, sh); gPut(G, HOUSING_X + 1, 2, 0x2599, sh);
+  gPut(G, HOUSING_X, 2, 0x2588, hs); gPut(G, HOUSING_X + 1, 2, 0x2599, hs);
   gRun(G, MOUTH_X, 2, 0x2584, MOUTH_W, st.openShade);
-  gPut(G, MOUTH_X + MOUTH_W, 2, 0x259f, sh); gPut(G, MOUTH_X + MOUTH_W + 1, 2, 0x2588, sh);
+  gPut(G, MOUTH_X + MOUTH_W, 2, 0x259f, hs); gPut(G, MOUTH_X + MOUTH_W + 1, 2, 0x2588, hs);
   gRun(G, 56, 2, FR[1], 27, sh); gPut(G, 83, 2, FR[2], sh);
   // body rows 3-13: the bezel screen (48) and the panel (29)
   for (let k = 0; k < 11; k++) {
@@ -364,10 +365,11 @@ export function miniGrid(o = {}) {
   const FR = frameChars(st);
   const sh = st.shade;
   const G = newGrid(MINI_W, MINI_H);
-  gRun(G, 5, 0, 0x2584, 28, sh);
+  const hs = st.housing === undefined ? sh : st.housing;
+  gRun(G, 5, 0, 0x2584, 28, hs);
   gPut(G, 0, 1, FR[0], sh); gRun(G, 1, 1, FR[1], 4, sh);
-  gPut(G, 5, 1, 0x2588, sh); gPut(G, 6, 1, 0x258c, sh);
-  gPut(G, 31, 1, 0x2590, sh); gPut(G, 32, 1, 0x2588, sh);
+  gPut(G, 5, 1, 0x2588, hs); gPut(G, 6, 1, 0x258c, hs);
+  gPut(G, 31, 1, 0x2590, hs); gPut(G, 32, 1, 0x2588, hs);
   gRun(G, 33, 1, FR[1], 4, sh); gPut(G, 37, 1, FR[2], sh);
   gPut(G, 0, 2, FR[7], sh); gPut(G, 37, 2, FR[3], sh);
   gPut(G, 2, 2, 0x25cf, DRIFTMAN_COLOURS.amber); gText(G, 3, 2, ' PWR', ui.dim);
@@ -620,7 +622,9 @@ function drawListPane(ctx, view, skin, x, y, w, slots, gap) {
 //   o.drop       rows it has dropped (0..3)
 //   o.fadeP      0..1 dissolve of the neighbours, dots, hint and the console screen
 //   o.body       console style overrides ({ led, ledShade, openShade, shade, ... }) and
-//   o.sweep      { x, style }: the skin-takeover band over the console, from the left edge to column x
+//   o.spread     columns the neighbours have slid outward (each to its own side)
+//   o.sweep      { x, style, band: { w, style } }: the skin-takeover over the console. Columns left of x - w show the
+//                console in `style`; the w columns before x show it in band.style (the band); the rest is unchanged
 //   o.hint       replaces the hint line text
 //   o.noArrows   accepted for the insert animation (the shelf draws no arrows: the hint names the keys)
 export function drawShelf(f, view, skin, o = {}) {
@@ -642,7 +646,12 @@ export function drawShelf(f, view, skin, o = {}) {
   const makeConsole = (style) => (L.full ? consoleGrid(sel, { st: style, ui, n, index: view.index, dial: view.dial, type: view.type, scan: idle ? scanAt(idle) : null, cursor: idle ? cursorShadeAt(idle) : undefined }) : miniGrid({ st: style, ui }));
   const cx = L.full ? L.consoleX : L.miniX, cy = L.full ? L.consoleTop : L.miniTop;
   blit(f, makeConsole(st), cx, cy, { fadeP });
-  if (o.sweep && o.sweep.x > 0) blit(f, makeConsole(consoleStyle(skin, o.sweep.style)), cx, cy, { fadeP, clipX1: Math.min(f.cols, Math.floor(o.sweep.x)) });
+  if (o.sweep && o.sweep.x > 0) {
+    // behind the band the console is in its swapped state; the band itself (sweep.band = { w, style }) is that state one shade up
+    const x = Math.floor(o.sweep.x), bw = o.sweep.band ? o.sweep.band.w : 0, x0 = Math.max(0, x - bw);
+    blit(f, makeConsole(consoleStyle(skin, o.sweep.style)), cx, cy, { fadeP, clipX1: Math.min(f.cols, x0) });
+    if (bw > 0) blit(f, makeConsole(consoleStyle(skin, o.sweep.band.style)), cx, cy, { fadeP, clipX0: x0, clipX1: Math.min(f.cols, x) });
+  }
 
   if (L.full) {
     // while the shelf slides it is displaced by `shift` columns; the cartridges beyond the settled cluster
@@ -659,7 +668,7 @@ export function drawShelf(f, view, skin, o = {}) {
           const idx = wrapIdx(view.index + side * r, n);
           if (seen.has(idx)) continue;
           seen.add(idx);
-          const x = L.cartX + side * r * L.step + shift;
+          const x = L.cartX + side * r * L.step + shift + side * (o.spread || 0);
           const visible = Math.min(x + CART_W, f.cols, win1) - Math.max(x, 0, win0);
           if (visible < (shift ? 1 : 3)) continue;
           blit(f, cartAt(idx, false), x, L.cartTop, { fadeP, all: true, clipX0: win0, clipX1: win1 });

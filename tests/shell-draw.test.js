@@ -187,7 +187,7 @@ test('insert: every phase at every size draws allowed glyphs, owns every cell, a
     const x = lines[y].indexOf('CART') - 2;
     return { glyph: lines[y][x], shade: f.shades[y * f.cols + x] };
   };
-  assert.equal(cartLed(at(0.8)).glyph, '●');
+  assert.equal(cartLed(at(0.8)).glyph, '○', 'CART is ○ until the click (designer step 4; the stub drew it solid early)');
   assert.notEqual(cartLed(at(0.8)).shade, driftmanSkin.palette.ui.accent);
   assert.equal(cartLed(at(0.9)).shade, driftmanSkin.palette.ui.accent, 'CART LED on in the accent colour');
 });
