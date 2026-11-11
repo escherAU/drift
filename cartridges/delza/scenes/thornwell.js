@@ -65,7 +65,7 @@ function thornwell(t, w, h, params) {
 
   // the Brambleback crosses the mid-ground (behind the path), one start in each 50 s
   const bk = Math.floor(T / 50);
-  const bs = bk * 50 + 10 + Math.floor(rand(S + 13, bk, 0) * 20);
+  const bs = bk * 50 + 15 + Math.floor(rand(S + 13, bk, 0) * 10); // starts 40 to 60 s apart
   if (T >= bs) {
     const bx = W + 1 - Math.floor((T - bs) / BRAMBLE_STEP);
     if (bx > -BRAMBLE_W) drawBrambleback(cv, bx, gy - BRAMBLE_H);

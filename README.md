@@ -221,7 +221,7 @@ snap to their place instead of sliding. This is a deliberate cost choice: moving
 the distance, and a continuous slide there wrote about twice the bytes of the full tier.
 
 Each unlocked card shows its manifest `code` on its name plate and on the console screen (a locked card shows SOON there instead). The scheme is DM-00 Classic, DM-01 Delza, DM-02 Night Drive,
-DM-03 Arcade and DM-04 Last Fantasy; a card only appears when its folder exists, so Delza is absent until it is added. Any
+DM-03 Arcade and DM-04 Last Fantasy; a card only appears when its folder exists. Delza (DM-01) is installed, so the shelf is Classic, Arcade, Delza, Last Fantasy and Night Drive (the loader sorts the folders by name, Classic first). Any
 manifest (including a data-only user cartridge) may set `code` and `facts`.
 
 ### What a cartridge is: the folder format
@@ -270,8 +270,8 @@ and never stops the others; at most 50 cartridges are read.
 | `scenes` | yes (1 to 16) | list of `{ id, kind, title?, ref? }`. `id` follows the id rule; `kind` is `cells`, `sim`, `field` (code, install only), `text` (a `scenes/<id>.txt` file) or `builtin`; `title` up to 30 characters; `ref` (builtin only) names a Classic **calm** or **experimental** scene, such as `sand` or `plasma` |
 | `programs` | yes (1 to 8) | list of `{ id, title?, transition, scenes, sceneSeconds?, seconds?, fadeSeconds? }`: `transition` is `dissolve` or `crossfade`; `scenes` lists scene ids (1 to 16); `sceneSeconds` 20 to 3600 (default 180); `seconds` (optional) is an object keyed by scene id that gives single scenes their own time, 20 to 3600 each (a key must be a scene in this program; scenes not named use `sceneSeconds`); `fadeSeconds` 5 to 60 (default 15, crossfade only, and shorter than the shortest scene time: `sceneSeconds` or any `seconds` entry). A `crossfade` program holds only `field` scenes and calm builtins; a `dissolve` program holds `cells`, `sim`, `text` and experimental builtins |
 | `start` | yes | the id of the program that plays first |
-| `menu` | no (1 to 10) | list of entries: `{ label, program, scene?, note?, desc? }` or `{ label, action: "eject", note? }`. `label` up to 24 characters. `scene` (only with `program`) is a scene id in that program: choosing the entry starts the program at that scene, and a scene entry is marked as playing only while that scene plays (choosing the scene that is already playing, or the playing program with no `scene`, changes nothing). `note` up to 16 characters is a short tag at the right of the entry (in the list the box widens to hold it; in the slots layout it sits on the label row; in the grid it is a row under the label; it is left out when there is no room for it as well as the whole label). `desc` up to 76 characters is shown, wrapped to two lines above the hint, for the highlighted entry in the `list` layout only (left out when the window is too short, before the title). Without a `menu` the menu is one entry per program plus Eject |
-| `chapters` | no (1 to 16) | list of `{ id, numeral, place, line, icon, minutes }` for cartridges that present their scenes as chapters: `id` is a scene id (each at most once), `numeral` up to 8 characters, `place` up to 30, `line` up to 64, `icon` two pieces of text of at most 5 characters each, `minutes` a whole number 1 to 999. It is validated and kept with the manifest; no screen draws it yet |
+| `menu` | no (1 to 10) | list of entries: `{ label, program, scene?, note?, desc? }` or `{ label, action: "eject", note? }`. `label` up to 24 characters. `scene` (only with `program`) is a scene id in that program: choosing the entry starts the program at that scene, and a scene entry is marked as playing only while that scene plays (choosing the scene that is already playing, or the playing program with no `scene`, changes nothing). `note` up to 16 characters is a short tag at the right of the entry (in the list the box widens to hold it; in the slots layout it sits on the label row; in the grid it is a row under the label; it is left out when there is no room for it as well as the whole label). `desc` up to 76 characters is shown, wrapped to two lines above the hint, for the highlighted entry in the `list` layout (left out when the window is too short, before the title); in the `slots` layout it is the second row of the entry's card, and an entry that names a chapter falls back to the chapter's `line` when it has no `desc`. Without a `menu` the menu is one entry per program plus Eject |
+| `chapters` | no (1 to 16) | list of `{ id, numeral, place, line, icon, minutes }` for cartridges that present their scenes as chapters: `id` is a scene id (each at most once), `numeral` up to 8 characters, `place` up to 30, `line` up to 64, `icon` two pieces of text of at most 5 characters each, `minutes` a whole number 1 to 999. The `slots` menu draws it: a menu entry whose `scene` has a chapter shows the chapter's icon (two rows), numeral and place on its card, and the chapter's line when the entry has no `desc` (see the menu layouts below) |
 
 **Skin** (`skin.json`; every section but `palette` is optional and has a default taken from the
 Driftman 2000; a cartridge with no `skin.json` uses the Driftman 2000's whole look). Palette indexes 0 to 15 are the hue at 16 brightness levels, exactly as in Classic;
@@ -280,9 +280,9 @@ Driftman 2000; a cartridge with no `skin.json` uses the Driftman 2000's whole lo
 | section | fields |
 |---|---|
 | `palette` (required) | `hue` `#RRGGBB`; `colours` up to 48 extra fixed colours (indexes 16 and up); `bg` the background, which must be dark (WCAG relative luminance 0.05 or less, else "background too light"); `ui` `{ text, dim, head, accent }`, palette indexes for the console's own text (defaults 15, 7, 15, 15) |
-| `frame` | `show` `never`, `menu` or `always` (when the frame is drawn around the scene); `glyphs` 8 characters; `title` up to 30; `colour` a palette index |
+| `frame` | `show` `never`, `menu` or `always` (when the frame is drawn around the scene); `glyphs` 8 characters; `title` up to 30; `colour` a palette index; `ornament` up to 30 characters, set into the bottom edge, centred (Delza: `Ψ · Δ · Ξ · Φ · Ω`) |
 | `console` | restyles the Driftman 2000 itself once the cartridge is in (see below); every field optional |
-| `menu` | `layout` `list`, `slots` or `grid`; `anchor` `center`, `left` or `bottom`; `cursor` 1 character; `title` up to 40; `box` 8 characters |
+| `menu` | `layout` `list`, `slots` or `grid`; `anchor` `center`, `left` or `bottom`; `cursor` 1 character; `title` up to 40; `box` 8 characters; `prompt` up to 60 characters, one line above the menu (dropped when it does not fit beside the countdown); `autostartSeconds` 5 to 60, see below |
 | `help` | `title` up to 30; `box` 8 characters; `groups` `{ "Cartridge": "...", "Other": "..." }` renames the two headings on the running screen (up to 24 characters each); `modeLabel` and `sceneLabel` up to 12 each, replacing "cartridge" and "scene" on the mode line (which shows the cartridge title and the scene title) |
 | `boot` | `lines` up to 8 typed lines of up to 60 characters, typed after the console's own two (`DRIFTMAN 2000 · CORE 2.0`, `MEMORY 64K ..... OK`); the screen has room for six lines in all and 40 columns (so four of yours, up to 40 characters), and text after a run of dots and a space (the `OK` of `MEMORY ..... OK`) is drawn in the accent colour, or in `valueColour` when the skin sets it; `art` true to draw `boot.txt`; `seconds` 0.5 to 10, how long the typed lines take (0.25 s a line; the default 1.5 s is six lines); `valueColour` a palette index (0 up to the size of the palette), the shade of those value words, default the accent |
 | `insert` | `text` up to 40: the caption of the insert animation |
@@ -325,10 +325,31 @@ flash-safe, and three named ones cover the console well):
 | layout | what it draws |
 |---|---|
 | `list` | a boxed column, one row per entry (the default) |
-| `slots` | one 4-row card per entry, collapsing to 2-row cards below 30 rows |
+| `slots` | one 4-row card per entry, collapsing to 2-row cards below 30 rows. Row one is the cursor, the icon's first row, the numeral, the label (and the current mark) and the place at the right; row two is the icon's second row, the description and the note at the right (the note takes row one when there is no place). Cards widen to hold the longest line, stay two columns inside the window, and drop the place or the note, never the label, when there is no room |
 | `grid` | 22 x 7 tiles in rows, collapsing to the list below 100 columns |
 
 A layout that does not fit the window (too many entries for the rows) falls back to the list.
+
+**The start-by-itself countdown.** With `menu.autostartSeconds` set, the menu that opens when the cartridge arrives counts down, drawn at the right of the line above the menu (`starts by itself in 15 s`, beside `menu.prompt` when there is one). At zero the menu closes and the program that has been playing behind it carries on; any key at all (even one that does nothing) cancels the countdown, and the menu then stays until its 20 s idle close. A menu the viewer opens with Enter never counts down.
+
+### Delza, the first real cartridge
+
+Delza (DM-01) is a woodsy fantasy: Orrin Thistlewick, a lamplighter's apprentice, crosses the Hollowmere Reach with a moth
+named Pim. Everything in it is original. The skin gives it a forest-dark background (#0F1A12), a Greek-rune console
+(`◆═◆║◆═◆║` frame, `▒` grille, the stripe `Ψ · Δ · Ξ · Φ · Ω`), the Journal menu (the `slots` layout with chapter cards, a 15 s
+countdown and the title in the frame), its own help words (`tale:`, `chapter:`, the groups Chapters and Camp) and four boot lines.
+The `c` key walks Greenwood, Autumn and Moonlit: only the pines (the skin's hue) change colour. Its scenes live in
+`cartridges/delza/scenes/` and share `cartridges/delza/lib/` (`palette.js` names the colours, `canvas.js` draws and clips,
+`sprites.js` holds the pictures, `clock.js` gives a scene its own start time from `params.t0`):
+
+| chapter | scene | kind | what moves |
+|---|---|---|---|
+| I | `thornwell` The Thornwell Path | cells | forest walk in parallax layers; lantern glow; Pim; a Brambleback every 40 to 60 s; the far ridge is dropped at 80x24 |
+| II | `tallow` The Tallow & Tin | sim | the hearth fire (shade drift, never out), sparks, pipe smoke, mugs, the cat's tail; under 1% of the screen changes a frame |
+| III | `cinderhorn` The Cinderhorn | cells | a 4 s-a-turn fight, then the calm; a hit glow lights only the creature's own cells two shades, 0.15 s up and 0.45 s down, never closer than 1.5 s |
+
+`tests/delza-*.test.js` check the manifest, skin, palette, Journal at 120x40 and 80x24, help words, boot lines, the countdown, the
+seasons and each scene's promises on rendered frames.
 
 ### Where cartridges are read from, and the trust rule
 
@@ -446,7 +467,7 @@ bin/drift.js      entry   bin/drift.cmd  shim  tools/          capture.mjs measu
 src/cartridge/    schema.js (ids, limits, validators)  loader.js (discover + load)  textscene.js  palette.js
 src/shell/        the console: shell.js (screen machine)  runtime.js (a running cartridge)  library.js insert.js
                   boot.js menu.js chrome.js ui.js (pure draw functions)  driftman.js (the console's own skin)
-cartridges/       the install cartridges: classic and the locked ones (label.txt + manifest.json each)
+cartridges/       the install cartridges: classic, delza (manifest, skin, label, scenes/, lib/) and the locked ones (label.txt + manifest.json each)
 ```
 
 Non-calm scene contract (`src/cells.js`): `kind: 'cells'` scenes are `scene(t, w, h, params)`
@@ -475,14 +496,14 @@ not a TTY, drift prints a message and exits 0 without emitting any escape sequen
 npm test            # node --test, no dependencies
 ```
 
-The suite is 977 tests in `tests/*.test.js` and takes about 20 seconds (test files run in parallel). The cartridge work is
+The suite is 1066 tests in `tests/*.test.js` and takes about 20 seconds (test files run in parallel). The cartridge work is
 covered by `cartridge-schema` (validators, text scene, skin palette), `cartridge-loader`
 (every way a cartridge can be wrong, and both arms of the trust rule), `cartridge-scenes` (every
 install cartridge's scenes through the size, glyph, colour, determinism and flash checks, with controls
 that must fail), `cartridges` (glyph and import scans over `cartridges/`), `config-extras`, `shell-app`
 (the console at app level on a fake clock), `shell-draw` and `shell-flash` (every screen at every size,
 and the photosensitivity checks), `tools-cartridges` (the cartridge captures and `measure.mjs` options),
-`readme-cartridge` (the example in this README), and the cartridge arms of `real-process` (below).
+`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow` and `delza-cinderhorn` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), and the cartridge arms of `real-process` (below).
 
 Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 `tests/real-process.test.js`, which spawns the real `bin/drift.js` with piped stdio):
