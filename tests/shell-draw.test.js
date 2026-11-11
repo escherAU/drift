@@ -84,8 +84,9 @@ test('library: at 80x24 one whole cartridge is visible (label art and blurb); at
   drawLibrary(f, view(0), driftmanSkin);
   const t = text(f);
   for (const row of cartridges[0].label) assert.ok(t.includes(row), `label row ${JSON.stringify(row)}`);
-  assert.ok(flat(f).includes(cartridges[0].manifest.blurb), 'blurb');
-  assert.ok(flat(f).includes('Drift Classic'), 'title');
+  // the blurb wraps at 34 inside its box, so look for each wrapped line
+  for (const line of wrapWords(cartridges[0].manifest.blurb, 34).slice(0, 3)) assert.ok(flat(f).includes(line), `blurb line ${line}`);
+  assert.ok(flat(f).includes('Drift Classic'), 'title in the list');
   assert.equal(sizeTier(80, 24), 'compact');
   const g = newFrame(120, 40);
   drawLibrary(g, view(1), driftmanSkin);
@@ -93,12 +94,13 @@ test('library: at 80x24 one whole cartridge is visible (label art and blurb); at
   for (const row of cartridges[1].label) assert.ok(u.includes(row), 'selected label');
   assert.ok(u.includes(cartridges[0].label[2]) && u.includes(cartridges[2].label[2]), 'both neighbours are on the shelf');
   assert.equal(sizeTier(120, 40), 'full');
-  // locked cartridges say so
+  assert.match(flat(g), /Genre: test · Players: 1/, 'facts line on the console screen');
+  // locked cartridges say so: SOON on the plate, "Not on the shelf yet." on the screen, and the message
   const l = newFrame(120, 40);
   drawLibrary(l, view(2, { message: 'hello message' }), driftmanSkin);
-  assert.match(flat(l), /\(locked\)/);
+  assert.match(flat(l), /SOON/);
+  assert.match(flat(l), /Not on the shelf yet\./);
   assert.match(flat(l), /hello message/);
-  assert.match(flat(l), /Status: soon/, 'facts');
 });
 
 test('library: size tiers (88x39 full, 78x24 compact, 40x10 list) and the bigger-window line below 40x10', () => {
@@ -175,12 +177,19 @@ test('insert: every phase at every size draws allowed glyphs, owns every cell, a
   const fixtureRow = entries[1].label[1];
   assert.equal(count(text(at(0)), fixtureRow), 2, 'both neighbours (fixture and locker share this art) at the start');
   assert.equal(count(text(at(0.45)), fixtureRow), 0, 'neighbours gone at 0.45');
-  assert.match(text(at(0)), /left\/right choose/);
-  assert.ok(!/left\/right choose/.test(text(at(0.45))), 'hint gone');
-  // the LED goes from solid to on at the click (cell shade changes to the accent colour)
-  const ledShade = (f) => { const y = f.rows; for (let i = 0; i < f.glyphs.length; i++) if (f.glyphs[i] === 0x25cf && f.shades[i] === driftmanSkin.palette.ui.accent) return true; return y < 0; };
-  assert.equal(ledShade(at(0.8)), false);
-  assert.equal(ledShade(at(0.9)), true, 'CART LED on in the accent colour');
+  assert.match(text(at(0)), /◀ ▶ choose/);
+  assert.ok(!/◀ ▶ choose/.test(text(at(0.45))), 'hint gone');
+  // the CART LED goes from solid to on at the click (its cell shade changes to the accent colour);
+  // the PWR LED is always amber, so look at the glyph in front of the word CART on the console
+  const cartLed = (f) => {
+    const lines = frameLines(f);
+    const y = lines.findIndex((l) => l.includes('● PWR'));
+    const x = lines[y].indexOf('CART') - 2;
+    return { glyph: lines[y][x], shade: f.shades[y * f.cols + x] };
+  };
+  assert.equal(cartLed(at(0.8)).glyph, '●');
+  assert.notEqual(cartLed(at(0.8)).shade, driftmanSkin.palette.ui.accent);
+  assert.equal(cartLed(at(0.9)).shade, driftmanSkin.palette.ui.accent, 'CART LED on in the accent colour');
 });
 
 test('insert: the takeover band sweeps left to right (Classic: a shimmer only, no change of frame glyphs)', () => {

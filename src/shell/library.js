@@ -1,5 +1,5 @@
-// The cartridge library screen and the console body it shares with the insert animation (DRIFT-4).
-// A stub: simple but correct. Pure; writes every cell it owns (it clears the whole frame first).
+// The cartridge library screen and the Driftman 2000 console art it shares with the insert animation
+// (DRIFT-4). Pure: writes every cell it owns (it clears the whole frame first), never throws at any size.
 //
 //   drawLibrary(frame, view, skin)       skin = the console skin (driftman.js)
 //
@@ -15,37 +15,343 @@
 //     dip     0 or 1: rows the selected cartridge is pressed down (the locked "dip and spring back")
 //     tier    'full' | 'compact' | 'list' | 'tiny'   (optional; worked out from the frame size)
 //   }
-// Size tiers: full >= 88x39 (three cartridges, details), compact >= 78x24 (one cartridge, blurb),
-// list >= 40x10 (text list), below that one line asking for a bigger window.
+//
+// Pieces (all assembled from component specs; widths are asserted in tests/shell-library-art.test.js):
+//   cartridge   30 x 18   shell, grip ridges, LED, label window 24 x 10, name plate, tongue, contacts
+//   console     84 x 18   slot housing, 46 x 9 bezel screen, panel (LEDs, TUNE dial, grille, buttons), chrome band
+//   mini        38 x 4    the compact tier's console
+//   spine        4 x 10   the extra-large tier's shelf
+// Layout tiers (sizeTier in ui.js):
+//   full     >= 88 x 39   centre cartridge, neighbours 4 columns apart (step 34), far ones as slivers at the edges
+//   extra    >= 176 x 58  the full layout with 2 whole neighbours each side (5 x 30 + 4 x 4 = 166 columns), a spine
+//                         shelf above the cartridges (10 + 1 rows) and a desk line under the console feet. 176 is the
+//                         166-column cluster plus 5 columns of air each side; 58 is the 53-row composition plus 5.
+//                         Nothing is scaled: the art stays at its normal size and is centred.
+//   compact  >= 78 x 24   one cartridge left, the CARTRIDGES list and blurb box right, the mini console under it
+//   list     >= 40 x 10   the list and a hint, no art
+//   tiny                  one line asking for a bigger window
 import { put, putText, putCentered, centerX, lenOf, drawBox, wrapWords, clearFrame, sizeTier, drawTooSmall, dissolveThresholds } from './ui.js';
 import { DRIFTMAN_COLOURS } from './driftman.js';
 
 export const LABEL_W = 24;
 export const LABEL_H = 10;
-export const NEIGHBOUR_STEP = 28;
-export const SLOT_W = 30;
-export const SLOT_H = 3;
-export const SLOT_BOX = '╔═╗║╝═╚║';
-export const LIBRARY_HINT = 'left/right choose   Enter insert   h help   q quit';
+export const CART_W = 30;
+export const CART_H = 18;
+export const CONSOLE_W = 84;
+export const CONSOLE_H = 18;
+export const MINI_W = 38;
+export const MINI_H = 4;
+export const SPINE_W = 4;
+export const SPINE_H = 10;
+export const NEIGHBOUR_STEP = 34; // 30 wide + a 4 column gap
+export const SLOT_W = CART_W;
+export const SLOT_BOX = '╔═╗║╝═╚║'; // the screen bezel (and what "no change" means for a skin takeover)
+export const ROUND_BOX = '╭─╮│╯─╰│'; // the console's outer frame
 export const TITLE_TEXT = 'D R I F T M A N   2 0 0 0';
+export const SOON_STRIP = '────── COMING SOON ─────'; // replaces label row 4 of a locked cartridge
+export const XL_COLS = 176;
+export const XL_ROWS = 58;
+export const FULL_H = 39; // dots, gap, cartridge 18, console 18, hint
+export const XL_H = 53; // + spine shelf 11 and 1 gap, + desk line and 1 gap, same dots and hint
+export const COMPACT_H = 24;
+export const LIST_SLOTS = 5; // rows of the compact tier's list
+export const LOCKED_NOTE = 'Not on the shelf yet.';
 
 const wrapIdx = (i, n) => ((i % n) + n) % n;
+const cpOf = (ch) => ch.codePointAt(0);
 
-// Where everything sits for a frame size (full and compact tiers).
-export function shelfLayout(cols, rows, tier) {
-  const full = tier === 'full';
-  const infoH = full ? 10 : 3;
-  const blockH = 2 + LABEL_H + 1 + SLOT_H + 1 + infoH + 1 + 1;
-  const y0 = Math.max(0, Math.floor((rows - 1 - blockH) / 2));
-  const labelTop = y0 + 2;
-  const labelBottom = labelTop + LABEL_H - 1;
-  const slotY = labelBottom + 1;
-  const infoY = slotY + SLOT_H + 1;
-  const dotsY = infoY + infoH + 1;
-  const cx = Math.floor(cols / 2);
+// ---- grids: a small sprite (cols x rows of glyph + shade). A blank glyph is transparent.
+
+function newGrid(w, h) {
+  return { w, h, g: new Uint16Array(w * h).fill(32), s: new Uint8Array(w * h), fl: new Uint8Array(w * h) };
+}
+function gPut(G, x, y, cp, shade, fade = 0) {
+  if (x < 0 || y < 0 || x >= G.w || y >= G.h) return;
+  const i = y * G.w + x;
+  G.g[i] = cp;
+  G.s[i] = cp === 32 ? 0 : shade;
+  G.fl[i] = fade;
+}
+function gText(G, x, y, text, shade, fade = 0, maxW = Infinity) {
+  let n = 0;
+  for (const ch of String(text)) {
+    if (n >= maxW) break;
+    const cp = cpOf(ch);
+    if (cp !== 32) gPut(G, x + n, y, cp, shade, fade);
+    n++;
+  }
+}
+function gRun(G, x, y, ch, count, shade) {
+  const cp = typeof ch === 'string' ? cpOf(ch) : ch;
+  for (let i = 0; i < count; i++) gPut(G, x + i, y, cp, shade);
+}
+// The grid as text rows (blank cells as spaces). Tests assert widths on these.
+export function gridRows(G) {
+  const out = [];
+  for (let y = 0; y < G.h; y++) out.push(String.fromCharCode(...G.g.subarray(y * G.w, (y + 1) * G.w)));
+  return out;
+}
+
+// Copy a grid onto the frame. Blank grid cells leave what is underneath. Options:
+//   fadeP + all   dissolve every cell (fadeP 0..1); with fadeP only, just the cells the grid marked as fading
+//   clipX0/clipX1 only columns in [clipX0, clipX1) of the frame; clipY rows at or below it are not drawn
+function blit(f, G, x0, y0, o = {}) {
+  const fadeP = o.fadeP || 0, all = !!o.all;
+  const cx0 = o.clipX0 === undefined ? 0 : o.clipX0, cx1 = o.clipX1 === undefined ? f.cols : o.clipX1;
+  const cy = o.clipY === undefined ? Infinity : o.clipY;
+  const thr = fadeP > 0 ? dissolveThresholds(f.cols * f.rows) : null;
+  for (let y = 0; y < G.h; y++) {
+    const yy = y0 + y;
+    if (yy < 0 || yy >= f.rows || yy >= cy) continue;
+    for (let x = 0; x < G.w; x++) {
+      const xx = x0 + x;
+      if (xx < cx0 || xx >= cx1 || xx < 0 || xx >= f.cols) continue;
+      const i = y * G.w + x;
+      const cp = G.g[i];
+      if (cp === 32) continue;
+      if (thr && (all || G.fl[i]) && fadeP >= thr[yy * f.cols + xx]) continue;
+      f.glyphs[yy * f.cols + xx] = cp;
+      f.shades[yy * f.cols + xx] = G.s[i];
+    }
+  }
+}
+
+// ---- the cartridge component, 30 x 18
+
+const nameOf = (c) => String(c.title || '').toUpperCase();
+
+// o = { selected, level (1-3 brightness of label and chrome), ui }
+// Shell and window frame take the chrome shade, the name its own, the label the cartridge's tint.
+export function cartridgeGrid(cart, o = {}) {
+  const ui = o.ui || { text: 15, dim: 19, head: 15, accent: 16 };
+  const locked = !!cart.locked;
+  const selected = !!o.selected;
+  const level = Math.max(1, Math.min(3, o.level || (selected ? 3 : 1)));
+  const H = locked ? '┄' : '─', V = locked ? '┆' : '│';
+  const chrome = level >= 3 ? 13 : level === 2 ? 9 : DRIFTMAN_COLOURS.housing;
+  const G = newGrid(CART_W, CART_H);
+  const row = (y, s, shade = chrome) => gText(G, 0, y, s, shade);
+
+  row(0, '╭' + H.repeat(28) + '╮');
+  row(1, V + '  ════' + ' '.repeat(18 + 1 + 3) + V); // the LED goes in at column 25 below
+  gPut(G, 25, 1, selected && !locked ? 0x25cf : 0x25cb, selected && !locked ? cart.tint + 3 : DRIFTMAN_COLOURS.housing);
+  row(2, V + ' ┌' + H.repeat(24) + '┐ ' + V);
+  for (let r = 0; r < LABEL_H; r++) row(3 + r, V + ' ' + V + ' '.repeat(LABEL_W) + V + ' ' + V);
+  row(13, V + ' └' + H.repeat(24) + '┘ ' + V);
+
+  // the label art
+  const lines = (cart.label || []).slice(0, LABEL_H);
+  for (let r = 0; r < LABEL_H; r++) {
+    const chars = [...(lines[r] || '')].slice(0, LABEL_W);
+    const ink = cart.ink && cart.ink[r] ? cart.ink[r] : null;
+    for (let c = 0; c < chars.length; c++) {
+      const cp = cpOf(chars[c]);
+      if (cp === 32) continue;
+      const lv = locked ? 0 : (ink && ink[c] >= '0' && ink[c] <= '3' ? Number(ink[c]) : level);
+      gPut(G, 3 + c, 3 + r, cp, cart.tint + lv);
+    }
+  }
+  if (locked) {
+    for (let c = 0; c < LABEL_W; c++) gPut(G, 3 + c, 3 + 4, 32, 0); // the strip replaces row 4 whole
+    gText(G, 3, 3 + 4, SOON_STRIP, ui.dim);
+  }
+
+  // the name plate: "V  " + name padded to 19 + code (5) + "  V"
+  const name = [...nameOf(cart)].slice(0, 19).join('').padEnd(19);
+  const code = (locked ? 'SOON' : String(cart.code || '')).slice(0, 5).padEnd(5);
+  gText(G, 3, 14, name, level >= 2 ? cart.tint + level : ui.dim);
+  gText(G, 22, 14, code, ui.dim);
+  gPut(G, 0, 14, cpOf(V), chrome); gPut(G, 29, 14, cpOf(V), chrome);
+
+  // the tongue and its contacts
+  row(15, '╰' + H.repeat(2) + '┬' + H.repeat(22) + '┬' + H.repeat(2) + '╯');
+  gPut(G, 3, 16, cpOf(V), chrome); gPut(G, 26, 16, cpOf(V), chrome);
+  if (!locked) gRun(G, 4, 16, 0x258c, 22, selected ? DRIFTMAN_COLOURS.amber : DRIFTMAN_COLOURS.housing);
+  row(17, '   ╰' + H.repeat(22) + '╯');
+  return G;
+}
+
+// ---- the spine (extra-large tier), 4 x 10: the name down the middle in vertical letters
+
+export function spineGrid(cart, o = {}) {
+  const ui = o.ui || { text: 15, dim: 19, head: 15, accent: 16 };
+  const locked = !!cart.locked, lit = !!o.selected;
+  const H = locked ? '┄' : '─', V = locked ? '┆' : '│';
+  const chrome = lit ? 13 : DRIFTMAN_COLOURS.housing;
+  const G = newGrid(SPINE_W, SPINE_H);
+  gText(G, 0, 0, '╭' + H + H + '╮', chrome);
+  gText(G, 0, SPINE_H - 1, '╰' + H + H + '╯', chrome);
+  const letters = [...nameOf(cart)].filter((ch) => ch !== ' ').slice(0, SPINE_H - 2);
+  for (let r = 0; r < SPINE_H - 2; r++) {
+    gPut(G, 0, 1 + r, cpOf(V), chrome); gPut(G, 3, 1 + r, cpOf(V), chrome);
+    if (!locked) gPut(G, 1, 1 + r, 0x258c, cart.tint + (lit ? 3 : 1));
+    if (letters[r]) gPut(G, 2, 1 + r, cpOf(letters[r]), lit ? cart.tint + 3 : ui.dim);
+  }
+  return G;
+}
+
+// ---- the console, 84 x 18
+
+const HOUSING_X = 28; // the slot housing is 28 wide; the mouth inside it is 24 wide at columns 30-53
+export const MOUTH_X = 30;
+export const MOUTH_W = 24;
+const BEZEL_X = 2;
+const PANEL_X = 53;
+
+// the TUNE dial: 9 x 5 with 8 pointer positions clockwise from the top
+const DIAL = ['  ╭───╮  ', ' ╱     ╲ ', '│   ●   │', ' ╲     ╱ ', '  ╰───╯  '];
+const POINTER = [
+  [[1, 4, '│']], [[1, 5, '╱']], [[2, 5, '─'], [2, 6, '─']], [[3, 5, '╲']],
+  [[3, 4, '│']], [[3, 3, '╱']], [[2, 2, '─'], [2, 3, '─']], [[1, 3, '╲']],
+];
+export const DIAL_POSITIONS = POINTER.length;
+
+export function consoleStyle(skin, overrides = {}) {
+  const ui = skin.palette.ui;
   return {
-    full, barY: y0, labelTop, labelBottom, slotY, infoY, infoH, dotsY, hintY: rows - 1, messageY: Math.min(rows - 3, dotsY + 1),
-    cx, xSel: cx - LABEL_W / 2, slotX: cx - SLOT_W / 2,
+    box: SLOT_BOX, shade: DRIFTMAN_COLOURS.housing, bar: ui.head, led: 'off', ledShade: DRIFTMAN_COLOURS.housing,
+    openShade: DRIFTMAN_COLOURS.dark, link: false, grille: 0x2592, stripe: null, ...overrides,
+  };
+}
+
+const frameChars = (st) => ((st.box && st.box !== SLOT_BOX) ? [...st.box].map(cpOf) : [...ROUND_BOX].map(cpOf));
+const bezelChars = (st) => [...(st.box || SLOT_BOX)].map(cpOf);
+const LED_GLYPH = { off: 0x25cb, solid: 0x25cf, on: 0x25cf };
+
+function ledRow(G, x, y, st, ui, fade = 0) {
+  gPut(G, x, y, 0x25cf, DRIFTMAN_COLOURS.amber); gText(G, x + 1, y, ' PWR', ui.dim, fade);
+  gPut(G, x + 9, y, LED_GLYPH[st.led] || 0x25cb, st.led === 'on' ? st.ledShade : (st.led === 'solid' ? st.ledShade : DRIFTMAN_COLOURS.housing));
+  gText(G, x + 10, y, ' CART', ui.dim, fade);
+  gPut(G, x + 19, y, st.link ? 0x25cf : 0x25cb, st.link ? DRIFTMAN_COLOURS.cyan : DRIFTMAN_COLOURS.housing);
+  gText(G, x + 20, y, ' LINK', ui.dim, fade);
+}
+
+// the screen's 9 interior rows: [{ text, shade, x }] by row (x = column inside the 44-wide text area)
+function screenRows(sel, n, ui) {
+  const rows = [];
+  const locked = !!sel.locked;
+  rows[0] = [{ x: 0, text: nameOf(sel), shade: sel.tint + 3 }, { x: 44 - 5, text: locked ? 'SOON ' : String(sel.code || '').padEnd(5), shade: ui.dim, right: true }];
+  rows[1] = [{ x: 0, text: '─'.repeat(44), shade: DRIFTMAN_COLOURS.housing }];
+  const wrap = wrapWords(sel.blurb || '', 44);
+  for (let k = 0; k < Math.min(2, wrap.length); k++) rows[2 + k] = [{ x: 0, text: wrap[k], shade: ui.text }];
+  if (locked) {
+    rows[5] = [{ x: 0, text: LOCKED_NOTE, shade: ui.text }];
+    if (n > 1) rows[7] = [{ x: 0, text: '◀ ▶ to browse', shade: ui.dim }];
+  } else {
+    const facts = (sel.facts || []).join(' · ');
+    if (facts) rows[5] = [{ x: 0, text: [...facts].slice(0, 44).join(''), shade: ui.dim }];
+    rows[7] = [{ x: 0, text: '▶ Enter to insert', shade: ui.text }, { x: 17, text: '▌', shade: DRIFTMAN_COLOURS.amber }];
+  }
+  return rows;
+}
+
+// o = { st (console style), ui, n (cartridges on the shelf), index (the cursor, turns the TUNE dial) }
+export function consoleGrid(sel, o = {}) {
+  const st = o.st || {};
+  const ui = o.ui || { text: 15, dim: 19, head: 15, accent: 16 };
+  const n = o.n || 1;
+  const FR = frameChars(st), BZ = bezelChars(st);
+  const G = newGrid(CONSOLE_W, CONSOLE_H);
+  const sh = st.shade;
+  // slot housing (rows 0-1) and its floor (row 2)
+  gRun(G, HOUSING_X, 0, 0x2584, 28, sh);
+  gPut(G, HOUSING_X, 1, 0x2588, sh); gPut(G, HOUSING_X + 1, 1, 0x258c, sh);
+  gPut(G, HOUSING_X + 26, 1, 0x2590, sh); gPut(G, HOUSING_X + 27, 1, 0x2588, sh);
+  gPut(G, 0, 2, FR[0], sh); gRun(G, 1, 2, FR[1], 27, sh);
+  gPut(G, HOUSING_X, 2, 0x2588, sh); gPut(G, HOUSING_X + 1, 2, 0x2599, sh);
+  gRun(G, MOUTH_X, 2, 0x2584, MOUTH_W, st.openShade);
+  gPut(G, MOUTH_X + MOUTH_W, 2, 0x259f, sh); gPut(G, MOUTH_X + MOUTH_W + 1, 2, 0x2588, sh);
+  gRun(G, 56, 2, FR[1], 27, sh); gPut(G, 83, 2, FR[2], sh);
+  // body rows 3-13: the bezel screen (48) and the panel (29)
+  for (let k = 0; k < 11; k++) {
+    const y = 3 + k;
+    gPut(G, 0, y, FR[7], sh); gPut(G, 83, y, FR[3], sh);
+    if (k === 0 || k === 10) {
+      const [l, m, r] = k === 0 ? [BZ[0], BZ[1], BZ[2]] : [BZ[6], BZ[5], BZ[4]];
+      gPut(G, BEZEL_X, y, l, sh); gRun(G, BEZEL_X + 1, y, m, 46, sh); gPut(G, BEZEL_X + 47, y, r, sh);
+    } else {
+      gPut(G, BEZEL_X, y, BZ[7], sh); gPut(G, BEZEL_X + 47, y, BZ[3], sh);
+    }
+  }
+  const rows = screenRows(sel, n, ui);
+  for (let j = 0; j < 9; j++) {
+    for (const seg of rows[j] || []) gText(G, BEZEL_X + 2 + seg.x, 4 + j, seg.text, seg.shade, 1);
+  }
+  // the panel
+  ledRow(G, PANEL_X, 3, st, ui);
+  for (let r = 0; r < DIAL.length; r++) {
+    for (let c = 0; c < 9; c++) {
+      const ch = DIAL[r][c];
+      if (ch === ' ') continue;
+      gPut(G, PANEL_X + 1 + c, 5 + r, cpOf(ch), ch === '●' ? ui.text : DRIFTMAN_COLOURS.housing);
+    }
+    gRun(G, PANEL_X + 14, 5 + r, st.grille, 13, sh);
+  }
+  const pos = wrapIdx(o.index || 0, DIAL_POSITIONS);
+  for (const [r, c, ch] of POINTER[pos]) gPut(G, PANEL_X + 1 + c, 5 + r, cpOf(ch), DRIFTMAN_COLOURS.amber);
+  gText(G, PANEL_X + 3, 10, 'TUNE', ui.dim);
+  gText(G, PANEL_X + 3, 12, '[ EJECT ]', ui.dim);
+  gText(G, PANEL_X + 16, 12, '[ RESET ]', ui.dim);
+  // the chrome band
+  if (st.box && st.box !== SLOT_BOX) { gPut(G, 0, 14, FR[7], sh); gRun(G, 1, 14, FR[1], 82, sh); gPut(G, 83, 14, FR[3], sh); }
+  else { gPut(G, 0, 14, 0x255e, sh); gRun(G, 1, 14, 0x2550, 82, sh); gPut(G, 83, 14, 0x2561, sh); }
+  gPut(G, 0, 15, FR[7], sh); gPut(G, 83, 15, FR[3], sh);
+  gText(G, 3, 15, TITLE_TEXT, st.bar);
+  const stripe = [...(st.stripe || ('═'.repeat(30) + '╱╱╱╱'))].slice(0, 34);
+  gText(G, 31, 15, stripe.join(''), sh);
+  gText(G, 68, 15, 'MODEL DM-2000', ui.dim);
+  gPut(G, 0, 16, FR[6], sh); gRun(G, 1, 16, FR[5], 82, sh); gPut(G, 83, 16, FR[4], sh);
+  gRun(G, 3, 17, 0x2580, 6, sh); gRun(G, 75, 17, 0x2580, 6, sh);
+  return G;
+}
+
+// The mini console, 38 x 4: the housing (mouth at columns 7-30), the LEDs and the name.
+export function miniGrid(o = {}) {
+  const st = o.st || {};
+  const ui = o.ui || { text: 15, dim: 19, head: 15, accent: 16 };
+  const FR = frameChars(st);
+  const sh = st.shade;
+  const G = newGrid(MINI_W, MINI_H);
+  gRun(G, 5, 0, 0x2584, 28, sh);
+  gPut(G, 0, 1, FR[0], sh); gRun(G, 1, 1, FR[1], 4, sh);
+  gPut(G, 5, 1, 0x2588, sh); gPut(G, 6, 1, 0x258c, sh);
+  gPut(G, 31, 1, 0x2590, sh); gPut(G, 32, 1, 0x2588, sh);
+  gRun(G, 33, 1, FR[1], 4, sh); gPut(G, 37, 1, FR[2], sh);
+  gPut(G, 0, 2, FR[7], sh); gPut(G, 37, 2, FR[3], sh);
+  gPut(G, 2, 2, 0x25cf, DRIFTMAN_COLOURS.amber); gText(G, 3, 2, ' PWR', ui.dim);
+  gPut(G, 9, 2, LED_GLYPH[st.led] || 0x25cb, st.led === 'off' || !st.led ? DRIFTMAN_COLOURS.housing : st.ledShade);
+  gText(G, 10, 2, ' CART', ui.dim);
+  gText(G, 19, 2, 'DRIFTMAN 2000', st.bar === undefined ? ui.head : st.bar);
+  gPut(G, 0, 3, FR[6], sh); gRun(G, 1, 3, FR[5], 36, sh); gPut(G, 37, 3, FR[4], sh);
+  return G;
+}
+
+// ---- layout
+
+export function isExtraLarge(cols, rows) {
+  return cols >= XL_COLS && rows >= XL_ROWS;
+}
+
+// Where everything sits for a frame size (full, extra-large and compact tiers).
+export function shelfLayout(cols, rows, tier) {
+  if (tier === 'compact') {
+    const y0 = Math.max(0, Math.floor((rows - COMPACT_H) / 2));
+    const cartX = Math.max(4, Math.floor((cols - 74) / 2) + 1);
+    const cartTop = y0 + 1;
+    return {
+      full: false, xl: false, y0, cartTop, cartX, miniTop: cartTop + CART_H, miniX: cartX - 4, listX: cartX + 36, listW: 38,
+      hintY: y0 + COMPACT_H - 1, messageY: y0 + COMPACT_H - 1,
+    };
+  }
+  const xl = isExtraLarge(cols, rows);
+  const h = xl ? XL_H : FULL_H;
+  const y0 = Math.max(0, Math.floor((rows - h) / 2));
+  const cartTop = y0 + (xl ? 14 : 2);
+  const consoleTop = cartTop + CART_H;
+  const cartX = Math.floor(cols / 2) - CART_W / 2;
+  return {
+    full: true, xl, y0, dotsY: y0, messageY: y0 + 1, spineY: y0 + 2, shelfY: y0 + 12, cartTop, cartX, consoleTop,
+    consoleX: cartX - 27, deskY: consoleTop + CONSOLE_H, hintY: consoleTop + CONSOLE_H + (xl ? 2 : 0), step: NEIGHBOUR_STEP,
   };
 }
 
@@ -57,83 +363,61 @@ export function levelOf(view, i) {
   return 1;
 }
 
-// One cartridge's label art with its bottom row at bottomY. Rows at or below clipY are not drawn (the
-// part that has gone into the slot). fadeP 0..1 dissolves it away cell by cell.
-export function drawLabel(f, x, bottomY, cart, level, clipY = Infinity, fadeP = 0) {
-  const lines = cart.label || [];
+// ---- drawing helpers that fade with the insert animation
+
+function fadeCtx(f, fadeP) {
   const thr = fadeP > 0 ? dissolveThresholds(f.cols * f.rows) : null;
-  const top = bottomY - (lines.length - 1);
-  for (let r = 0; r < lines.length; r++) {
-    const y = top + r;
-    if (y < 0 || y >= f.rows || y >= clipY) continue;
-    const chars = [...lines[r]];
-    const ink = cart.ink && cart.ink[r] ? cart.ink[r] : null;
-    for (let c = 0; c < chars.length; c++) {
-      const cp = chars[c].codePointAt(0);
-      const xx = x + c;
-      if (cp === 32 || xx < 0 || xx >= f.cols) continue;
-      if (thr && fadeP >= thr[y * f.cols + xx]) continue;
-      const lv = ink && ink[c] >= '0' && ink[c] <= '3' ? Number(ink[c]) : level;
-      put(f, xx, y, cp, cart.tint + lv);
-    }
-  }
-}
-
-const LED = { off: 0x25cb, solid: 0x25cf, on: 0x25cf };
-
-// The console body: title bar, the slot, the CART LED. st = { box, rule, shade, led, ledShade, openShade, bar }.
-// clip = { x0, x1 } limits which columns are written (the skin-takeover band).
-export function drawConsoleBody(f, L, st, clip) {
-  const x0 = clip ? clip.x0 : 0, x1 = clip ? clip.x1 : f.cols;
-  if (x1 <= x0) return;
-  const sub = { glyphs: f.glyphs, shades: f.shades, cols: f.cols, rows: f.rows };
-  // draw into the real frame, then restore the columns outside the clip from a copy
-  const keep = clip ? snapshotRows(f, [L.barY, L.barY + 1, L.slotY, L.slotY + 1, L.slotY + 2]) : null;
-  putCentered(sub, L.barY, TITLE_TEXT, st.bar);
-  const ruleW = Math.min(36, f.cols - 2);
-  for (let i = 0; i < ruleW; i++) put(sub, centerX(f.cols, ruleW) + i, L.barY + 1, st.rule, st.shade);
-  const w = Math.min(SLOT_W, f.cols);
-  const sx = Math.max(0, L.slotX);
-  drawBox(sub, sx, L.slotY, w, SLOT_H, st.box, st.shade);
-  for (let i = 1; i < w - 1; i++) put(sub, sx + i, L.slotY + 1, 0x2591, st.openShade);
-  const ledX = sx + Math.floor(w / 2) + 3;
-  putText(sub, ledX - 7, L.slotY + 2, ' CART ', st.shade);
-  put(sub, ledX, L.slotY + 2, LED[st.led], st.ledShade);
-  if (keep) restoreOutside(f, keep, x0, x1);
-}
-
-function snapshotRows(f, ys) {
-  const out = [];
-  for (const y of ys) {
-    if (y < 0 || y >= f.rows) continue;
-    out.push({ y, g: f.glyphs.slice(y * f.cols, (y + 1) * f.cols), s: f.shades.slice(y * f.cols, (y + 1) * f.cols) });
-  }
-  return out;
-}
-function restoreOutside(f, keep, x0, x1) {
-  for (const k of keep) {
-    for (let x = 0; x < f.cols; x++) {
-      if (x >= x0 && x < x1) continue;
-      f.glyphs[k.y * f.cols + x] = k.g[x];
-      f.shades[k.y * f.cols + x] = k.s[x];
-    }
-  }
-}
-
-export function consoleStyle(skin, overrides = {}) {
-  const ui = skin.palette.ui;
   return {
-    box: SLOT_BOX, rule: 0x2550, shade: DRIFTMAN_COLOURS.housing, bar: ui.head, led: 'off', ledShade: DRIFTMAN_COLOURS.housing,
-    openShade: DRIFTMAN_COLOURS.dark, ...overrides,
+    f,
+    put(x, y, cp, shade) {
+      if (x < 0 || y < 0 || x >= f.cols || y >= f.rows) return;
+      if (thr && fadeP >= thr[y * f.cols + x]) return;
+      put(f, x, y, cp, shade);
+    },
+    text(x, y, text, shade, maxW = Infinity) {
+      let k = 0;
+      for (const ch of String(text)) {
+        if (k >= maxW) break;
+        if (ch !== ' ') this.put(x + k, y, cpOf(ch), shade);
+        k++;
+      }
+    },
   };
 }
 
-// Dots (one per cartridge) or "k / n" when they do not fit.
-function drawDots(f, y, view, shade, dimShade, fadeP) {
+// keys silver, words dim: [[key, word], ...] centred on row y
+function hintSegments(n, tier) {
+  const choose = tier === 'full' ? '◀ ▶' : '↑ ↓';
+  return [...(n > 1 ? [[choose, 'choose']] : []), ['Enter', 'insert'], ['h', 'help'], ['q', 'quit']];
+}
+export const LIBRARY_HINT = '◀ ▶ choose   Enter insert   h help   q quit';
+
+function drawHint(ctx, y, cols, n, tier, ui, text) {
+  if (y < 0 || y >= ctx.f.rows) return;
+  if (text !== undefined && text !== null) {
+    ctx.text(centerX(cols, lenOf(text)), y, text, ui.dim);
+    return;
+  }
+  const segs = hintSegments(n, tier);
+  for (const sep of [3, 1]) {
+    const total = segs.reduce((a, [k, w]) => a + lenOf(k) + 1 + lenOf(w), 0) + sep * (segs.length - 1);
+    if (total <= cols - 2 || sep === 1) {
+      let x = centerX(cols, total);
+      segs.forEach(([k, w], i) => {
+        ctx.text(x, y, k, ui.text); x += lenOf(k) + 1;
+        ctx.text(x, y, w, ui.dim); x += lenOf(w) + (i < segs.length - 1 ? sep : 0);
+      });
+      return;
+    }
+  }
+}
+
+// Dots (one per cartridge, 5 at most) or "k / n" when there are more or they do not fit.
+function drawDots(ctx, y, view, ui) {
+  const f = ctx.f;
   if (y < 0 || y >= f.rows) return;
   const n = view.cartridges.length;
-  const thr = fadeP > 0 ? dissolveThresholds(f.cols * f.rows) : null;
-  const text = 2 * n - 1 <= f.cols - 4
+  const text = n <= 5 && 2 * n - 1 <= f.cols - 4
     ? Array.from({ length: n }, (_, i) => (i === view.index ? '●' : '○')).join(' ')
     : `${view.index + 1} / ${n}`;
   const x0 = centerX(f.cols, lenOf(text));
@@ -141,29 +425,59 @@ function drawDots(f, y, view, shade, dimShade, fadeP) {
   for (const ch of text) {
     const x = x0 + k++;
     if (ch === ' ') continue;
-    if (thr && fadeP >= thr[y * f.cols + x]) continue;
-    put(f, x, y, ch.codePointAt(0), ch === '●' || /\d/.test(ch) ? shade : dimShade);
+    ctx.put(x, y, cpOf(ch), ch === '●' || /\d/.test(ch) ? ui.text : ui.dim);
   }
 }
 
-function drawFaded(f, y, text, shade, fadeP, x = null) {
-  if (y < 0 || y >= f.rows) return;
-  const thr = fadeP > 0 ? dissolveThresholds(f.cols * f.rows) : null;
-  const x0 = x === null ? centerX(f.cols, lenOf(text)) : x;
-  let k = 0;
-  for (const ch of text) {
-    const xx = x0 + k++;
-    if (ch === ' ' || xx < 0 || xx >= f.cols) continue;
-    if (thr && fadeP >= thr[y * f.cols + xx]) continue;
-    put(f, xx, y, ch.codePointAt(0), shade);
+// The cartridge list (compact tier's right column and the list tier). Scrolls with "up N more" and
+// "down N more" rows when it has more entries than slots.
+function listWindow(n, index, slots) {
+  if (n <= slots) return { first: 0, count: n, up: 0, down: 0 };
+  let vis = slots;
+  let first = 0;
+  for (let pass = 0; pass < 4; pass++) {
+    first = Math.max(0, Math.min(index - Math.floor(vis / 2), n - vis));
+    const need = (first > 0 ? 1 : 0) + (first + vis < n ? 1 : 0);
+    const next = slots - need;
+    if (next === vis) break;
+    vis = next;
   }
+  if (index < first) first = index;
+  if (index >= first + vis) first = index - vis + 1;
+  return { first, count: vis, up: first, down: n - first - vis };
 }
 
-// The shelf shared by the library (at rest) and the insert animation (o carries the animation).
+function drawListPane(ctx, view, skin, x, y, w, slots, gap) {
+  const ui = skin.palette.ui;
+  const n = view.cartridges.length;
+  const pos = `${view.index + 1} / ${n}`;
+  ctx.text(x, y, 'CARTRIDGES', ui.head);
+  ctx.text(x + w - lenOf(pos), y, pos, ui.dim);
+  for (let i = 0; i < w; i++) ctx.put(x + i, y + 1, 0x2500, DRIFTMAN_COLOURS.housing);
+  const top = y + 2 + gap;
+  const win = listWindow(n, view.index, slots);
+  let row = 0;
+  if (win.up > 0) ctx.text(x + 2, top + row++, `↑ ${win.up} more`, ui.dim);
+  for (let k = 0; k < win.count; k++) {
+    const i = win.first + k, c = view.cartridges[i];
+    const sel = i === view.index;
+    const right = c.locked ? 'soon' : String(c.code || '');
+    ctx.put(x, top + row, sel ? 0x25b6 : 32, DRIFTMAN_COLOURS.amber);
+    ctx.text(x + 2, top + row, c.title, sel ? c.tint + 3 : ui.dim, Math.max(0, w - 4 - lenOf(right)));
+    ctx.text(x + w - lenOf(right), top + row, right, ui.dim);
+    row++;
+  }
+  if (win.down > 0) ctx.text(x + 2, top + row, `↓ ${win.down} more`, ui.dim);
+}
+
+// ---- the shelf, shared by the library (at rest) and the insert animation (o carries the animation)
 //   o.lift       rows the selected cartridge is raised (0 or 1)
 //   o.drop       rows it has dropped (0..3)
-//   o.fadeP      0..1 dissolve of the neighbours, dots, hint and details
-//   o.body       console-body style overrides ({ led, shade, ... }) and o.sweep = { x, style } for the takeover band
+//   o.fadeP      0..1 dissolve of the neighbours, dots, hint and the console screen
+//   o.body       console style overrides ({ led, ledShade, openShade, shade, ... }) and
+//   o.sweep      { x, style }: the skin-takeover band over the console, from the left edge to column x
+//   o.hint       replaces the hint line text
+//   o.noArrows   accepted for the insert animation (the shelf draws no arrows: the hint names the keys)
 export function drawShelf(f, view, skin, o = {}) {
   const tier = view.tier || sizeTier(f.cols, f.rows);
   const L = shelfLayout(f.cols, f.rows, tier);
@@ -171,64 +485,114 @@ export function drawShelf(f, view, skin, o = {}) {
   const n = view.cartridges.length;
   const fadeP = o.fadeP || 0;
   const sel = view.cartridges[view.index];
-
-  // console body, then the takeover band over it
+  const ctx = fadeCtx(f, fadeP);
   const st = consoleStyle(skin, o.body || {});
-  drawConsoleBody(f, L, st);
-  if (o.sweep && o.sweep.x > 0) drawConsoleBody(f, L, consoleStyle(skin, o.sweep.style), { x0: 0, x1: Math.min(f.cols, Math.floor(o.sweep.x)) });
-
-  // neighbours (full tier only)
-  if (L.full && n > 1) {
-    for (const side of [-1, 1]) {
-      if (n === 2 && side === -1) continue;
-      const cart = view.cartridges[wrapIdx(view.index + side, n)];
-      drawLabel(f, L.xSel + side * NEIGHBOUR_STEP, L.labelBottom, cart, fadeP > 0.5 ? 0 : levelOf(view, wrapIdx(view.index + side, n)), L.slotY, fadeP);
-    }
-  }
-  // the selected cartridge
   const offset = (view.dip || 0) + (o.drop || 0) - (o.lift || 0);
-  drawLabel(f, L.xSel, L.labelBottom + offset, sel, levelOf(view, view.index), L.slotY);
-  if (!o.noArrows && n > 1 && fadeP === 0) {
-    const my = L.labelTop + Math.floor(LABEL_H / 2);
-    put(f, Math.max(0, L.xSel - 4), my, 0x25c0, ui.dim);
-    put(f, Math.min(f.cols - 1, L.xSel + LABEL_W + 3), my, 0x25b6, ui.dim);
+  const cartAt = (i, selected) => cartridgeGrid(view.cartridges[i], { selected, level: levelOf(view, i), ui });
+
+  // the console, then the takeover band over it
+  const makeConsole = (style) => (L.full ? consoleGrid(sel, { st: style, ui, n, index: view.index }) : miniGrid({ st: style, ui }));
+  const cx = L.full ? L.consoleX : L.miniX, cy = L.full ? L.consoleTop : L.miniTop;
+  blit(f, makeConsole(st), cx, cy, { fadeP });
+  if (o.sweep && o.sweep.x > 0) blit(f, makeConsole(consoleStyle(skin, o.sweep.style)), cx, cy, { fadeP, clipX1: Math.min(f.cols, Math.floor(o.sweep.x)) });
+
+  if (L.full) {
+    if (n > 1) {
+      // neighbours: each cartridge at most once, nearest first, the right side winning a tie; slivers at the edges
+      const seen = new Set([view.index]);
+      const maxR = 2;
+      for (let r = 1; r <= maxR; r++) {
+        for (const side of [1, -1]) {
+          const idx = wrapIdx(view.index + side * r, n);
+          if (seen.has(idx)) continue;
+          seen.add(idx);
+          const x = L.cartX + side * r * L.step;
+          const visible = Math.min(x + CART_W, f.cols) - Math.max(x, 0);
+          if (visible < 3) continue;
+          blit(f, cartAt(idx, false), x, L.cartTop, { fadeP, all: true });
+        }
+      }
+      if (L.xl) drawSpines(f, view, ui, L, fadeP, cartAt);
+    }
+    blit(f, cartAt(view.index, true), L.cartX, L.cartTop + offset, { clipY: L.consoleTop + 2 });
+    if (L.xl) {
+      const dw = Math.min(f.cols, CONSOLE_W + 16), dx = centerX(f.cols, dw);
+      for (let i = 0; i < dw; i++) put(f, dx + i, L.deskY, 0x2594, DRIFTMAN_COLOURS.housing);
+    }
+    if (n > 1) drawDots(ctx, L.dotsY, view, ui);
+    if (view.message) {
+      const m = wrapWords(view.message, Math.max(10, f.cols - 4))[0] || '';
+      putCentered(f, L.messageY, m, ui.accent);
+    }
+    drawHint(ctx, L.hintY, f.cols, n, 'full', ui, o.hint);
+    return L;
   }
 
-  // details
-  const code = sel.code ? `  [${sel.code}]` : '';
-  const head = `${sel.title}${code}${sel.locked ? '  (locked)' : ''}`;
-  drawFaded(f, L.infoY, head, sel.tint + 3, fadeP);
-  const wrap = wrapWords(sel.blurb || '', Math.max(10, Math.min(60, f.cols - 4)));
-  for (let k = 0; k < Math.min(L.full ? 2 : 1, wrap.length); k++) drawFaded(f, L.infoY + 1 + k, wrap[k], ui.text, fadeP);
-  if (L.full) {
-    const facts = sel.facts || [];
-    for (let k = 0; k < Math.min(6, facts.length); k++) drawFaded(f, L.infoY + 4 + k, facts[k], ui.dim, fadeP);
+  // compact: the cartridge on the left, the list and the blurb box on the right
+  blit(f, cartAt(view.index, true), L.cartX, L.cartTop + offset, { clipY: L.miniTop + 2 });
+  drawListPane(ctx, view, skin, L.listX, L.cartTop, L.listW, LIST_SLOTS, 1);
+  const by = L.cartTop + 9;
+  if (!fadeP) drawBox(f, L.listX, by, L.listW, 9, null, DRIFTMAN_COLOURS.housing);
+  else drawFadedBox(ctx, L.listX, by, L.listW, 9);
+  const wrap = wrapWords(sel.blurb || '', 34);
+  for (let k = 0; k < Math.min(3, wrap.length); k++) ctx.text(L.listX + 2, by + 1 + k, wrap[k], ui.text);
+  if (sel.locked) {
+    ctx.text(L.listX + 2, by + 5, LOCKED_NOTE, ui.text);
+    if (n > 1) ctx.text(L.listX + 2, by + 7, '↑ ↓ to browse', ui.dim);
+  } else {
+    const facts = wrapWords((sel.facts || []).join(' · '), 34);
+    for (let k = 0; k < Math.min(2, facts.length); k++) ctx.text(L.listX + 2, by + 5 + k, facts[k], ui.dim);
+    ctx.put(L.listX + 2, by + 7, 0x25b6, ui.accent);
+    ctx.text(L.listX + 4, by + 7, 'Enter to insert', ui.text);
   }
-  drawDots(f, L.dotsY, view, ui.text, ui.dim, fadeP);
   if (view.message) {
-    const m = wrapWords(view.message, Math.max(10, f.cols - 4));
-    for (let k = 0; k < Math.min(2, m.length); k++) putCentered(f, L.messageY + k, m[k], ui.accent);
+    const m = wrapWords(view.message, Math.max(10, f.cols - 4))[0] || '';
+    putCentered(f, L.messageY, m, ui.accent);
+  } else {
+    drawHint(ctx, L.hintY, f.cols, n, 'compact', ui, o.hint);
   }
-  drawFaded(f, L.hintY, o.hint === undefined ? LIBRARY_HINT : o.hint, ui.dim, fadeP);
   return L;
 }
 
+function drawFadedBox(ctx, x, y, w, h) {
+  const b = [...'┌─┐│┘─└│'].map(cpOf);
+  const sh = DRIFTMAN_COLOURS.housing;
+  for (let i = 1; i < w - 1; i++) { ctx.put(x + i, y, b[1], sh); ctx.put(x + i, y + h - 1, b[5], sh); }
+  for (let j = 1; j < h - 1; j++) { ctx.put(x, y + j, b[7], sh); ctx.put(x + w - 1, y + j, b[3], sh); }
+  ctx.put(x, y, b[0], sh); ctx.put(x + w - 1, y, b[2], sh); ctx.put(x, y + h - 1, b[6], sh); ctx.put(x + w - 1, y + h - 1, b[4], sh);
+}
+
+// The spine shelf: every cartridge as a 4 x 10 spine, the selected one lit, with a shelf board under them.
+function drawSpines(f, view, ui, L, fadeP, cartAt) {
+  const n = view.cartridges.length;
+  const pitch = SPINE_W + 1;
+  const fit = Math.max(1, Math.floor((f.cols - 4 + 1) / pitch));
+  const count = Math.min(n, fit);
+  const first = Math.max(0, Math.min(view.index - Math.floor(count / 2), n - count));
+  const total = count * pitch - 1;
+  const x0 = centerX(f.cols, total);
+  for (let k = 0; k < count; k++) {
+    const i = first + k;
+    blit(f, spineGrid(view.cartridges[i], { selected: i === view.index, ui }), x0 + k * pitch, L.spineY, { fadeP, all: true });
+  }
+  const bx = Math.max(0, x0 - 2), bw = Math.min(f.cols - bx, total + 4);
+  const ctx = fadeCtx(f, fadeP);
+  for (let i = 0; i < bw; i++) ctx.put(bx + i, L.shelfY, 0x2581, DRIFTMAN_COLOURS.housing);
+}
+
+// ---- the list tier: the list, the blurb (or the message) and the hint, no art
+
 function drawList(f, view, skin) {
   const ui = skin.palette.ui;
+  const ctx = fadeCtx(f, 0);
   const n = view.cartridges.length;
-  putCentered(f, 0, 'DRIFTMAN 2000', ui.head);
-  const room = Math.max(1, f.rows - 4);
-  const first = Math.max(0, Math.min(view.index - Math.floor(room / 2), n - room));
-  for (let k = 0; k < Math.min(room, n); k++) {
-    const i = first + k;
-    const c = view.cartridges[i];
-    const text = `${i === view.index ? '▶' : ' '} ${c.title}${c.locked ? ' (locked)' : ''}`;
-    putText(f, 2, 2 + k, text, c.tint + (i === view.index ? 3 : 1), Math.max(0, f.cols - 3));
-  }
+  const w = Math.min(f.cols - 2, 46), x = centerX(f.cols, w);
+  const slots = Math.max(1, f.rows - 5);
+  drawListPane(ctx, view, skin, x, 0, w, slots, 0);
   const sel = view.cartridges[view.index];
   const line = view.message || sel.blurb || '';
   putText(f, 1, f.rows - 2, line, view.message ? ui.accent : ui.text, Math.max(0, f.cols - 2));
-  putText(f, 1, f.rows - 1, 'Enter insert  Esc back  q quit', ui.dim, Math.max(0, f.cols - 2));
+  drawHint(ctx, f.rows - 1, f.cols, n, 'compact', ui);
 }
 
 export function drawLibrary(frame, view, skin) {

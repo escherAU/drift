@@ -29,6 +29,7 @@ export const EJECT_SECONDS = 1.6;
 export const LOCKED_MESSAGE = 'This cartridge isn\'t ready yet. Pick another with ◀ ▶.';
 export const SLIDE_SECONDS = 0.3;
 export const DIP_SECONDS = 0.3;
+export const LIBRARY_FADE_SECONDS = 0.3; // the library dissolves in when opened from Classic (a hard cut would flash)
 export const MESSAGE_SECONDS = 5;
 const TINT_LEVELS = [4, 8, 12, 15];
 const DEFAULT_HUE = '#9DB8A8';
@@ -64,6 +65,7 @@ export function createShell(o) {
   let index = Math.max(0, carts.findIndex((c) => c.id === o.lastCartridge));
   let prev = index, slideT = SLIDE_SECONDS, message = '', msgT = 0, dipT = DIP_SECONDS;
   let helpOpen = false; // library help (the runtime keeps its own)
+  let enterT = o.from === 'classic' ? 0 : LIBRARY_FADE_SECONDS; // seconds since the library was opened from Classic
   let from = o.from === undefined ? null : o.from;
   let forced = true;
 
@@ -222,6 +224,7 @@ export function createShell(o) {
     const d = dt > 0 ? dt : 0;
     switch (screen) {
       case 'library':
+        if (enterT < LIBRARY_FADE_SECONDS) { enterT += d; forced = true; }
         if (helpOpen) break;
         if (slideT < SLIDE_SECONDS) { slideT += d; forced = true; }
         if (dipT < DIP_SECONDS) { dipT += d; forced = true; }
@@ -284,6 +287,10 @@ export function createShell(o) {
     switch (screen) {
       case 'library':
         drawLibrary(f, view(), driftmanSkin);
+        if (enterT < LIBRARY_FADE_SECONDS) {
+          const p = ramp(enterT, 0, LIBRARY_FADE_SECONDS), thr = dissolveThresholds(cols * rows);
+          for (let i = 0; i < f.glyphs.length; i++) if (p < thr[i]) { f.glyphs[i] = 32; f.shades[i] = 0; }
+        }
         if (helpOpen) drawHelp(f.glyphs, f.shades, cols, rows, helpInfo('library'));
         break;
       case 'insert':
@@ -349,7 +356,7 @@ export function createShell(o) {
 
   return {
     tick, key, frame, resize, dirty, dispose, whenRunning, actions,
-    openLibrary: (f) => resetLibrary(f === undefined ? null : f),
+    openLibrary: (f) => { resetLibrary(f === undefined ? null : f); enterT = f === 'classic' ? 0 : LIBRARY_FADE_SECONDS; },
     state: () => ({
       screen,
       cartridge: cart ? cart.id : (libCarts[index] ? libCarts[index].id : null),
