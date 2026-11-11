@@ -163,6 +163,7 @@ export function createShell(o) {
     ensureRuntime();
     if (!runtime) return;
     screen = 'running'; st = 0; forced = true;
+    if (menuOnArrive) runtime.startAuto();
     settleRunning(true);
   }
 
@@ -240,6 +241,7 @@ export function createShell(o) {
     const e = map && map.get(token);
     if (e && e.action === 'quit') { actions.quit(token); return; }
     if (screen === 'insert' || screen === 'boot' || screen === 'error' || screen === 'eject') { skip(); return; }
+    if (screen === 'running' && runtime) runtime.cancelAuto(); // any key (even one that does nothing) cancels the start-by-itself countdown
     if (!e) return;
     const open = screen === 'running' ? (runtime && runtime.helpOpen) : helpOpen;
     if (open && !SHELL_HELP_OPEN_ACTIONS.includes(e.action)) return;

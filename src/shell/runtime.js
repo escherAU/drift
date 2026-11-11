@@ -47,6 +47,7 @@ export function createCartridgeRuntime(cart, scenes, palette, opts) {
   const skin = opts.skin;
   let { cols, rows } = opts;
   const m = cart.manifest;
+const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
 
   const cellList = scenes.filter((s) => s.family === 'cells');
   const fieldList = scenes.filter((s) => s.family === 'field');
@@ -70,6 +71,8 @@ export function createCartridgeRuntime(cart, scenes, palette, opts) {
   let cur = m.start;
   let t = 0, speedIdx = 3, paused = false, helpOpen = false;
   const menu = { open: false, index: 0, idle: 0, p: 0 };
+  let auto = null; // seconds left on the menu's start-by-itself countdown (skin.menu.autostartSeconds), or null
+  let autoShown = null; // the whole second last drawn, so a redraw is asked for once a second
   let xfade = null; // { glyphs, shades, t } the frame we dissolve away from after a program switch
   let last = null; // copy of the last scene frame (before overlays)
   let forced = true;
@@ -98,12 +101,13 @@ export function createCartridgeRuntime(cart, scenes, palette, opts) {
       const o = { label: e.label, program: e.program, scene: e.scene, action: e.action, current: e.program === cur && (e.scene === undefined || e.scene === playingId) };
       if (e.note !== undefined) o.note = e.note;
       if (e.desc !== undefined) o.desc = e.desc;
+      if (e.scene !== undefined && chapters.has(e.scene)) { const c = chapters.get(e.scene); o.chapter = { numeral: c.numeral, place: c.place, line: c.line, icon: c.icon }; }
       return o;
     });
   }
 
   function openMenu() { menu.open = true; menu.idle = 0; forced = true; }
-  function closeMenu() { menu.open = false; forced = true; }
+  function closeMenu() { menu.open = false; auto = null; forced = true; }
 
   // Switch to a program, optionally starting at one of its scenes. Nothing happens for an unknown program,
   // for the playing program when no scene is given, or for the scene that is already playing.
@@ -160,6 +164,11 @@ export function createCartridgeRuntime(cart, scenes, palette, opts) {
       const step = dt / MENU_RAMP_SECONDS;
       menu.p = target > menu.p ? Math.min(1, menu.p + step) : Math.max(0, menu.p - step);
     }
+    if (menu.open && auto !== null) {
+      auto -= dt;
+      if (auto <= 0) closeMenu(); // the tale starts: the program has been playing behind the menu
+      else if (Math.ceil(auto) !== autoShown) forced = true;
+    }
     if (menu.open) {
       menu.idle += dt;
       if (menu.idle >= MENU_IDLE_SECONDS) closeMenu();
@@ -202,7 +211,8 @@ export function createCartridgeRuntime(cart, scenes, palette, opts) {
     if (show === 'always') drawChrome(out, skin);
     const overlay = (o) => {
       if (show === 'menu') drawChrome(o, skin);
-      drawMenu(o, { entries: entries(), index: menu.index, title: skin.menu && skin.menu.title }, skin);
+      autoShown = auto === null ? null : Math.ceil(auto);
+      drawMenu(o, { entries: entries(), index: menu.index, title: skin.menu && skin.menu.title, prompt: skin.menu && skin.menu.prompt, countdown: auto === null ? null : `starts by itself in ${autoShown} s` }, skin);
     };
     if (menu.p >= 1) overlay(out);
     else if (menu.p > 0) {
@@ -227,6 +237,10 @@ export function createCartridgeRuntime(cart, scenes, palette, opts) {
     entries,
     open: openMenu,
     touch() { menu.idle = 0; },
+    // the countdown to the start of the program: begins when the menu opens on arrival, any key cancels it
+    startAuto() { const n = skin.menu && skin.menu.autostartSeconds; if (menu.open && Number.isFinite(n)) { auto = n; autoShown = null; forced = true; } },
+    cancelAuto() { if (auto !== null) { auto = null; forced = true; } },
+    get autoLeft() { return auto; },
     // true when the next frame can differ from the last one
     needsFrame: () => forced || (!paused && !helpOpen) || (!helpOpen && (menu.p !== (menu.open ? 1 : 0) || !!xfade || !!seasonRamp)),
     state() {

@@ -159,21 +159,46 @@ function drawList(f, a, skin) {
     for (let k = 0; k < lines.length; k++) putText(f, x + 2, top + k, lines[k], ui.text, w - 4);
   }
   if (withHint) putText(f, x + 2, y + h - 2, hint, ui.dim, w - 4);
+  return { x, y, w };
 }
 
 // ---- slots
 
-// One card's label row: cursor, Roman numeral, label (a later right field goes in `right`).
-function slotRow(e, i, sel, ui, cursor, rowW, edge) {
-  const leftLen = 3 + NUMERAL_W + 2 + lenOf(labelOf(e));
-  return {
-    left: [
-      { t: ' ' + (sel ? cursor : ' ') + ' ', s: ui.accent },
-      { t: pad(romanOf(i), NUMERAL_W) + '  ', s: sel ? ui.accent : ui.dim },
-      ...labelParts(e, sel, ui),
-    ],
-    right: noteParts(e, sel, ui, leftLen, rowW - edge, edge),
-  };
+// A card: the label row (cursor, [icon row 0,] numeral, label; the place or the note at the right) and the row under it
+// (the icon's second row, then the description, with the note at the right when the place took the label row's end).
+// An entry that names a chapter (e.chapter: { numeral, place, line, icon: [row0, row1] }, put there by the runtime from the
+// manifest's `chapters`) brings its own numeral, icon, place and line; its menu `desc` wins over the chapter line. A menu in
+// which some entry has a chapter keeps a column for the icon, and an entry without one (an Eject) shows no numeral.
+const ICON_W = 5;
+const rightPart = (text, sel, ui, leftLen, rowW, edge) => {
+  if (!text) return [];
+  if (leftLen + 1 + lenOf(text) > rowW) return [];
+  return [{ t: text, s: sel ? ui.accent : ui.dim }, ...(edge ? [{ t: ' '.repeat(edge), s: 0 }] : [])];
+};
+function slotRows(e, i, sel, ui, cursor, rowW, edge, k) {
+  const ch = e.chapter || null;
+  const numeral = k.chap ? (ch ? ch.numeral : '') : romanOf(i);
+  const lead = k.chap ? ICON_W + 2 : 0;
+  const head = 3 + lead + k.numeralW + 2; // where the label (and the description) start
+  const labelLen = head + lenOf(labelOf(e));
+  const desc = e.desc || (ch && ch.line) || '';
+  const place = ch && ch.place ? ch.place : '';
+  const left1 = [
+    { t: ' ' + (sel ? cursor : ' ') + ' ', s: ui.accent },
+    ...(k.chap ? [{ t: pad(ch ? ch.icon[0] : '', ICON_W) + '  ', s: sel ? ui.accent : ui.dim }] : []),
+    { t: pad(numeral, k.numeralW) + '  ', s: sel ? ui.accent : ui.dim },
+    ...labelParts(e, sel, ui),
+  ];
+  const placed = rightPart(place, sel, ui, labelLen, rowW - edge, edge);
+  const row1 = { left: left1, right: place ? placed : rightPart(e.note, sel, ui, labelLen, rowW - edge, edge) };
+  const left2 = [
+    { t: '   ', s: 0 },
+    ...(k.chap ? [{ t: pad(ch ? ch.icon[1] : '', ICON_W) + '  ', s: sel ? ui.accent : ui.dim }] : []),
+    { t: ' '.repeat(k.numeralW + 2), s: 0 },
+    ...(desc ? [{ t: desc, s: sel ? ui.text : ui.dim }] : []),
+  ];
+  const row2 = { left: left2, right: place ? rightPart(e.note, sel, ui, head + lenOf(desc), rowW - edge, edge) : [] };
+  return [row1, row2];
 }
 
 function drawSlots(f, a, skin) {
@@ -185,7 +210,24 @@ function drawSlots(f, a, skin) {
   const tall = f.rows >= SLOTS_TALL_ROWS && n * 4 <= room;
   const compact = n * 3 - 1 <= room;
   if (!tall && !compact) return drawList(f, a, skin);
-  const w = Math.min(f.cols, Math.max(30, labelWidth(a.entries) + 3 + NUMERAL_W + 2 + 2 + 2));
+  const chap = a.entries.some((e) => e.chapter);
+  const numeralW = chap ? Math.max(NUMERAL_W, ...a.entries.map((e) => (e.chapter ? lenOf(e.chapter.numeral) : 0))) : NUMERAL_W;
+  const k = { chap, numeralW };
+  let w = Math.min(f.cols, Math.max(30, labelWidth(a.entries) + 3 + NUMERAL_W + 2 + 2 + 2));
+  if (chap || a.entries.some((e) => e.desc)) {
+    // wide enough for the longest label row and description row, but inside the window's frame (2 columns each side)
+    const head = 3 + (chap ? ICON_W + 2 : 0) + numeralW + 2;
+    let need = 0;
+    for (const e of a.entries) {
+      const ch = e.chapter;
+      const desc = e.desc || (ch && ch.line) || '';
+      const place = ch && ch.place ? ch.place : '';
+      need = Math.max(need,
+        head + lenOf(labelOf(e)) + (place ? 2 + lenOf(place) : e.note ? 2 + lenOf(e.note) : 0),
+        head + lenOf(desc) + (place && e.note ? 2 + lenOf(e.note) : 0));
+    }
+    w = Math.max(w, Math.min(need + 1 + 2, Math.max(30, f.cols - 4)));
+  }
   const total = tall ? n * 4 : n * 3 - 1;
   const { x, y } = place(f, w, total, m.anchor);
   const rest = restBox(skin);
@@ -196,13 +238,18 @@ function drawSlots(f, a, skin) {
     if (tall) {
       const cy = y + i * 4;
       boxed(f, x, cy, w, 4, sel ? DOUBLE : rest, sel ? ui.accent : ui.dim);
-      putRow(f, x + 1, cy + 1, w - 2, slotRow(e, i, sel, ui, cursor, w - 2, 1));
+      const [r1, r2] = slotRows(e, i, sel, ui, cursor, w - 2, 1, k);
+      putRow(f, x + 1, cy + 1, w - 2, r1);
+      putRow(f, x + 1, cy + 2, w - 2, r2);
     } else {
       const cy = y + i * 3;
-      putRow(f, x, cy, w, slotRow(e, i, sel, ui, cursor, w, 0));
-      if (i < n - 1) for (let k = 0; k < w; k++) putText(f, x + k, cy + 2, '┄', ui.dim);
+      const [r1, r2] = slotRows(e, i, sel, ui, cursor, w, 0, k);
+      putRow(f, x, cy, w, r1);
+      putRow(f, x, cy + 1, w, r2);
+      if (i < n - 1) for (let c = 0; c < w; c++) putText(f, x + c, cy + 2, '┄', ui.dim);
     }
   }
+  return { x, y, w };
 }
 
 // ---- grid
@@ -232,15 +279,33 @@ function drawGrid(f, a, skin) {
     putRow(f, x + off, y + LABEL_ROW, TILE_W - 1 - off, { left: parts });
     if (e.note && lenOf(e.note) <= TILE_W - 2) putText(f, x + Math.floor((TILE_W - lenOf(e.note)) / 2), y + LABEL_ROW + 1, e.note, sel ? ui.accent : ui.dim);
   }
+  return { x: top.x, y: top.y, w: totalW };
 }
 
 export function drawMenu(frame, args, skin) {
   if (!args || !args.entries || args.entries.length === 0 || frame.cols < 6 || frame.rows < 3) return;
   const a = { entries: args.entries, index: Math.max(0, Math.min(args.entries.length - 1, args.index | 0)), title: args.title };
   const layout = LAYOUT_NAMES[(skin.menu && skin.menu.layout) || 'list'] || 'list';
-  if (layout === 'slots') drawSlots(frame, a, skin);
-  else if (layout === 'grid') drawGrid(frame, a, skin);
-  else drawList(frame, a, skin);
+  let rect;
+  if (layout === 'slots') rect = drawSlots(frame, a, skin);
+  else if (layout === 'grid') rect = drawGrid(frame, a, skin);
+  else rect = drawList(frame, a, skin);
+  if (rect && (args.prompt || args.countdown)) drawHeader(frame, rect, args.prompt, args.countdown, uiOf(skin));
+}
+
+// The line above the menu: the skin's prompt at the left and, while the start-by-itself countdown runs, its text at the
+// right. It sits two rows above the menu when there is room (one row when only that fits) and is drawn on blanks, so it
+// reads over a busy scene. Nothing is drawn when the menu starts at the top edge.
+function drawHeader(f, rect, prompt, countdown, ui) {
+  const y = rect.y >= 3 ? rect.y - 2 : rect.y >= 2 ? rect.y - 1 : -1;
+  if (y < 0) return;
+  fillRect(f, rect.x, y, rect.w, 1, 32, 0);
+  const cd = countdown ? String(countdown) : '';
+  const room = rect.w - 2;
+  const cdLen = cd && lenOf(cd) + 1 <= room ? lenOf(cd) : 0;
+  const pText = prompt && lenOf(prompt) + (cdLen ? cdLen + 1 : 0) <= room ? prompt : '';
+  if (pText) putText(f, rect.x + 1, y, pText, ui.text, room);
+  if (cdLen) putText(f, rect.x + rect.w - 1 - cdLen, y, cd, ui.dim);
 }
 
 export { putCentered, boxChars };
