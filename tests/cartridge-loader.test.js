@@ -36,7 +36,7 @@ function expectSkip(files, re, opts = {}) {
 
 // ---- the install folder
 
-test('install cartridges/ folder: zero errors, Classic first, then Delza and the three locked ones', () => {
+test('install cartridges/ folder: zero errors, Classic first, then Delza and Night Drive (both playable) and the two locked ones', () => {
   const r = discover(INSTALL_DIR, true);
   assert.deepEqual(r.errors, []);
   assert.deepEqual(r.cartridges.map((c) => c.id), ['classic', 'arcade', 'delza', 'last-fantasy', 'night-drive']);
@@ -48,12 +48,16 @@ test('install cartridges/ folder: zero errors, Classic first, then Delza and the
   const delza = r.cartridges.find((c) => c.id === 'delza');
   assert.equal(delza.locked, false);
   assert.equal(delza.runtime, 'cartridge');
-  const locked = r.cartridges.filter((c) => c.id !== 'classic' && c.id !== 'delza');
-  assert.equal(locked.length, 3);
+  const nd = r.cartridges.find((c) => c.id === 'night-drive');
+  assert.equal(nd.locked, false);
+  assert.equal(nd.runtime, 'cartridge');
+  const locked = r.cartridges.filter((c) => c.id !== 'classic' && c.id !== 'delza' && c.id !== 'night-drive');
+  assert.equal(locked.length, 2);
+  assert.deepEqual(locked.map((c) => c.id), ['arcade', 'last-fantasy']);
   assert.ok(locked.every((c) => c.locked === true && c.manifest.scenes === undefined));
   const codes = locked.map((c) => c.manifest.code);
   assert.ok(codes.every((c) => /^[A-Z0-9-]{5}$/.test(c)), codes.join());
-  assert.equal(new Set(codes).size, 3, 'distinct codes');
+  assert.equal(new Set(codes).size, 2, 'distinct codes');
   assert.ok(locked.every((c) => c.label.length <= LIMITS.labelH && c.label.every((l) => [...l].length <= LIMITS.labelW)));
 });
 

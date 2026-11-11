@@ -4,9 +4,20 @@
   "title": "Night Drive",
   "version": "0.1.0",
   "author": "Drift",
-  "blurb": "Neon highway, endless dusk, and a car that never needs fuel.",
-  "locked": true,
+  "blurb": "Neon highway, late radio, and a night that never ends.",
+  "runtime": "cartridge",
   "code": "DM-02",
-  "facts": ["Genre: racing", "Players: 1", "Status: coming soon"],
-  "labelHue": "#B07CFF"
+  "facts": ["80s neon highway · about 12 min", "8 tracks on one tape, sides A and B"],
+  "labelHue": "#FF3EC8",
+  "scenes": [
+    { "id": "onramp", "kind": "cells", "title": "Midnight On-Ramp" }
+  ],
+  "programs": [
+    { "id": "tape", "title": "The tape", "transition": "dissolve", "scenes": ["onramp"], "sceneSeconds": 90 }
+  ],
+  "start": "tape",
+  "menu": [
+    { "label": "A1  MIDNIGHT ON-RAMP", "program": "tape", "scene": "onramp", "note": "1:30", "desc": "Out of Port Solace on Shoreline 9, lamps sliding past." },
+    { "label": "▲   EJECT THE TAPE", "action": "eject", "desc": "Back to the cartridge library." }
+  ]
 }

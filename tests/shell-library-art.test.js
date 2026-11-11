@@ -94,7 +94,7 @@ test('install manifests: reconciled codes, the designer copy where the schema al
   assert.equal(m('night-drive').code, 'DM-02');
   assert.equal(m('arcade').code, 'DM-03');
   assert.equal(m('last-fantasy').code, 'DM-04');
-  assert.equal(m('night-drive').blurb, 'Neon highway, endless dusk, and a car that never needs fuel.');
+  assert.equal(m('night-drive').blurb, 'Neon highway, late radio, and a night that never ends.'); // unlocked in DRIFT-5
   assert.ok(!/sword/i.test(JSON.stringify(m('last-fantasy'))), 'no sword in the Last Fantasy manifest');
   assert.equal(m('classic').code, 'DM-00');
   assert.deepEqual(m('classic').facts, ['4 modes · 21 scenes · the original']);

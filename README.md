@@ -221,7 +221,7 @@ snap to their place instead of sliding. This is a deliberate cost choice: moving
 the distance, and a continuous slide there wrote about twice the bytes of the full tier.
 
 Each unlocked card shows its manifest `code` on its name plate and on the console screen (a locked card shows SOON there instead). The scheme is DM-00 Classic, DM-01 Delza, DM-02 Night Drive,
-DM-03 Arcade and DM-04 Last Fantasy; a card only appears when its folder exists. Delza (DM-01) is installed, so the shelf is Classic, Arcade, Delza, Last Fantasy and Night Drive (the loader sorts the folders by name, Classic first). Any
+DM-03 Arcade and DM-04 Last Fantasy; a card only appears when its folder exists. Delza (DM-01) and Night Drive (DM-02) are installed and playable, so the shelf is Classic, Arcade, Delza, Last Fantasy and Night Drive (the loader sorts the folders by name, Classic first); Arcade and Last Fantasy are still coming-soon cards. Any
 manifest (including a data-only user cartridge) may set `code` and `facts`.
 
 ### What a cartridge is: the folder format
@@ -366,6 +366,21 @@ node bin\drift.js --cartridge delza      # straight in: insert, boot, the Journa
 `q` quits from the library and from inside Delza; `e` ejects Delza back to the library. Both quits, `Ctrl+C` and a crash
 inside the running cartridge are checked against the real process in `tests/real-process.test.js` (the terminal is restored each time).
 
+### Night Drive, the second real cartridge (in progress)
+
+Night Drive (DM-02) is an 80s neon highway: the Vantra Halcyon, a low coupe with the plate NITE86, driving out of the made-up Port Solace
+on Shoreline 9, with late-night radio on 88.1 Moonlow FM. Everything in it is original. It is built as one tape of eight tracks (sides A
+and B, 90 s each, about 12 minutes), added a few at a time; today the tape holds track A1, `onramp` Midnight On-Ramp. The skin gives it a
+violet-black background (#0D0820), a heavy-line magenta console (`┏━┓┃┛━┗┃`, a stacked-vent grille, an equaliser
+stripe), the tape deck menu (the `list` layout with a 15 s countdown), an Owner's Manual help panel (groups Tracks and Glovebox) and a
+cassette on the boot screen. Its colours are in `cartridges/night-drive/lib/palette.js` (eight hues in four shades each, plus text, dim and
+two silhouette colours; the library palette is untouched). Midnight On-Ramp is a function of time: a three-lane road in perspective whose dashes
+take 1.2 s from the horizon to the car, a street lamp every 2.4 s, one star at a time ramping, the car swaying a column every 7 to 11 s, and
+from 41 s a car ahead that closes and slides past. Under 100 columns or 32 rows (80x24) it drops to a one-row ridge, no lamps and the 20x4 car.
+`tests/night-drive-*.test.js` check the skin, palette, label, boot art, manifest, help panel and the scene's promises on rendered frames.
+
+`node bin\drift.js --cartridge night-drive` goes straight in.
+
 ### Where cartridges are read from, and the trust rule
 
 | folder | trusted | may hold |
@@ -485,7 +500,7 @@ bin/drift.js      entry   bin/drift.cmd  shim  tools/          capture.mjs measu
 src/cartridge/    schema.js (ids, limits, validators)  loader.js (discover + load)  textscene.js  palette.js
 src/shell/        the console: shell.js (screen machine)  runtime.js (a running cartridge)  library.js insert.js
                   boot.js menu.js chrome.js ui.js (pure draw functions)  driftman.js (the console's own skin)
-cartridges/       the install cartridges: classic, delza (manifest, skin, label, scenes/, lib/) and the locked ones (label.txt + manifest.json each)
+cartridges/       the install cartridges: classic, delza and night-drive (manifest, skin, label, scenes/, lib/; night-drive also boot.txt) and the locked ones (label.txt + manifest.json each)
 ```
 
 Non-calm scene contract (`src/cells.js`): `kind: 'cells'` scenes are `scene(t, w, h, params)`
@@ -514,14 +529,14 @@ not a TTY, drift prints a message and exits 0 without emitting any escape sequen
 npm test            # node --test, no dependencies
 ```
 
-The suite is 1145 tests in `tests/*.test.js` and takes 45 to 80 seconds depending on the machine (test files run in parallel; the real-process arms start the real program and wait in real time, about 28 s of that). The cartridge work is
+The suite is 1280 tests in `tests/*.test.js` and takes 45 to 80 seconds depending on the machine (test files run in parallel; the real-process arms start the real program and wait in real time, about 28 s of that). The cartridge work is
 covered by `cartridge-schema` (validators, text scene, skin palette), `cartridge-loader`
 (every way a cartridge can be wrong, and both arms of the trust rule), `cartridge-scenes` (every
 install cartridge's scenes through the size, glyph, colour, determinism and flash checks, with controls
 that must fail), `cartridges` (glyph and import scans over `cartridges/`), `config-extras`, `shell-app`
 (the console at app level on a fake clock), `shell-draw` and `shell-flash` (every screen at every size,
 and the photosensitivity checks), `tools-cartridges` (the cartridge captures and `measure.mjs` options),
-`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), and the cartridge arms of `real-process` (below).
+`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge` and `night-drive-onramp` (Night Drive's skin, palette, label, boot art, manifest, help panel, and the road, sprites and calm bounds of its first track), and the cartridge arms of `real-process` (below).
 
 Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 `tests/real-process.test.js`, which spawns the real `bin/drift.js` with piped stdio):
