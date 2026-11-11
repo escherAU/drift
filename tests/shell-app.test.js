@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import { createApp, main, planStartup, parseOptions, helpText } from '../src/app.js';
 import { SHELL_KEYMAP, SHELL_KEYS, buildShellKeyMaps, SHELL_SCREENS } from '../src/keymap.js';
 import { createShell, LOCKED_MESSAGE, ERROR_SECONDS, EJECT_SECONDS } from '../src/shell/shell.js';
+import { discoverCartridges } from '../src/cartridge/loader.js';
 import { INSERT_END } from '../src/shell/insert.js';
 import { BOOT_END } from '../src/shell/boot.js';
 import { LEAVE, ENTER } from '../src/term.js';
@@ -300,6 +301,46 @@ test('quit while the load is pending: no writes after LEAVE, and a late resolve 
     assert.equal(await c.app.whenRunning(), false, 'whenRunning settles false on quit');
     fs.rmSync(c.dir, { recursive: true, force: true });
   }
+});
+
+test('shell: a load that settles AFTER dispose() changes nothing (no frame request, no state change, no writes, no unhandled rejection); a live shell does react (control)', async () => {
+  const found = discoverCartridges({ dirs: [{ dir: makeRoot(), trusted: true }] });
+  const unhandled = [];
+  const onUnhandled = (e) => unhandled.push(e);
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    for (const [how, disposeFirst] of [['resolve', true], ['reject', true], ['resolve', false], ['reject', false]]) {
+      const calls = [];
+      let settle = null;
+      const sh = createShell({
+        cols: 80, rows: 24, cartridges: found.cartridges, consts: {},
+        host: { quit: (c) => calls.push(['quit', c]), persist: (p) => calls.push(['persist', p]), leaveToClassic: () => calls.push(['leave']) },
+        loadScenes: () => new Promise((res, rej) => { settle = how === 'resolve' ? () => res({ scenes: [], errors: [] }) : () => rej(new Error('late')); }),
+      });
+      for (let i = 0; i < 12 && sh.state().cartridge !== 'fixture'; i++) sh.actions.libNext();
+      sh.actions.libInsert();
+      assert.equal(sh.screen, 'insert');
+      await new Promise((r) => setTimeout(r, 10)); // the loader call is made in a microtask
+      assert.equal(typeof settle, 'function', 'the load started');
+      sh.frame(); // a drawn frame clears the redraw request
+      assert.equal(sh.dirty(), false);
+      const before = JSON.stringify(sh.state());
+      const callsBefore = calls.length;
+      if (disposeFirst) sh.dispose();
+      settle();
+      for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 10));
+      const label = `${how}, ${disposeFirst ? 'after dispose' : 'live'}`;
+      assert.equal(sh.dirty(), !disposeFirst, `redraw requested only while live (${label})`);
+      assert.equal(JSON.stringify(sh.state()), before, label);
+      assert.equal(calls.length, callsBefore, `no host calls (${label})`);
+      if (disposeFirst) {
+        sh.tick(5); sh.key('enter');
+        assert.equal(calls.length, callsBefore, `still no host calls after tick and key (${label})`);
+        assert.equal(sh.screen, 'insert', 'a disposed shell does not move on');
+      }
+    }
+    assert.deepEqual(unhandled, []);
+  } finally { process.off('unhandledRejection', onUnhandled); }
 });
 
 test('skip: any key but q jumps insert and boot to the end state; q still quits (both arms)', async () => {
