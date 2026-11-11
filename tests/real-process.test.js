@@ -6,6 +6,9 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ENTER, LEAVE } from '../src/term.js';
+import { INSERT_END } from '../src/shell/insert.js';
+import { bootPhases } from '../src/shell/boot.js';
+import { classicBootSkin } from '../src/shell/driftman.js';
 
 const BIN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'drift.js');
 const CFG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-rp-'));
@@ -17,9 +20,9 @@ function pidAlive(pid) {
 
 // Spawn bin/drift.js; `drive(child, out)` is called once the first frame has
 // been seen (or after 1.5 s) so it can send input. Always killed on timeout.
-function run({ env = {}, drive, waitForFrame = true }) {
+function run({ env = {}, drive, waitForFrame = true, args = [] }) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [BIN], {
+    const child = spawn(process.execPath, [BIN, ...args], {
       env: { ...process.env, DRIFT_CONFIG: path.join(CFG_DIR, 'config.json'), DRIFT_TEST_COLS: '60', DRIFT_TEST_ROWS: '20', ...env },
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
@@ -95,6 +98,64 @@ test('real process: the force flag is inert unless set to 1', async () => {
   const r = await run({ env: { DRIFT_TEST_FORCE_TTY: '0' }, waitForFrame: false });
   assert.ok(!r.stdout.includes('\x1b[?1049h'));
   assert.equal(r.code, 0);
+});
+
+// ---- the cartridge library and cartridge starts (DRIFT-4). Every arm goes through assertRestored
+// (the --cartridge nope arm never enters the alt screen, so it checks for no escape bytes instead).
+// The running-code-cartridge arm waits for slice 3 (a real code cartridge).
+
+test('real process (library a): --library then q restores the terminal, exit 0', async (t) => {
+  const r = await run({ args: ['--library'], env: FORCE, drive: (c) => c.stdin.write('q') });
+  assertRestored(r, t, '(lib a) q');
+  assert.equal(r.code, 0);
+  assert.ok(r.stdout.includes('\x1b[2J'), 'drew the library');
+});
+
+test('real process (library b): --library then byte 0x03 restores the terminal, exit 130', async (t) => {
+  const r = await run({ args: ['--library'], env: FORCE, drive: (c) => c.stdin.write(Buffer.from([0x03])) });
+  assertRestored(r, t, '(lib b) 0x03');
+  assert.equal(r.code, 130);
+});
+
+test('real process (library c): --library, Enter, then q within 300 ms (mid-insert) restores the terminal, exit 0', async (t) => {
+  const r = await run({
+    args: ['--library'], env: FORCE,
+    drive: (c) => { c.stdin.write('\r'); setTimeout(() => c.stdin.write('q'), 250); },
+  });
+  assertRestored(r, t, '(lib c) mid-insert');
+  assert.equal(r.code, 0);
+});
+
+test('real process (cartridge a): --cartridge classic then q during the insert animation: exit 0', async (t) => {
+  const r = await run({ args: ['--cartridge', 'classic'], env: FORCE, drive: (c) => setTimeout(() => c.stdin.write('q'), 500) });
+  assertRestored(r, t, '(cart a) insert');
+  assert.equal(r.code, 0);
+});
+
+test('real process (cartridge b): --cartridge classic then q during the boot screen: exit 0', async (t) => {
+  // the middle of the boot, counted from the first frame: the insert animation, then half the boot
+  const ms = Math.round((INSERT_END + bootPhases(classicBootSkin).end / 2) * 1000);
+  const r = await run({ args: ['--cartridge', 'classic'], env: FORCE, drive: (c) => setTimeout(() => c.stdin.write('q'), ms) });
+  assertRestored(r, t, '(cart b) boot');
+  assert.equal(r.code, 0);
+});
+
+test('real process (cartridge c): --cartridge with a thrown error restores the terminal and exits non-zero', async (t) => {
+  const r = await run({ args: ['--cartridge', 'classic'], env: { ...FORCE, DRIFT_TEST_THROW_AFTER_MS: '400' }, waitForFrame: false });
+  assertRestored(r, t, '(cart c) throw');
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr, /DRIFT_TEST_THROW/);
+});
+
+test('real process (cartridge d): --cartridge nope exits 2 with a plain "drift:" message and no escape byte on either stream', async (t) => {
+  const r = await run({ args: ['--cartridge', 'nope'], env: FORCE, waitForFrame: false });
+  assert.equal(r.timedOut, false);
+  assert.equal(r.gone, true);
+  assert.equal(r.code, 2);
+  assert.ok(r.stderr.startsWith('drift:'), show(r.stderr));
+  assert.ok(!r.stderr.includes('\x1b'), 'no ESC byte on stderr');
+  assert.ok(!r.stdout.includes('\x1b'), 'no ESC byte on stdout');
+  t.diagnostic('(cart d) stderr: ' + show(r.stderr) + ' stdout: ' + show(r.stdout));
 });
 
 test.after(() => fs.rmSync(CFG_DIR, { recursive: true, force: true }));
