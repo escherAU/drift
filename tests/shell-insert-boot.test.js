@@ -802,3 +802,55 @@ test('boot.valueColour: the console skin own value colour is used when it is the
   const y0 = ls.findIndex((x) => x.includes('Nothing to do.'));
   assert.equal(f.shades[y0 * 120 + ls[y0].indexOf('Nothing')], driftmanSkin.palette.ui.text);
 });
+
+// ---- DRIFT-4 follow-up F1: the typed text is whole until THIS skin's progress bar ends, and only then dissolves
+
+const BAR_RE = /\[[█▉▊▋▌▍▎▏]* *\]/;
+const GAPPY_RE = /[█▉▊▋▌▍▎▏] +[█▉▊▋▌▍▎▏]/;
+
+// Every line that has finished typing is whole on some row; from the end of the lines the bar is drawn with no gap inside it.
+function wholeAt(skin, item, cols, rows, t, name, extra = {}) {
+  const f = newFrame(cols, rows);
+  drawBoot(f, { skin, item, labelArt: fixture.label, t, loading: false, title: 'Fixture', ...extra }, driftmanSkin);
+  const rowsText = frameLines(f);
+  const PH = bootPhases(skin);
+  bootLines(skin, driftmanSkin, 'Fixture').forEach((line, k) => {
+    if (t >= PH.on + (k + 1) * LINE_SECONDS + 1e-6) assert.ok(rowsText.some((r) => r.includes(line)), `${name}: line "${line}" is whole`);
+  });
+  if (t >= PH.linesEnd) {
+    const bar = rowsText.find((r) => BAR_RE.test(r));
+    assert.ok(bar, `${name}: the progress bar is drawn`);
+    assert.ok(!GAPPY_RE.test(bar), `${name}: no hole inside the bar: ${bar.trim()}`);
+  }
+}
+
+test('boot F1: typed lines and the progress bar are whole from the last line to the end of the bar, for Classic and a skinned cartridge, at 120x40 and 80x24', () => {
+  const variants = [
+    { name: 'classic', skin: classicBootSkin, item: classicItem },
+    { name: 'skinned', skin: BOOT_SKIN, item: skinnedItem, extra: { consoleMap: MAP } },
+  ];
+  for (const [w, h] of [[120, 40], [80, 24]]) {
+    for (const v of variants) {
+      const PH = bootPhases(v.skin);
+      for (const t of [PH.linesEnd, (PH.linesEnd + PH.barEnd) / 2, PH.barEnd - 0.05, PH.barEnd - 0.001]) {
+        wholeAt(v.skin, v.item, w, h, t, `${v.name} ${w}x${h} t=${t.toFixed(3)}`, v.extra);
+      }
+    }
+  }
+  // absolute seconds after Enter (INSERT_END = 1.5): a skin with no boot.seconds starts dissolving at 3.8 s, so 3.0 / 3.6 / 3.79 are whole
+  const plain = { ...BOOT_SKIN, boot: { lines: BOOT_SKIN.boot.lines, art: false } };
+  assert.equal(Math.round((1.5 + bootPhases(plain).barEnd) * 100) / 100, 3.8);
+  for (const abs of [3.0, 3.6, 3.79]) wholeAt(plain, skinnedItem, 120, 40, abs - 1.5, `plain skin ${abs} s after Enter`, { consoleMap: MAP });
+});
+
+test('boot F1: Classic\'s own boot runs 1.25 s of lines, so its text starts to dissolve at 3.55 s after Enter (not 3.8) - the 3.6 s capture shows that dissolve', () => {
+  const PC = bootPhases(classicBootSkin);
+  assert.equal(Math.round((1.5 + PC.barEnd) * 100) / 100, 3.55);
+  const cells = (t) => {
+    const f = newFrame(120, 40);
+    drawBoot(f, { skin: classicBootSkin, item: classicItem, t, title: 'Drift Classic' }, driftmanSkin);
+    return f.glyphs.reduce((n, g) => n + (g !== 32 ? 1 : 0), 0);
+  };
+  assert.equal(cells(PC.barEnd), cells(PC.barEnd - 0.001), 'nothing has gone at the very start of the zoom');
+  assert.ok(cells(3.6 - 1.5) < cells(PC.barEnd), 'by 3.6 s after Enter some typed cells have dissolved');
+});
