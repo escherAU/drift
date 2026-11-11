@@ -1,0 +1,71 @@
+{
+  "palette": {
+    "hue": "#FF3EC8",
+    "bg": "#0D0820",
+    "colours": [
+      "#615723", "#948435", "#CCB64A", "#FFE45C",
+      "#613417", "#945023", "#CC6E31", "#FF8A3D",
+      "#61172A", "#942340", "#CC3158", "#FF3D6E",
+      "#61184C", "#942474", "#CC32A0", "#FF3EC8",
+      "#3B2361", "#5A3594", "#7C4ACC", "#9B5CFF",
+      "#0D5761", "#148594", "#1BB8CC", "#22E6FF",
+      "#176143", "#239466", "#31CC8D", "#3DFFB0",
+      "#585B61", "#878B94", "#BAC0CC", "#E8F0FF",
+      "#EDE6FF", "#8576B0", "#2A1E5C", "#1A1240"
+    ],
+    "ui": { "text": 48, "dim": 49, "head": 39, "accent": 31 }
+  },
+  "frame": {
+    "show": "menu",
+    "glyphs": "┏━┓┃┛━┗┃",
+    "title": "NIGHT DRIVE",
+    "colour": 31,
+    "ornament": "▁▂▃▄▅▆▇█▇▆▅▄▃▂▁"
+  },
+  "console": {
+    "frame": "┏━┓┃┛━┗┃",
+    "grille": "═",
+    "stripe": "▁▂▃▄▅▆▇█▇▆▅▄▃▂",
+    "ink": { "frame": 3, "grille": 1, "stripe": 2, "led": 3, "bar": 3 },
+    "title": { "style": "block", "ornament": "▁▂▃▄▅▆▇█▇▆▅▄▃▂▁", "colour": 31, "ornamentColour": 38 }
+  },
+  "menu": {
+    "layout": "list",
+    "anchor": "center",
+    "cursor": "▶",
+    "title": "TAPE DECK · SIDE A / SIDE B",
+    "box": "┏━┓┃┛━┗┃",
+    "prompt": "Pick a track, or let it play.",
+    "autostartSeconds": 15
+  },
+  "help": {
+    "title": "OWNER'S MANUAL · keys",
+    "box": "┏━┓┃┛━┗┃",
+    "groups": { "Cartridge": "Tracks", "Other": "Glovebox" },
+    "modeLabel": "tape",
+    "sceneLabel": "track"
+  },
+  "boot": {
+    "lines": ["CARTRIDGE ...... NIGHT DRIVE", "TAPE ........... SIDE A, REWOUND", "HEADLIGHTS ..... ON", "The night is young. It always is."],
+    "art": true,
+    "valueColour": 43
+  },
+  "insert": { "text": "CLUNK · TAPE IN · AUTO-REVERSE ON" },
+  "wording": {
+    "keys": {
+      "menu": "open the tape deck, or play",
+      "menu-prev": "tape deck: previous track",
+      "menu-next": "tape deck: next track",
+      "close": "close the tape deck or page",
+      "eject": "eject the tape",
+      "scene-next": "skip to the next track",
+      "pause": "pause the tape or play on",
+      "faster": "cruise control: faster",
+      "slower": "cruise control: slower",
+      "seasons": "colours: none on this tape",
+      "help": "show or hide these keys",
+      "quit": "quit Drift"
+    },
+    "menuHint": "↑ ↓ pick a track · Enter plays on from there · Esc closes"
+  }
+}
