@@ -42,6 +42,7 @@ const byId = (id) => SCENES.find((s) => s.id === id);
 const TAPE = manifest.programs.find((p) => p.id === manifest.start) || manifest.programs[0];
 const ORDER = TAPE.scenes; // the tape's order
 const HOLD = TAPE.sceneSeconds; // 90
+const holdOf = (id) => (TAPE.seconds && TAPE.seconds[id]) ?? HOLD; // a scene with its own seconds (the 75 s call) is held for that long
 const FADE = 2;
 const nextOf = (i) => (i + 1) % ORDER.length;
 
@@ -88,14 +89,15 @@ test('flash (a) overdrive: all 90 s through the composer at 1x and 4x, every fra
 // ---- (b) the dissolves
 
 const pairCache = new Map();
-// A -> B through a two-scene composer under a Scheduler with the tape's real hold, to the end of the dissolve plus 2 s.
+// A -> B through a two-scene composer under a Scheduler with the tape's real holds (a scene's own `seconds` if the program gives it one), to the end of the dissolve plus 2 s.
 // The worst frame is taken over the WHOLE run (the sims' real phases, the dissolve window and the tail).
 function pairRun(idA, idB, w, h, speed) {
   const key = `${idA}>${idB} ${w}x${h} ${speed}x`;
   if (pairCache.has(key)) return pairCache.get(key);
   const cc = createCellComposer({ scenes: [byId(idA).scene, byId(idB).scene], cols: w, rows: h, seed: 1 });
-  const sched = new Scheduler({ count: 2, durationSec: HOLD, fadeSec: FADE, start: 0 });
-  const total = Math.ceil(((HOLD + FADE + 2) * FPS) / speed);
+  const holdA = holdOf(idA), holdB = holdOf(idB);
+  const sched = new Scheduler({ count: 2, durationSec: holdA, fadeSec: FADE, start: 0, durations: [holdA, holdB] });
+  const total = Math.ceil(((holdA + FADE + 2) * FPS) / speed);
   let pg = null, pc = null, worst = 0, where = 0;
   for (let k = 0; k <= total; k++) {
     sched.advance(speed / FPS);
@@ -120,6 +122,12 @@ test('flash (b) dissolves: every consecutive pair of the tape in manifest order,
   const pairs = [];
   for (let k = 0; k < ORDER.length; k++) pairs.push([ORDER[k], ORDER[nextOf(k)]]);
   assert.deepEqual(pairs[pairs.length - 1], [ORDER[ORDER.length - 1], ORDER[0]], 'the wrap is a pair');
+  // the 75 s call is held for its own length, and the pairs on either side of it are run
+  if (ORDER.includes('caller')) {
+    assert.equal(holdOf('caller'), 75);
+    const has = (a, b) => pairs.some(([x, y]) => x === a && y === b);
+    assert.ok(has('diner', 'caller') && has('caller', 'overdrive'), 'diner -> caller and caller -> overdrive are pairs');
+  }
   const rows = [], bad = [];
   for (const [a, b] of pairs) {
     for (const [w, h] of [[120, 40], [80, 24], [41, 11]]) {
