@@ -23,6 +23,8 @@ Options (also available as environment variables):
 | `--fps N` | `DRIFT_FPS` | 18 | frames per second (1-30) |
 | `--seed N` | `DRIFT_SEED` | 1 | seed for rain and ripples |
 | `--scene NAME` | `DRIFT_SCENE` | squiggle | start scene, in its own mode: squiggle, sunburst, plasma, ripples, rain, glyphrain, swarm, glitch, fireworks, vortex, life, tunnel, wire, maze, blocktype, bounce, sand, waves, pendulum, cloth, artist (a bare number counts calm scenes) |
+| `--library` | | off | start in the cartridge library (see [Cartridges](#cartridges)) |
+| `--cartridge ID` | | none | insert that cartridge at start; `last` means the one inserted most recently (Drift Classic if none yet). Wins over `--library` |
 | | `DRIFT_CONFIG` | see below | full path of the config file |
 
 ## Keys
@@ -36,15 +38,17 @@ Options (also available as environment variables):
 | `i` | high contrast only: invert black on white / white on black (remembered) |
 | `+` / `-` | speed up / slow down (0.25x to 4x, clamped) |
 | `p` | pause / resume (resumes without a jump) |
+| `l` | cartridge library (the Driftman 2000 console); see [Cartridges](#cartridges) |
 | `h` | help panel: every key, grouped, with the current mode and scene; Esc or `h` closes it |
 | `q` or Ctrl+C | quit; the terminal is restored exactly |
 
 Every key lives in one table, `src/keymap.js`; the help panel and `drift --help` are
 generated from it. While the help panel is open the animation is frozen behind it (nothing
 is written), only `h`, Esc and `q`/Ctrl+C act, and closing it restores your pause state.
-Unknown keys and arrow keys are ignored. There is no status bar. The panel shrinks to fit:
-roomy at 30 rows or more, compact (no blank lines between groups) at 23 to 29, and below
-that it shows what fits and ends with "(+N more, enlarge window)".
+In Classic, unknown keys and arrow keys are ignored (the library and cartridges use the arrows).
+There is no status bar. The panel shrinks to fit: roomy at 31 rows or more, compact (no blank
+lines between groups) at 25 to 30, tight (the title and the mode line share one row) at 23 to
+24, and below that it shows what fits and ends with "(+N more, enlarge window)".
 
 ## Modes
 
@@ -139,12 +143,231 @@ phosphor, green phosphor, ice blue, violet, white, then a slow orange/violet ble
 (2-minute loop). Truecolor is used when `COLORTERM` is `truecolor`/`24bit` or
 `WT_SESSION` is set (Windows Terminal); otherwise a 256-colour fallback.
 
-Config: `%APPDATA%\drift\config.json`, `{"colour":"claude","mode":"calm","chaosPalette":"neon","invert":false}`.
+Config: `%APPDATA%\drift\config.json`, `{"colour":"claude","mode":"calm","chaosPalette":"neon","invert":false}`,
+plus `"lastCartridge":"<id>"` once you have inserted a cartridge (until then the file is written exactly as
+before, and older builds ignore the extra field).
 Each field is checked on its own and falls back to its default if it is wrong; a v1 file
 containing only `colour` loads as calm. Missing or corrupt files are ignored. Drift never
-writes anywhere else. Override the path with `DRIFT_CONFIG`. Saves are atomic (a temp file
+writes anywhere else (the user cartridge folder is only ever read). Override the path with `DRIFT_CONFIG`. Saves are atomic (a temp file
 in the same folder, then a rename), and each save re-reads the file and changes only the field you
 touched, so two windows sharing one file do not undo each other.
+
+## Cartridges
+
+The **Driftman 2000** is a little console built into Drift. You slot **cartridges** into it:
+each is a folder of plain files that brings its own look (a skin: colours, frame, menu, help,
+boot screen), its own scenes and its own programs (playlists). **Drift Classic** is itself the
+first cartridge: it loads the original modes exactly as they are. Plain `drift` always starts
+Classic, exactly as before; nothing about the console is on screen until you ask for it.
+
+```
+drift --library            # start in the library
+drift --cartridge classic  # insert a cartridge at start (boot included)
+drift --cartridge last     # the one inserted most recently (Drift Classic if none yet)
+```
+
+In Classic press `l` to open the library, `Esc` or `l` to go back. A bad id (`--cartridge nope`,
+a locked or broken cartridge) prints `drift: ...` to stderr and exits 2 before the terminal is
+touched, with no escape bytes. The id of the cartridge you insert is remembered as
+`lastCartridge` in the config file (it only sets where the library cursor starts and what
+`--cartridge last` means).
+
+### Library and cartridge keys
+
+These come from one table, `SHELL_KEYMAP` in `src/keymap.js`, and the help panel (`h`) on each
+console screen is generated from it. A skin may re-word a row's label (`wording.keys`) but
+never rebind a key.
+
+| screen | key | does |
+|---|---|---|
+| library | left, up or `,` | previous cartridge (wraps) |
+| library | right, down or `.` | next cartridge (wraps) |
+| library | Enter | insert the cartridge (a locked one just says it is not ready) |
+| library | Esc, `l` | back to Classic if the library was opened from it; nothing when you started in the library |
+| library, running | `h` | show or hide the help panel (the animation is frozen behind it; `h` or Esc closes it) |
+| running | Enter | open the menu; with the menu open, choose the highlighted entry |
+| running | up or left / down or right | menu: previous / next |
+| running | Esc | close the help or the menu (the menu also closes after 20 s idle) |
+| running | `e`, `l` | eject: the insert animation plays backwards and you are back in the library |
+| running | space | next scene in the current program |
+| running | `p` | pause or resume |
+| running | `+` (or `=`) / `-` (or `_`) | faster / slower |
+| running | `c` | next season, if the skin has `seasons`: the palette hue eases to the next one |
+| every screen | `q`, Ctrl+C | quit (Ctrl+C exits 130); the terminal is restored exactly |
+
+Insert, boot and the error card take any key except `q` as "skip". The timeline is: insert
+animation 1.5 s, boot (typed lines, a progress bar that waits for the scenes to finish loading,
+the title card), then the menu opens over the first program. If loading fails the console shows
+the reason for 4 s and returns to the library.
+
+### What a cartridge is: the folder format
+
+A cartridge is a folder whose name equals its manifest `id`:
+
+```
+<id>/manifest.json     required
+<id>/label.txt         required: the art on the library card, at most 24 columns x 10 rows, 4 KB
+<id>/skin.json         optional (32 KB at most): the look
+<id>/boot.txt          optional: art for the boot screen, at most 76 x 18, 16 KB (drawn when skin.boot.art is true)
+<id>/scenes/<id>.txt   one per scene of kind "text" (32 KB at most)
+<id>/scenes/<id>.js    one per scene of kind "cells", "sim" or "field" (install folder only; see the trust rule)
+```
+
+Rules that apply to every file: only allow-listed glyphs (the list in `src/glyphs.js`; tabs,
+emoji and wide characters are rejected with the exact code point), LF or CRLF, a link or junction
+that is a cartridge folder or one of its files is not followed (the cartridge is skipped), and unknown fields are
+errors ("unknown field 'titel'"). A cartridge that cannot be loaded is skipped with a reason
+and never stops the others; at most 50 cartridges are read.
+
+**Manifest** (`manifest.json`; `format` greater than 1 gives "needs a newer Drift"):
+
+| field | required | meaning |
+|---|---|---|
+| `format` | yes | `1` |
+| `id` | yes | 2 to 32 characters: lowercase letters, digits, hyphens, starting with a letter, not ending in a hyphen. Must equal the folder name. Reserved: `last`, `con`, `prn`, `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9`; `classic` only in the install folder |
+| `title` | yes | up to 30 characters |
+| `version` | yes | `1.0.0` form (three whole numbers) |
+| `author` | yes | up to 30 characters |
+| `blurb` | yes | up to 60 characters |
+| `runtime` | unless `locked` | `"cartridge"`; `"classic"` is only for the install folder's `classic` |
+| `locked` | no | `true` makes a coming-soon card: it can then hold only `format`, `id`, `title`, `version`, `author`, `blurb`, `labelHue`, `code` and `facts`, and cannot be inserted |
+| `code` | locked only | exactly 5 characters, capitals, digits or hyphen (like `DM-01`): the shelf code shown beside the title |
+| `facts` | locked only | up to 6 lines of up to 40 characters, listed under the blurb when the window is roomy |
+| `labelHue` | no | `#RRGGBB`: the tint of the library card |
+| `scenes` | yes (1 to 16) | list of `{ id, kind, title?, ref? }`. `id` follows the id rule; `kind` is `cells`, `sim`, `field` (code, install only), `text` (a `scenes/<id>.txt` file) or `builtin`; `title` up to 30 characters; `ref` (builtin only) names a Classic **calm** or **experimental** scene, such as `sand` or `plasma` |
+| `programs` | yes (1 to 8) | list of `{ id, title?, transition, scenes, sceneSeconds?, fadeSeconds? }`: `transition` is `dissolve` or `crossfade`; `scenes` lists scene ids (1 to 16); `sceneSeconds` 20 to 3600 (default 180); `fadeSeconds` 5 to 60 (default 15, crossfade only, and shorter than `sceneSeconds`). A `crossfade` program holds only `field` scenes and calm builtins; a `dissolve` program holds `cells`, `sim`, `text` and experimental builtins |
+| `start` | yes | the id of the program that plays first |
+| `menu` | no (1 to 8) | list of `{ label, program }` or `{ label, action: "eject" }`, `label` up to 24 characters. Without it the menu is one entry per program plus Eject |
+| `chapters` | no (1 to 16) | list of `{ id, numeral, place, line, icon, minutes }` for cartridges that present their scenes as chapters: `id` is a scene id (each at most once), `numeral` up to 8 characters, `place` up to 30, `line` up to 64, `icon` two pieces of text of at most 5 characters each, `minutes` a whole number 1 to 999. It is validated and kept with the manifest; no screen draws it yet |
+
+**Skin** (`skin.json`; every section but `palette` is optional and has a default taken from the
+Driftman 2000; a cartridge with no `skin.json` uses the Driftman 2000's whole look). Palette indexes 0 to 15 are the hue at 16 brightness levels, exactly as in Classic;
+`colours` start at 16.
+
+| section | fields |
+|---|---|
+| `palette` (required) | `hue` `#RRGGBB`; `colours` up to 48 extra fixed colours (indexes 16 and up); `bg` the background, which must be dark (WCAG relative luminance 0.05 or less, else "background too light"); `ui` `{ text, dim, head, accent }`, palette indexes for the console's own text (defaults 15, 7, 15, 15) |
+| `frame` | `show` `never`, `menu` or `always` (when the frame is drawn around the scene); `glyphs` 8 characters; `title` up to 30; `colour` a palette index |
+| `menu` | `layout` `list`, `slots` or `grid`; `anchor` `center`, `left` or `bottom`; `cursor` 1 character; `title` up to 40; `box` 8 characters |
+| `help` | `title` up to 30; `box` 8 characters |
+| `boot` | `lines` up to 8 typed lines of up to 60 characters; `art` true to draw `boot.txt`; `seconds` 0.5 to 10, how long the typed lines take |
+| `insert` | `text` up to 40: the caption of the insert animation |
+| `wording` | `keys` `{ <key id>: "label" }` re-words help rows, ids from the key tables (up to 28 characters each); `menuHint` up to 60 |
+| `seasons` | 1 to 4 of `{ name, hue }` (`name` up to 16 characters, `hue` `#RRGGBB`); the `c` key walks the skin's own hue, then each season, then back. The name is checked but not shown yet |
+
+The 8-character `glyphs` and `box` strings are the corners and edges in the order
+top-left, top, top-right, right, bottom-right, bottom, bottom-left, left (for example
+`┌─┐│┘─└│`).
+
+**Text scene** (`scenes/<id>.txt`): line 1 is `title: <name>`, line 2 is `---`, then cards
+separated by blank lines (up to 12 cards of 8 lines of 60 characters). A card types out at 24
+characters a second, holds 4 s, fades over 1 s, rests 0.5 s, and the scene loops. It uses the
+skin's hue only and does not depend on the seed.
+
+**Menu layouts.** A skin picks one of three layouts by name; there are no free-form layouts
+(a deliberate narrowing: arbitrary layouts would need a template language to test and keep
+flash-safe, and three named ones cover the console well):
+
+| layout | what it draws |
+|---|---|
+| `list` | a boxed column, one row per entry (the default) |
+| `slots` | one 4-row card per entry, collapsing to 2-row cards below 30 rows |
+| `grid` | 22 x 7 tiles in rows, collapsing to the list below 100 columns |
+
+A layout that does not fit the window (too many entries for the rows) falls back to the list.
+
+### Where cartridges are read from, and the trust rule
+
+| folder | trusted | may hold |
+|---|---|---|
+| `cartridges\` in the install (this repository) | yes | everything above, including scene code |
+| `%APPDATA%\drift\cartridges\` (next to the config file, so `DRIFT_CONFIG` moves it too) | no | **data only**: `text` and `builtin` scenes, skins, labels, boot art |
+
+Scene code is JavaScript loaded with `import()`, and only ever from the install folder, which is
+the git checkout: it is reviewed and committed like `src/`. A cartridge in the user folder that
+contains any `.js`, `.mjs` or `.cjs` file, or declares a `cells`, `sim` or `field` scene, is
+skipped with "user cartridges cannot contain code in this version", and its code is never
+imported. There is no environment override. If the same id is in both folders the install one
+wins. Cost of the rule: user cartridges can re-skin Drift, add cut scenes and reuse Classic
+scenes, but not add new animations.
+
+Every skin background must be dark, which also makes the photosensitivity rule structural:
+two allowed backgrounds differ in luminance by at most 0.05, under the 0.10 that WCAG counts as a flash. Opening the library from inverted high
+contrast waits for the same 3 s window as any other background flip.
+
+### How to make a cartridge
+
+A data-only cartridge in four small files. Make the folder
+`%APPDATA%\drift\cartridges\hello\` (the folder name must be the `id`) and put these in it.
+
+**hello/manifest.json**
+
+```json
+{
+  "format": 1,
+  "id": "hello",
+  "title": "Hello",
+  "version": "1.0.0",
+  "author": "You",
+  "blurb": "A tiny cartridge: one note and some falling sand.",
+  "runtime": "cartridge",
+  "labelHue": "#7FB069",
+  "scenes": [
+    { "id": "note", "kind": "text", "title": "A note" },
+    { "id": "grains", "kind": "builtin", "ref": "sand", "title": "Falling sand" }
+  ],
+  "programs": [
+    { "id": "main", "title": "Play", "transition": "dissolve", "scenes": ["note", "grains"], "sceneSeconds": 30 }
+  ],
+  "start": "main"
+}
+```
+
+**hello/label.txt**
+
+```
++--------------------+
+|                    |
+|       HELLO        |
+|                    |
++--------------------+
+```
+
+**hello/skin.json**
+
+```json
+{
+  "palette": { "hue": "#7FB069", "bg": "#0B140C" },
+  "menu": { "layout": "list", "title": "HELLO" },
+  "boot": { "lines": ["HELLO 1.0", "Warming up ..."], "seconds": 2 }
+}
+```
+
+**hello/scenes/note.txt**
+
+```
+title: A note
+---
+Hello from a cartridge.
+This card types out, holds, and fades.
+
+A second card follows it,
+then the scene starts again.
+```
+
+Then run `drift --library`: Hello is on the shelf, after the cartridges that ship with Drift. If
+it is missing, a problem is the reason (the library does not list skipped cartridges), and
+`drift --cartridge hello` names it: `drift: cartridge 'hello' cannot be loaded: ...`, exit 2.
+`tests/readme-cartridge.test.js` extracts the four files above from this README and loads them
+through the real loader, so the example cannot go stale.
+
+To add code scenes (a new animation) a cartridge must live in the install folder: a
+`scenes/<id>.js` whose default export is the scene (a `cells` or `sim` scene as described under
+Architecture; a `field` scene is the calm `scene(t, w, h, params)` contract) with `id` equal to the
+manifest id. Cartridge scenes may import only `src/scenes/util.js`, `src/scenes/simrng.js`,
+`src/glyphs.js` and `src/cells.js`, and `tests/cartridge-scenes.test.js` runs every install
+cartridge's scenes through the same size, glyph, colour, determinism and flash checks as the
+built-in scenes.
 
 ## Architecture
 
@@ -163,6 +386,10 @@ src/cells.js      cell scenes + sims, dissolve  src/keymap.js    the one key tab
 src/overlay.js    help panel                  src/glyphs.js    glyph allow-list
 src/modes.js      the four modes              src/scenes/*.js  the non-calm scenes (blockfont.js is the blocktype font)
 bin/drift.js      entry   bin/drift.cmd  shim  tools/          capture.mjs measure.mjs calm.mjs
+src/cartridge/    schema.js (ids, limits, validators)  loader.js (discover + load)  textscene.js  palette.js
+src/shell/        the console: shell.js (screen machine)  runtime.js (a running cartridge)  library.js insert.js
+                  boot.js menu.js chrome.js ui.js (pure draw functions)  driftman.js (the console's own skin)
+cartridges/       the install cartridges: classic and the locked ones (label.txt + manifest.json each)
 ```
 
 Non-calm scene contract (`src/cells.js`): `kind: 'cells'` scenes are `scene(t, w, h, params)`
@@ -171,6 +398,12 @@ indexes), pure in `t`; `kind: 'sim'` scenes are `{init(w,h,seed), step(state) at
 draw(state, params)}` (same seed + same step count = same frame). The cell composer steps
 sims from an accumulator, at most 8 steps per frame (enough for 4x speed at 18 fps; a stall
 cannot snowball). A cells scene also gets `params.t0`, the clock when it became active.
+
+The console (`src/shell/`) owns no terminal, timer or exit path. `createApp` still owns the loop, the
+renderer, the signal guards and `quit`; while a console screen is up it calls `shell.tick(dt)`,
+`shell.key(token)` and `shell.frame()` instead of the Classic composers, so every exit path (q, Ctrl+C,
+signals, a thrown scene) restores the terminal exactly, in the library and mid-insert included. A
+cartridge's programs run on the same `Scheduler`, field composer and cell composer as Classic.
 
 Terminal handling: alternate screen, hidden cursor, raw mode; restored on `q`,
 Ctrl+C (byte 0x03), SIGINT/SIGTERM, uncaught exceptions, unhandled rejections and
@@ -184,6 +417,15 @@ not a TTY, drift prints a message and exits 0 without emitting any escape sequen
 ```
 npm test            # node --test, no dependencies
 ```
+
+The suite is 766 tests in `tests/*.test.js` and takes about 20 seconds (test files run in parallel). The cartridge work is
+covered by `cartridge-schema` (validators, text scene, skin palette), `cartridge-loader`
+(every way a cartridge can be wrong, and both arms of the trust rule), `cartridge-scenes` (every
+install cartridge's scenes through the size, glyph, colour, determinism and flash checks, with controls
+that must fail), `cartridges` (glyph and import scans over `cartridges/`), `config-extras`, `shell-app`
+(the console at app level on a fake clock), `shell-draw` and `shell-flash` (every screen at every size,
+and the photosensitivity checks), `tools-cartridges` (the cartridge captures and `measure.mjs` options),
+`readme-cartridge` (the example in this README), and the cartridge arms of `real-process` (below).
 
 Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 `tests/real-process.test.js`, which spawns the real `bin/drift.js` with piped stdio):
@@ -200,10 +442,19 @@ Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 node tools/capture.mjs [--out captures]     # .txt (chars only) and .ansi, 5 scenes + crossfade, 120x40 and 240x67; scenes at t = 0, 5, 10, 20 s, crossfade at 0, 25, 50, 75, 100% of the 15 s default fade
 node tools/calm.mjs [--seconds 60]          # calmness table (cells changing per frame, mean intensity change) plus cross-fade rows at the shipped fade
 node tools/measure.mjs --seconds 60 --cols 240 --rows 67 [--scene mix|squiggle|sunburst|plasma|ripples|rain|glyphrain|swarm|glitch|fireworks|vortex|life|tunnel|wire|maze|blocktype|bounce|sand|waves|pendulum|cloth|artist|all]
+node tools/measure.mjs --library [--cycle N]                      # the cartridge library; N = press right arrow every N seconds
+node tools/measure.mjs --cartridge ID [--program P] [--scene S]   # a running cartridge (boot skipped, sampling starts once it runs); prints RESULT load_ms=
+node tools/measure.mjs --cartridge all                            # one fresh process per unlocked cartridge scene
 ```
 
-`captures/*.ansi` are git-ignored (large); regenerate with the capture command and
-view with `type captures\sunburst-120x40.ansi` in a truecolor terminal.
+The same capture command also writes the mode captures (`<mode>-<scene>-1/-2.txt`, `help-<mode>.txt`,
+`dissolve-<mode>.txt`), the artist's gallery and the cartridge console: `cart-library-<id>.txt` for every
+install cartridge (locked ones included) and `cart-insert-<id>.txt` / `cart-boot-<id>.txt` at several moments
+for each unlocked one, all 120x40 plain text. Only the install folder is captured, so the files do not
+depend on what is in your user cartridge folder.
+
+`captures/*.ansi` are git-ignored (large) except the calm scenes' and the crossfade's; regenerate with the
+capture command and view with `type captures\sunburst-120x40.ansi` in a truecolor terminal.
 
 Fade calmness is measured, not assumed. Across a sweep of seeds 1-3, start times
 8/40/100 s, all five adjacent scene pairs and both sizes (120x40, 240x67), the
@@ -217,7 +468,9 @@ process CPU and RSS each second. It includes scene maths, cross-fade, diff, stri
 build, the timer and Node/V8 itself. It excludes the cost of Windows Terminal parsing
 and drawing the bytes (another process) and any real console write. `process.cpuUsage`
 has about 15 ms granularity on Windows, so single one-second samples are lumpy; trust
-the run mean.
+the run mean. A still library draws one frame and then nothing (an empty 18 Hz Node timer already
+reads about 0.3% of a core here), so 10 second library runs mostly show that floor and the one-off
+first paint; use a longer run for a tighter number.
 
 ## Windows Terminal: full-screen profile (paste, do not auto-install)
 
