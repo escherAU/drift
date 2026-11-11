@@ -1,13 +1,13 @@
 === library 80x24 cursor on last-fantasy (locked)
                                                                                 
-    ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮      CARTRIDGES                       3 / 4  
+    ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮      CARTRIDGES                       4 / 5  
     ┆  ════                  ○   ┆      ──────────────────────────────────────  
     ┆ ┌┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┐ ┆                                              
     ┆ ┆  ▄▄▄▄          ·    ·  ┆ ┆        Drift Classic                  DM-00  
     ┆ ┆ ▟████▙     ·    ○      ┆ ┆        Arcade                          soon  
-    ┆ ┆ ██▓███         ·   ●   ┆ ┆      ▶ Last Fantasy                    soon  
-    ┆ ┆ ▜████▛            ▐█▌  ┆ ┆        Night Drive                     soon  
-    ┆ ┆────── COMING SOON ─────┆ ┆                                              
+    ┆ ┆ ██▓███         ·   ●   ┆ ┆        Delza                          DM-01  
+    ┆ ┆ ▜████▛            ▐█▌  ┆ ┆      ▶ Last Fantasy                    soon  
+    ┆ ┆────── COMING SOON ─────┆ ┆        Night Drive                     soon  
     ┆ ┆  ░▒▒░    ░▒░  ▟████████┆ ┆                                              
     ┆ ┆░▒▓▓▒░  ░▒▓▓▒░ ▐████████┆ ┆      ┌────────────────────────────────────┐  
     ┆ ┆▒▓██▓▒░▒▓▓██▓▒░▒▐███████┆ ┆      │ A long tale told in tiny pixels.   │  

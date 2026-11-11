@@ -1,0 +1,25 @@
+=== help 80x24 while the tale plays delza
+░░  ░░  ░░░░    ░░░░      ░░            ░░░░          ░░  ░░  ░░░░            ░░
+          ░░    ◆══════════════════════════════════════════════◆  ░░        ░░  
+                ║                                              ║                
+                ║  JOURNAL · how to travel                     ║                
+                ║  tale: Delza    chapter: The Thornwell Path  ║                
+                ║                                              ║                
+                ║  Chapters                                    ║                
+                ║  Enter         open the journal, or choose   ║                
+                ║  up or left    journal: previous chapter     ║                
+                ║  down or right journal: next chapter         ║                
+                ║  Esc           close the journal or page     ║                
+                ║  e or l        eject the cartridge           ║                
+                ║  space         next chapter                  ║                
+                ║  p             rest (pause) or carry on      ║                
+                ║  +             faster                        ║                
+ ▲       ▲     ▲║  -             slower                        ║ ▲              
+▲▲▲     ▲▲▲   ▲▲║  c             next season (colours)         ║▲▲▲       ▲     
+▲▲▲▲   ▲▲▲▲▲   ▲║                                              ║▲▲▲▲     ▲▲▲    
+ █       █      ║  Camp                                        ║ █        █     
+▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒║  h             show or hide these keys       ║▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+░░░░·░░░░░░░░░░░║  q or Ctrl+C   quit                          ║░░░░░░░░░░░░░░░░
+·░░░···░░░░░░░░░║                                              ║░░░░·░·░░░·░░░░░
+▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒◆══════════════════════════════════════════════◆▒▒▒·▒▒▒▒▒▒▒▒▒▒▒▒
+▒▒▒▒▒▒▒▒▒▒▒▒·▒▒·▒▒▒▒▒▒▒▒▒·▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒

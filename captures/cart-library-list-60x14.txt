@@ -1,11 +1,11 @@
 === library 60x14 (text-list tier) cursor on classic
-       CARTRIDGES                               1 / 4       
+       CARTRIDGES                               1 / 5       
        ──────────────────────────────────────────────       
        ▶ Drift Classic                          DM-00       
          Arcade                                  soon       
+         Delza                                  DM-01       
          Last Fantasy                            soon       
          Night Drive                             soon       
-                                                            
                                                             
                                                             
                                                             

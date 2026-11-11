@@ -1,13 +1,13 @@
 === library 80x24 cursor on night-drive (locked)
                                                                                 
-    ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮      CARTRIDGES                       4 / 4  
+    ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮      CARTRIDGES                       5 / 5  
     ┆  ════                  ○   ┆      ──────────────────────────────────────  
     ┆ ┌┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┐ ┆                                              
     ┆ ┆ ·      ▄▄████▄▄     ·  ┆ ┆        Drift Classic                  DM-00  
     ┆ ┆      ▄██████████▄      ┆ ┆        Arcade                          soon  
-    ┆ ┆      ▀▀▀▀▀▀▀▀▀▀▀▀      ┆ ┆        Last Fantasy                    soon  
-    ┆ ┆      ▄▄▄▄▄▄▄▄▄▄▄▄      ┆ ┆      ▶ Night Drive                     soon  
-    ┆ ┆────── COMING SOON ─────┆ ┆                                              
+    ┆ ┆      ▀▀▀▀▀▀▀▀▀▀▀▀      ┆ ┆        Delza                          DM-01  
+    ┆ ┆      ▄▄▄▄▄▄▄▄▄▄▄▄      ┆ ┆        Last Fantasy                    soon  
+    ┆ ┆────── COMING SOON ─────┆ ┆      ▶ Night Drive                     soon  
     ┆ ┆──────────╱  ╲──────────┆ ┆                                              
     ┆ ┆         ╱ ││ ╲         ┆ ┆      ┌────────────────────────────────────┐  
     ┆ ┆───────╱        ╲───────┆ ┆      │ Neon highway, endless dusk, and a  │  

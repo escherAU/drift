@@ -1,0 +1,25 @@
+=== Journal menu 80x24 7.3s after Enter (the boot ends at 5.8s) delza
+◆═╡ THE WAYFARER'S JOURNAL ╞═══════════════════════════════════════════════════◆
+║  Choose where the tale begins.                     starts by itself in 14 s  ║
+║  ▶ ▲ ▲ ▲  I     THE THORNWELL PATH *                Thornwell Wood · morning ║
+║    █ █ █        Orrin sets out with the Ember Lantern and a moth named Pim.  ║
+║ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ ║
+║    ┌▲▲┐   II    THE TALLOW & TIN                           Lowmarrow · night ║
+║    └▓▓┘         Warm ale, a crackling hearth, and a rumour about the Lamp.   ║
+║ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ ║
+║    ψ  ψ   III   THE CINDERHORN                         Ashen Clearing · noon ║
+║    ▀██▀         A stag of embers blocks the road. Orrin stands his ground.   ║
+║ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ ║
+║    ▲▲ ≈≈  IV    ACROSS THE REACH                  The Hollowmere Reach · map ║
+║    ■ ··●        From Lowmarrow to Highcandle, one dotted step at a time.     ║
+║ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ ║
+║    ▄ ▲ ▄  V     HIGHCANDLE AT DUSK                         Highcandle · dusk ║
+║    █▄█▄█        Nine hundred lamps, and only one still dark.     about 1 min ║
+║▲┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ ║
+║▲   ╭──╮   VI    THE LAMPWARDEN                             The tower · night ║
+║    ╰▼─╯         Maren hands over the Moonwax Key, and Orrin climbs.          ║
+║▒┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄▒║
+║░                Eject the cartridge                                         ░║
+║░                                                                            ░║
+║▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒·▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒·▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒·▒▒▒▒▒▒▒▒▒║
+◆═════════════════════════════ Ψ · Δ · Ξ · Φ · Ω ══════════════════════════════◆

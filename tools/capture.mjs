@@ -25,7 +25,9 @@ import { buildPlan, pieceToText } from '../src/art/engine.js';
 import { discoverCartridges, INSTALL_DIR } from '../src/cartridge/loader.js';
 import { INSERT_END } from '../src/shell/insert.js';
 import { BOOT_END } from '../src/shell/boot.js';
-import { EJECT_SECONDS } from '../src/shell/shell.js';
+import { EJECT_SECONDS, resetFirstInsertHint } from '../src/shell/shell.js';
+import { TURN, HIT_AT, CONTACT_AT } from '../cartridges/delza/scenes/cinderhorn.js';
+import { LINES, STARTS, TYPE_CPS, DISSOLVE, FLUTTER_STEP } from '../cartridges/delza/scenes/lampwarden.js';
 
 export const CAPTURE_NAMES = [...SCENES.map((s) => s.id), 'crossfade'];
 const SIZES = [[120, 40], [240, 67]];
@@ -180,8 +182,9 @@ export function runCaptureGallery({ outDir, seed = 1 }) {
 // Unlocked cartridges only get insert/boot/eject. Driven through the real app on a fake terminal, with a fake clock.
 const CART_DT = 1 / 18;
 const CART_SIZES = [[120, 40], [80, 24]];
-// seconds after Enter: the insert is over at INSERT_END (1.5 s), the boot runs on to about 5.8 s
-export const CART_MOMENTS = [0.4, 0.9, 1.25, 1.6, 2.5, 3.6, 4.2, 5.0, 5.6];
+// seconds after Enter: the insert is over at INSERT_END (1.5 s), the boot runs on to about 5.8 s. The 3.4 s moment sits
+// where Classic's progress bar is whole (the old 3.6 s moment caught it with a one-cell gap).
+export const CART_MOMENTS = [0.4, 0.9, 1.25, 1.6, 2.5, 3.4, 4.2, 5.0, 5.6];
 export const EJECT_MOMENTS = CART_MOMENTS.filter((m) => m < INSERT_END).map((m) => (m / INSERT_END) * EJECT_SECONDS);
 const CART_DIRS = () => [{ dir: INSTALL_DIR, trusted: true }];
 const sizeTag = (cols, rows) => (cols === 120 && rows === 40 ? '' : `-${cols}x${rows}`);
@@ -189,6 +192,7 @@ const ms = (sec) => Math.round(sec * 1000);
 
 const installed = (dirs) => discoverCartridges({ dirs: dirs || CART_DIRS() }).cartridges;
 const isShellRun = (c) => c.manifest && c.manifest.runtime !== 'classic';
+const hasDelza = (c) => c.id === 'delza' && !c.locked && isShellRun(c);
 
 export function cartridgeCaptureNames({ dirs } = {}) {
   const names = ['cart-library-240x67.txt', 'cart-library-list-60x14.txt', 'cart-help-classic-120x40.txt'];
@@ -201,10 +205,45 @@ export function cartridgeCaptureNames({ dirs } = {}) {
       if (isShellRun(c)) for (const m of EJECT_MOMENTS) names.push(`cart-eject-${c.id}${tag}-t${ms(m)}.txt`);
     }
   }
+  if (installed(dirs).some(hasDelza)) names.push(...delzaCaptureNames());
   return names;
 }
 
-function cartApp(seed, cols, rows, dirs) {
+// ---- Delza's own captures (cart-delza-*.txt), all through the real app on the fake terminal at the shipped defaults:
+//   cart-delza-library-240x67.txt       the extra-large library, cursor on Delza
+//   cart-delza-journal-120x40.txt, -80x24.txt   the Journal menu as it opens when the boot ends
+//   cart-delza-help-120x40.txt, -80x24.txt      the reskinned help panel (h) while the tale plays
+//   cart-delza-boot-hint-t<ms>.txt      the FIRST insert of a process, which has "e ejects · h shows the keys" on the bar line
+//   cart-delza-scene-<id>-t<s>.txt      every scene at 2, 20 and 40 s of scene time (120x40), chosen from the Journal menu
+//   cart-delza-fight-t<ms>.txt          the Cinderhorn through its third turn (a swing): the cursor walking, the word gold, the
+//                                       lantern landing, the stag pawing, the stag's charge landing
+//   cart-delza-cutscene-t<ms>.txt       the Lampwarden: line 1 half typed, line 3 whole, Pim's flutter, the last line whole
+// The plain boot captures (cart-boot-*) must show the plain bar, so the per-process first-insert flag is spent first and
+// only the hint capture sets it again with resetFirstInsertHint().
+export const DELZA_ID = 'delza';
+export const DELZA_SCENE_IDS = ['thornwell', 'tallow', 'cinderhorn', 'reach', 'highcandle', 'lampwarden'];
+export const DELZA_SCENE_TIMES = [2, 20, 40];
+export const HINT_MOMENT = 3.4;
+const round2 = (x) => Math.round(x * 100) / 100;
+const TURN3 = 2 * TURN; // the third turn of the fight's plan is a swing
+export const FIGHT_MOMENTS = [0.3, 0.8, HIT_AT + 0.1, 2.5, CONTACT_AT + 0.1].map((o) => round2(TURN3 + o));
+const lineEnd = (i) => STARTS[i] + LINES[i].text.length / TYPE_CPS;
+export const CUTSCENE_MOMENTS = [
+  STARTS[0] + (lineEnd(0) - STARTS[0]) / 2,
+  lineEnd(2) + 0.8,
+  STARTS[3] + DISSOLVE + FLUTTER_STEP + FLUTTER_STEP / 2,
+  lineEnd(5) + 1,
+].map(round2);
+export function delzaCaptureNames() {
+  const names = ['cart-delza-library-240x67.txt', `cart-delza-boot-hint-t${ms(HINT_MOMENT)}.txt`];
+  for (const sz of ['120x40', '80x24']) names.push(`cart-delza-journal-${sz}.txt`, `cart-delza-help-${sz}.txt`);
+  for (const id of DELZA_SCENE_IDS) for (const sec of DELZA_SCENE_TIMES) names.push(`cart-delza-scene-${id}-t${sec}.txt`);
+  for (const m of FIGHT_MOMENTS) names.push(`cart-delza-fight-t${ms(m)}.txt`);
+  for (const m of CUTSCENE_MOMENTS) names.push(`cart-delza-cutscene-t${ms(m)}.txt`);
+  return names;
+}
+
+function cartApp(seed, cols, rows, dirs, startScreen = { screen: 'library' }) {
   const stdin = new EventEmitter();
   Object.assign(stdin, { isTTY: true, setRawMode() { return stdin; }, resume() { return stdin; }, pause() { return stdin; }, unref() {}, ref() {}, setEncoding() { return stdin; } });
   const stdout = new EventEmitter();
@@ -214,7 +253,7 @@ function cartApp(seed, cols, rows, dirs) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-capture-cart-'));
   const app = createApp({
     stdin, stdout, stderr: { write() { return true; } }, proc, env: { COLORTERM: 'truecolor' },
-    configPath: path.join(dir, 'config.json'), dirs, autoLoop: false, seed, startScreen: { screen: 'library' },
+    configPath: path.join(dir, 'config.json'), dirs, autoLoop: false, seed, startScreen,
   });
   app.start();
   return { app, dir };
@@ -242,12 +281,48 @@ async function withCartApp({ seed, cols, rows, dirs, id }, fn) {
   }
 }
 
+// Delza's scenes at scene-local times: a fresh app with the boot skipped, the scene chosen from the Journal menu with the
+// keys a person uses (Enter, Down to the entry, Enter), then a clock that counts from the first frame of that scene (the
+// scene's own params.t0), so `sec` is exactly the scene time. Returns [{ sec, text }] for each of `times`.
+async function sceneShots({ seed, cols, rows, dirs, sceneId, times }) {
+  const cart = installed(dirs).find(hasDelza);
+  const { app, dir } = cartApp(seed, cols, rows, dirs, { screen: 'cartridge', cartridge: DELZA_ID, skipBoot: true });
+  const out = [];
+  try {
+    for (let i = 0; i < 200 && app.getState().shell.screen !== 'running'; i++) { app.tick(0); await settle(); }
+    if (app.getState().shell.screen !== 'running') throw new Error('capture: ' + DELZA_ID + ' did not start');
+    const at = cart.manifest.menu.findIndex((e) => e.scene === sceneId);
+    if (at < 0) throw new Error('capture: no Journal entry for ' + sceneId);
+    if (at > 0) { // the first scene is already playing; the others are chosen
+      app.handleKey('\r');
+      for (let i = 0; i < at; i++) app.handleKey('\x1b[B');
+      app.handleKey('\r');
+    }
+    app.tick(0); // the scene's first frame: its clock starts here
+    if (app.getState().shell.sceneId !== sceneId) throw new Error('capture: could not reach ' + sceneId);
+    let t = 0;
+    for (const sec of times) {
+      while (t < sec - 1e-9) { const d = Math.min(CART_DT, sec - t); app.tick(d); t += d; }
+      await settle();
+      out.push({ sec, text: shotText(app) });
+    }
+  } finally {
+    app.quit(0);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  return out;
+}
+
 export async function runCaptureCartridges({ outDir, seed = 1, dirs = CART_DIRS() }) {
   fs.mkdirSync(outDir, { recursive: true });
   const written = [];
   const put = (name, text) => { const f = path.join(outDir, name); fs.writeFileSync(f, text); written.push(f); };
   const found = installed(dirs);
   const classicId = (found.find((c) => !isShellRun(c)) || found[0] || {}).id;
+  // spend the per-process first-insert flag so every boot capture below shows the plain bar (a process's first insert
+  // shows the hint instead); Delza's hint capture at the end sets it again on purpose with resetFirstInsertHint()
+  const firstOpen = found.find((c) => !c.locked);
+  if (firstOpen) await withCartApp({ seed, cols: 120, rows: 40, dirs, id: firstOpen.id }, async (app, step) => { app.handleKey('\r'); await step(0.2); });
 
   // the library, per cartridge and size, then the two single-purpose sizes
   for (const c of found) {
@@ -276,7 +351,15 @@ export async function runCaptureCartridges({ outDir, seed = 1, dirs = CART_DIRS(
         }
         if (!isShellRun(c)) return;
         await step(BOOT_END + 1.5); // running, with the menu open over it
+        if (hasDelza(c)) put(`cart-delza-journal-${cols}x${rows}.txt`, `=== Journal menu ${cols}x${rows} ${round2(BOOT_END + 1.5)}s after Enter (the boot ends at ${round2(BOOT_END)}s) delza\n${shotText(app)}\n`);
         app.handleKey('\x1b'); // close the menu
+        if (hasDelza(c)) {
+          await step(BOOT_END + 2);
+          app.handleKey('h');
+          app.tick(0);
+          put(`cart-delza-help-${cols}x${rows}.txt`, `=== help ${cols}x${rows} while the tale plays delza\n${shotText(app)}\n`);
+          app.handleKey('h');
+        }
         await step(BOOT_END + 3);
         app.handleKey('e');
         let t = 0;
@@ -298,6 +381,30 @@ export async function runCaptureCartridges({ outDir, seed = 1, dirs = CART_DIRS(
       app.tick(0);
       put('cart-help-classic-120x40.txt', `=== help 120x40 while ${classicId} runs (after the console handed back)\n${shotText(app)}\n`);
     });
+  }
+
+  // Delza's own set: the extra-large library, the first-insert hint, then every scene
+  if (found.some(hasDelza)) {
+    await withCartApp({ seed, cols: 240, rows: 67, dirs, id: DELZA_ID }, (app) => {
+      put('cart-delza-library-240x67.txt', `=== library 240x67 (extra-large) cursor on ${DELZA_ID}\n${shotText(app)}\n`);
+    });
+    resetFirstInsertHint();
+    await withCartApp({ seed, cols: 120, rows: 40, dirs, id: DELZA_ID }, async (app, step) => {
+      app.handleKey('\r');
+      await step(HINT_MOMENT);
+      put(`cart-delza-boot-hint-t${ms(HINT_MOMENT)}.txt`, `=== boot t=${HINT_MOMENT}s after Enter 120x40 delza, the first insert of the process (hint on the bar line)\n${shotText(app)}\n`);
+    });
+    for (const id of DELZA_SCENE_IDS) {
+      for (const sh of await sceneShots({ seed, cols: 120, rows: 40, dirs, sceneId: id, times: DELZA_SCENE_TIMES })) {
+        put(`cart-delza-scene-${id}-t${sh.sec}.txt`, `=== scene t=${sh.sec}s of scene time 120x40 delza/${id}\n${sh.text}\n`);
+      }
+    }
+    for (const sh of await sceneShots({ seed, cols: 120, rows: 40, dirs, sceneId: 'cinderhorn', times: FIGHT_MOMENTS })) {
+      put(`cart-delza-fight-t${ms(sh.sec)}.txt`, `=== fight t=${sh.sec}s of scene time (turn 3 of 5, a swing: ${round2(sh.sec - TURN3)}s into the turn) 120x40 delza/cinderhorn\n${sh.text}\n`);
+    }
+    for (const sh of await sceneShots({ seed, cols: 120, rows: 40, dirs, sceneId: 'lampwarden', times: CUTSCENE_MOMENTS })) {
+      put(`cart-delza-cutscene-t${ms(sh.sec)}.txt`, `=== cut scene t=${sh.sec}s of scene time 120x40 delza/lampwarden\n${sh.text}\n`);
+    }
   }
   return written;
 }
