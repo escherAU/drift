@@ -2,7 +2,8 @@
 //
 //   drawMenu(frame, { entries, index, title }, skin)
 //
-//   entries  [{ label, current }]   current marks the program that is playing
+//   entries  [{ label, current, note?, desc? }]   current marks the entry that is playing; note (up to 16 characters) is a
+//            short right-hand tag; desc (up to 76, list layout only) is the selected entry's text
 //   index    the highlighted entry
 //   title    the box title (skin.menu.title is used when absent)
 //   skin     the cartridge skin; skin.menu: { layout, anchor, cursor, title, box }
@@ -21,9 +22,15 @@
 //   grid   22x7 tiles, 3 per row from 120 columns and 2 per row from 100; the selected tile is a double line in the
 //          accent colour. Below 100 columns, or when the rows do not fit, it is the list.
 //
+// A note is right-aligned on the label row (list: the box widens by the widest note plus 2; slots: on the card's label row;
+// grid: a row under the label) and is dropped when there is no room for it as well as the whole label: a label is never
+// cut for a note. In the list, the selected entry's desc is wrapped to 2 lines above the hint (the rows are kept for it
+// whichever entry is selected, so the box does not change height); it is dropped before the title and the hint when the
+// rows are short.
+//
 // Only the cells inside the menu's own boxes are written; the scene shows through everywhere else. Every row is
 // composed through putRow (left parts, right-aligned parts) so a later field (a note, a description) is a new part.
-import { putText, putCentered, fillRect, drawBox, lenOf, centerX, uiOf, boxChars, titleCapsOf, putEdgeTitle, putRow, DEFAULT_BOX } from './ui.js';
+import { putText, putCentered, fillRect, drawBox, lenOf, centerX, uiOf, boxChars, titleCapsOf, putEdgeTitle, putRow, wrapWords, DEFAULT_BOX } from './ui.js';
 
 export const LAYOUT_NAMES = Object.freeze({ list: 'list', slots: 'slots', grid: 'grid' });
 export const TILE_W = 22;
@@ -68,6 +75,16 @@ function place(f, w, h, anchor) {
 
 const labelOf = (e) => e.label + (e.current ? ' *' : '');
 const labelWidth = (entries) => Math.max(1, ...entries.map((e) => lenOf(labelOf(e))));
+const noteWidth = (entries) => Math.max(0, ...entries.map((e) => (e.note ? lenOf(e.note) : 0)));
+const DESC_ROWS = 3; // a spacer and the 2 wrapped lines
+const DESC_MIN_INNER = 40;
+// The note as right-hand row parts, or none when the label row (left parts of leftLen cells) has no room for both.
+// edge is a blank cell kept after the note (inside a card's border).
+function noteParts(e, sel, ui, leftLen, rowW, edge = 0) {
+  if (!e.note) return [];
+  if (leftLen + 1 + lenOf(e.note) > rowW) return [];
+  return [{ t: e.note, s: sel ? ui.accent : ui.dim }, ...(edge ? [{ t: ' '.repeat(edge), s: 0 }] : [])];
+}
 const pad = (s, n) => s + ' '.repeat(Math.max(0, n - lenOf(s)));
 
 // The label as row parts: the text in the row's shade, the current mark in the head shade (accent when selected).
@@ -89,10 +106,13 @@ function drawList(f, a, skin) {
   const title = a.title === undefined ? (m.title || '') : a.title;
   const edgeTitle = title !== '' && !!titleCapsOf(box);
   let withHint = true, withTitleRow = title !== '' && !edgeTitle;
-  const fixed = () => 2 + (withTitleRow ? 2 : 0) + (withHint ? 2 : 0);
+  let withDesc = a.entries.some((e) => e.desc);
+  const fixed = () => 2 + (withTitleRow ? 2 : 0) + (withHint ? 2 : 0) + (withDesc ? DESC_ROWS : 0);
   const room = usableRows(f);
-  // a scrolling window keeps the hint and title unless it would be left with fewer than 5 entry rows
+  // a scrolling window keeps the hint and title unless it would be left with fewer than 5 entry rows;
+  // the description goes first: it is dropped as soon as it would make the list scroll
   const need = Math.min(n, 5);
+  if (withDesc && (n > room - fixed() || room - fixed() < need)) withDesc = false;
   if (room - fixed() < need) withHint = false;
   if (room - fixed() < need) withTitleRow = false;
   const avail = Math.max(1, room - fixed());
@@ -103,8 +123,10 @@ function drawList(f, a, skin) {
   const hasMore = (shown < n) && marks;
   const body = shown + (marks ? 2 : 0);
 
+  const noteW = noteWidth(a.entries);
   const inner = Math.max(
-    labelWidth(a.entries) + 4,
+    labelWidth(a.entries) + 4 + (noteW > 0 ? noteW + 2 : 0),
+    withDesc ? Math.min(DESC_MIN_INNER, Math.max(0, f.cols - 4)) : 0,
     withTitleRow ? lenOf(title) : 0,
     edgeTitle ? Math.min(lenOf(title) + 4, Math.max(0, f.cols - 8)) : 0,
     withHint ? Math.min(lenOf(hint), Math.max(0, f.cols - 8)) : 0,
@@ -124,11 +146,17 @@ function drawList(f, a, skin) {
     const i = first + k;
     const e = a.entries[i];
     const sel = i === a.index;
-    putRow(f, x + 2, row + k, w - 4, { left: [{ t: (sel ? cursor : ' ') + ' ', s: ui.accent }, ...labelParts(e, sel, ui)] });
+    putRow(f, x + 2, row + k, w - 4, { left: [{ t: (sel ? cursor : ' ') + ' ', s: ui.accent }, ...labelParts(e, sel, ui)], right: noteParts(e, sel, ui, 2 + lenOf(labelOf(e)), w - 4) });
   }
   if (marks) {
     const rest = n - first - shown;
     if (rest > 0) putText(f, x + 2, row + shown, `↓ ${rest} more`, ui.dim, w - 4);
+  }
+  if (withDesc) {
+    const d = a.entries[a.index].desc;
+    const lines = d ? wrapWords(d, w - 4).slice(0, 2) : [];
+    const top = y + h - 1 - 2 - (withHint ? 2 : 0);
+    for (let k = 0; k < lines.length; k++) putText(f, x + 2, top + k, lines[k], ui.text, w - 4);
   }
   if (withHint) putText(f, x + 2, y + h - 2, hint, ui.dim, w - 4);
 }
@@ -136,13 +164,15 @@ function drawList(f, a, skin) {
 // ---- slots
 
 // One card's label row: cursor, Roman numeral, label (a later right field goes in `right`).
-function slotRow(e, i, sel, ui, cursor) {
+function slotRow(e, i, sel, ui, cursor, rowW, edge) {
+  const leftLen = 3 + NUMERAL_W + 2 + lenOf(labelOf(e));
   return {
     left: [
       { t: ' ' + (sel ? cursor : ' ') + ' ', s: ui.accent },
       { t: pad(romanOf(i), NUMERAL_W) + '  ', s: sel ? ui.accent : ui.dim },
       ...labelParts(e, sel, ui),
     ],
+    right: noteParts(e, sel, ui, leftLen, rowW - edge, edge),
   };
 }
 
@@ -166,10 +196,10 @@ function drawSlots(f, a, skin) {
     if (tall) {
       const cy = y + i * 4;
       boxed(f, x, cy, w, 4, sel ? DOUBLE : rest, sel ? ui.accent : ui.dim);
-      putRow(f, x + 1, cy + 1, w - 2, slotRow(e, i, sel, ui, cursor));
+      putRow(f, x + 1, cy + 1, w - 2, slotRow(e, i, sel, ui, cursor, w - 2, 1));
     } else {
       const cy = y + i * 3;
-      putRow(f, x, cy, w, slotRow(e, i, sel, ui, cursor));
+      putRow(f, x, cy, w, slotRow(e, i, sel, ui, cursor, w, 0));
       if (i < n - 1) for (let k = 0; k < w; k++) putText(f, x + k, cy + 2, '┄', ui.dim);
     }
   }
@@ -200,6 +230,7 @@ function drawGrid(f, a, skin) {
     const len = lenOf(labelOf(e));
     const off = Math.max(1, Math.floor((TILE_W - len) / 2));
     putRow(f, x + off, y + LABEL_ROW, TILE_W - 1 - off, { left: parts });
+    if (e.note && lenOf(e.note) <= TILE_W - 2) putText(f, x + Math.floor((TILE_W - lenOf(e.note)) / 2), y + LABEL_ROW + 1, e.note, sel ? ui.accent : ui.dim);
   }
 }
 

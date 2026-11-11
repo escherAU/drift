@@ -345,3 +345,123 @@ test('chrome: the bottom-edge ornament hook is empty for now and draws centred i
   const tiny = newFrame(6, 3);
   assert.doesNotThrow(() => drawEdgeOrnament(tiny, 'a long ornament that cannot fit', 6));
 });
+
+// ---- note and desc (DRIFT-4 item 4)
+
+const withExtras = (n, over = {}) => Array.from({ length: n }, (_, i) => ({
+  label: `Program ${i + 1}`,
+  ...(i === 1 ? { current: true } : {}),
+  ...(i % 2 === 0 ? { note: i === 0 ? 'jump' : 'sixteen chars ab' } : {}),
+  desc: `Description number ${i + 1} says what this entry does, in a sentence or two.`,
+  ...over,
+}));
+const shortHint = { wording: { menuHint: 'ok' } };
+
+test('list note: right-aligned inside the box at 120x40 and 80x24, and the box widens by the note width plus 2', () => {
+  for (const [w, h] of [[120, 40], [80, 24]]) {
+    const entries = [{ label: 'Alpha', note: 'jump' }, { label: 'Beta' }, { label: 'Gamma', note: 'sixteen chars ab' }];
+    const skin = { ...mkSkin('list', { title: '' }), ...shortHint };
+    const plain = newFrame(w, h), noted = newFrame(w, h);
+    drawMenu(plain, { entries: entries.map(({ label }) => ({ label })), index: 0 }, skin);
+    drawMenu(noted, { entries, index: 0 }, skin);
+    const bp = changedBox(newFrame(w, h), plain), bn = changedBox(newFrame(w, h), noted);
+    assert.equal((bn.x1 - bn.x0) - (bp.x1 - bp.x0), 16 + 2, `${w}x${h}: widens by the widest note + 2`);
+    const lines = frameLines(noted);
+    const a = lines.find((l) => l.includes('Alpha')).trimEnd();
+    const g = lines.find((l) => l.includes('Gamma')).trimEnd();
+    assert.ok(a.endsWith('jump │'), `${w}x${h}: note at the right edge: ${a}`);
+    assert.ok(g.endsWith('sixteen chars ab │'), g);
+    assert.equal(a.length, g.length, 'both rows end at the same edge');
+    assert.ok(!lines.find((l) => l.includes('Beta')).includes('jump'));
+    assert.deepEqual(problems(noted, `${w}x${h}`), []);
+  }
+});
+
+test('list note: a width with no room for label and note keeps the whole label and drops the note', () => {
+  const entries = [{ label: 'Long label here ok', note: 'abcdefgh' }];
+  const f = newFrame(30, 12);
+  drawMenu(f, { entries, index: 0 }, { ...mkSkin('list', { title: '' }), ...shortHint });
+  const t = text(f);
+  assert.ok(t.includes('Long label here ok'), 'label whole');
+  assert.ok(!t.includes('abcdefgh'), 'note dropped');
+  const roomy = newFrame(60, 12);
+  drawMenu(roomy, { entries, index: 0 }, { ...mkSkin('list', { title: '' }), ...shortHint });
+  assert.ok(text(roomy).includes('abcdefgh'), 'control: the same entry shows its note when there is room');
+});
+
+test('slots note: right-aligned on the label row; dropped (label intact) when the card has no room', () => {
+  for (const [w, h] of [[120, 40], [80, 24]]) {
+    const f = newFrame(w, h);
+    drawMenu(f, { entries: [{ label: 'Alpha', note: 'new' }, { label: 'Beta with a longer label', note: 'sixteen chars ab' }], index: 0 }, mkSkin('slots'));
+    const lines = frameLines(f);
+    const a = lines.find((l) => l.includes('Alpha')).trimEnd();
+    // 120x40 draws boxed 4-row cards (the note sits one cell from the border); 80x24 draws flat 2-row entries
+    assert.match(a, h >= 30 ? /Alpha\s+new ║$/ : /Alpha\s+new$/, `${w}x${h}: right-aligned: ${a}`);
+    const b = lines.find((l) => l.includes('Beta'));
+    assert.ok(b.includes('Beta with a longer label'), 'label intact');
+    assert.ok(!text(f).includes('sixteen chars ab'), 'a note too wide for the card is dropped');
+    assert.deepEqual(problems(f, `slots ${w}x${h}`), []);
+  }
+});
+
+test('grid note: a row under the label inside the tile; dropped when wider than the tile', () => {
+  const f = newFrame(120, 40);
+  drawMenu(f, { entries: [{ label: 'Alpha', note: 'jump' }, { label: 'Beta', note: 'sixteen chars ab' }, { label: 'Gamma' }], index: 0 }, mkSkin('grid'));
+  const lines = frameLines(f);
+  const ya = lines.findIndex((l) => l.includes('Alpha'));
+  assert.ok(lines[ya + 1].includes('jump'), 'the note is on the row under the label');
+  assert.ok(lines[ya + 1].indexOf('jump') > lines[ya].indexOf('Alpha') - 8 && lines[ya + 1].indexOf('jump') < lines[ya].indexOf('Alpha') + 8, 'and sits under it');
+  const yb = lines.findIndex((l) => l.includes('Beta'));
+  assert.ok(lines[yb + 1].includes('sixteen chars ab'), '16 characters fit a 22-wide tile');
+  assert.deepEqual(problems(f, 'grid'), []);
+});
+
+test('list desc: the selected entry text, wrapped to 2 lines above the hint, follows the cursor; dropped at 80x16 before the title', () => {
+  const entries = withExtras(10);
+  const skin = mkSkin('list', { title: 'Menu title' });
+  const at = (index, w, h) => { const f = newFrame(w, h); drawMenu(f, { entries, index }, skin); return f; };
+  for (const [w, h] of [[120, 40], [80, 24]]) {
+    for (const index of [0, 3, 9]) {
+      const f = at(index, w, h);
+      const lines = frameLines(f);
+      const hintY = lines.findIndex((l) => l.includes('Up and down choose'));
+      assert.ok(hintY > 2, 'hint present');
+      const want = entries[index].desc;
+      const first = lines.findIndex((l) => l.includes(`Description number ${index + 1}`));
+      assert.ok(first >= 0, `${w}x${h} index ${index}: desc shown`);
+      assert.ok(first + 1 < hintY, 'two lines, above the hint');
+      const joined = (lines[first] + ' ' + lines[first + 1]).replace(/[│\s]+/g, ' ');
+      assert.ok(joined.includes(want.slice(0, 30)) && joined.includes(want.slice(-20)), `all of the text shows in 2 lines: ${joined}`);
+      for (let other = 0; other < 10; other++) if (other !== index) assert.ok(!text(f).includes(`Description number ${other + 1} `), 'only the selected entry text');
+      assert.deepEqual(problems(f, `desc ${w}x${h}`), []);
+    }
+    // the box does not change height when the cursor moves
+    const hOf = (index) => { const b = changedBox(newFrame(w, h), at(index, w, h)); return b.y1 - b.y0; };
+    assert.equal(hOf(0), hOf(5));
+  }
+  const short = at(2, 80, 16);
+  assert.ok(!text(short).includes('Description number'), '80x16: desc dropped');
+  assert.ok(text(short).includes('Menu title'), 'the title stays');
+  assert.ok(text(short).includes('Up and down choose'), 'and the hint');
+  assert.ok(text(short).includes('Program 3'), 'and the selected entry');
+  // control: an entry list with no desc draws no extra rows
+  const plain = newFrame(80, 24);
+  drawMenu(plain, { entries: mkEntries(10), index: 0 }, skin);
+  const withD = changedBox(newFrame(80, 24), at(0, 80, 24)), noD = changedBox(newFrame(80, 24), plain);
+  assert.equal((withD.y1 - withD.y0) - (noD.y1 - noD.y0), 3, 'desc takes 3 rows: a spacer and its 2 lines');
+});
+
+test('a 10-entry menu with notes and descriptions in each layout at 120x40 and 80x24 draws allowed glyphs only', () => {
+  for (const layout of ['list', 'slots', 'grid']) {
+    for (const [w, h] of [[120, 40], [80, 24]]) {
+      for (const index of [0, 4, 9]) {
+        const base = dirty(w, h), f = dirty(w, h);
+        const label = `${layout} ${w}x${h} index ${index}`;
+        assert.doesNotThrow(() => drawMenu(f, { entries: withExtras(10), index }, mkSkin(layout)), label);
+        assert.deepEqual(problems(f, label), [], label);
+        assert.ok(changedBox(base, f).count > 0, label);
+        assert.ok(text(f).includes(`Program ${index + 1}`), `${label}: selected entry visible`);
+      }
+    }
+  }
+});
