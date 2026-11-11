@@ -143,10 +143,28 @@ export function cartridgeCodeProblems(src, file) {
   for (const spec of specs) {
     if (!spec.startsWith('./') && !spec.startsWith('../')) { problems.push(`imports '${spec}' (only relative paths to the four allowed modules)`); continue; }
     const target = path.posix.normalize(path.posix.join(path.posix.dirname(file), spec));
+    // a flat lib file of the SAME cartridge (cartridges/<id>/lib/<name>.js) is allowed from its scenes and from its other lib files
+    const lib = /^cartridges\/([a-z0-9-]+)\/lib\/[a-z0-9-]+\.js$/.exec(target);
+    const own = /^cartridges\/([a-z0-9-]+)\//.exec(file);
+    if (lib && own && lib[1] === own[1]) continue;
     if (!ALLOWED_IMPORTS.includes(target)) problems.push(`imports '${spec}' which resolves to ${target}`);
   }
   return problems;
 }
+
+test('import scanner: a cartridge may import its own flat lib files (scene to ../lib/x.js, lib to ./y.js) and nothing else of the kind', () => {
+  const imp = (spec) => `import { x } from '${spec}';\n`;
+  const LIBFILE = 'cartridges/delza/lib/a.js';
+  assert.deepEqual(cartridgeCodeProblems(imp('../lib/digits.js'), 'cartridges/delza/scenes/glade.js'), []);
+  assert.deepEqual(cartridgeCodeProblems(imp('./b.js') + imp('../../../src/glyphs.js') + imp('../../../src/cells.js'), LIBFILE), []);
+  const bad = (src, file, re) => { const p = cartridgeCodeProblems(src, file); assert.ok(p.some((x) => re.test(x)), `${src} -> ${JSON.stringify(p)}`); };
+  bad(imp('../../arcade/lib/digits.js'), 'cartridges/delza/scenes/glade.js', /resolves to cartridges\/arcade\/lib\/digits\.js/);
+  bad(imp('../lib/sub/x.js'), 'cartridges/delza/scenes/glade.js', /resolves to cartridges\/delza\/lib\/sub\/x\.js/);
+  bad(imp('../scenes/glade.js'), LIBFILE, /resolves to cartridges\/delza\/scenes\/glade\.js/);
+  bad(imp('./other.js'), 'cartridges/delza/scenes/glade.js', /resolves to cartridges\/delza\/scenes\/other\.js/);
+  bad(imp('../../arcade/lib/digits.js'), LIBFILE, /resolves to cartridges\/arcade\/lib\/digits\.js/);
+  bad(imp('../lib/Digits.js'), 'cartridges/delza/scenes/glade.js', /resolves to/);
+});
 
 const SCENE = 'cartridges/delza/scenes/glade.js';
 

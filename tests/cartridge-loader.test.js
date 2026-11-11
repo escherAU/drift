@@ -555,3 +555,48 @@ test('caps: more than 16 scenes, more than 8 programs', () => {
   expectSkip({ 'manifest.json': dataManifest('c1', { programs, start: 'p00' }), 'label.txt': LABEL }, /'programs' must list 1 to 8 programs/);
   expectSkip({ 'manifest.json': 'x'.repeat(LIMITS.manifestBytes + 1), 'label.txt': LABEL }, /manifest\.json is \d+ bytes, max 16384/);
 });
+
+// ---- DRIFT-4 B6 (schema item 6): lib files for INSTALLED cartridges only
+
+const libFiles = (id) => ({
+  'manifest.json': {
+    format: 1, id, title: 'Lib ' + id, version: '1.0.0', author: 'Test', blurb: 'A cells scene that imports its own lib.', runtime: 'cartridge',
+    scenes: [{ id: 'dots', kind: 'cells', title: 'Dots' }],
+    programs: [{ id: 'main', title: 'Main', transition: 'dissolve', scenes: ['dots'] }],
+    start: 'main',
+  },
+  'label.txt': LABEL,
+  'lib/digits.js': "import { DOT } from './b.js';\nexport const digit = () => DOT;\n",
+  'lib/b.js': 'export const DOT = 46;\n',
+  'scenes/dots.js': [
+    "import { digit } from '../lib/digits.js';",
+    'function dots(t, w, h, params) {',
+    '  params.glyphs.fill(digit());',
+    '  params.colours.fill(8);',
+    '}',
+    "dots.id = 'dots';",
+    "dots.kind = 'cells';",
+    'export default dots;',
+    '',
+  ].join('\n'),
+});
+
+test('lib files: an installed cartridge whose scene imports ../lib/x.js (and a lib that imports ./y.js) loads and passes the smoke render', async () => {
+  const { r } = one(libFiles('libcart'), { id: 'libcart', trusted: true });
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.cartridges.length, 1);
+  const s = await loadScenes(r.cartridges[0]);
+  assert.deepEqual(s.errors, []);
+  assert.deepEqual(s.scenes.map((x) => [x.id, x.kind]), [['dots', 'cells']]);
+  assert.equal(typeof s.scenes[0].scene, 'function');
+});
+
+test('lib files: the same folder in the user folder is skipped - user cartridges cannot contain code', () => {
+  const { r } = one(libFiles('libcart'), { id: 'libcart', trusted: false });
+  assert.equal(r.cartridges.length, 0);
+  assert.equal(r.errors.length, 1);
+  assert.match(r.errors[0].reason, /user cartridges cannot contain code/);
+  // the lib alone is enough: a data-only manifest with only lib/x.js is refused too
+  const files = { 'manifest.json': dataManifest('c1'), 'label.txt': LABEL, 'lib/x.js': 'export const X = 1;\n' };
+  expectSkip(files, /user cartridges cannot contain code/);
+});

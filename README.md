@@ -389,7 +389,10 @@ To add code scenes (a new animation) a cartridge must live in the install folder
 `scenes/<id>.js` whose default export is the scene (a `cells` or `sim` scene as described under
 Architecture; a `field` scene is the calm `scene(t, w, h, params)` contract) with `id` equal to the
 manifest id. Cartridge scenes may import only `src/scenes/util.js`, `src/scenes/simrng.js`,
-`src/glyphs.js` and `src/cells.js`, and `tests/cartridge-scenes.test.js` runs every install
+`src/glyphs.js` and `src/cells.js`, plus the cartridge's own flat helper files: a scene may import
+`../lib/<name>.js`, and a lib file may import those four modules and `./<name>.js` from the same `lib/` (no sub-folders, no other
+cartridge's lib, no other scene). Lib files, like scenes, work in the install folder only; a user cartridge
+with any `.js` file is skipped, and `tests/cartridge-scenes.test.js` runs every install
 cartridge's scenes through the same size, glyph, colour, determinism and flash checks as the
 built-in scenes.
 
