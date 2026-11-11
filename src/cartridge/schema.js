@@ -25,7 +25,7 @@ export const LIMITS = Object.freeze({
   cartridges: 50,
   scenes: 16,
   programs: 8,
-  menuEntries: 8,
+  menuEntries: 10, menuNote: 16, menuDesc: 76,
   manifestBytes: 16 * 1024,
   skinBytes: 32 * 1024,
   labelBytes: 4 * 1024, labelW: 24, labelH: 10,
@@ -181,21 +181,35 @@ function validateProgram(p, i, scenesById) {
   return { ok: true, program: out };
 }
 
-function validateMenu(menu, programIds) {
+function validateMenu(menu, programsById) {
   if (!Array.isArray(menu) || menu.length < 1 || menu.length > LIMITS.menuEntries) return fail(`menu must list 1 to ${LIMITS.menuEntries} entries`);
   const out = [];
   for (let i = 0; i < menu.length; i++) {
     const m = menu[i];
     const where = `menu[${i}]`;
     if (!isObj(m)) return fail(`${where} must be an object`);
-    const uk = unknownKey(m, ['label', 'program', 'action'], where);
+    const uk = unknownKey(m, ['label', 'program', 'scene', 'action', 'note', 'desc'], where);
     if (uk) return fail(uk);
     const e = strErr(m.label, `${where}.label`, LIMITS.menuLabel);
     if (e) return fail(e);
     if ((m.program === undefined) === (m.action === undefined)) return fail(`${where}: give exactly one of 'program' or 'action'`);
-    if (m.program !== undefined && !programIds.has(m.program)) return fail(`${where}: unknown program ${JSON.stringify(m.program)}`);
+    const prog = m.program !== undefined && typeof m.program === 'string' ? programsById.get(m.program) : undefined;
+    if (m.program !== undefined && !prog) return fail(`${where}: unknown program ${JSON.stringify(m.program)}`);
     if (m.action !== undefined && !MENU_ACTIONS.includes(m.action)) return fail(`${where}: action must be one of ${MENU_ACTIONS.join(', ')}`);
-    out.push(m.program !== undefined ? { label: m.label, program: m.program } : { label: m.label, action: m.action });
+    if (m.scene !== undefined) {
+      if (m.program === undefined) return fail(`${where}: 'scene' goes with 'program'`);
+      const se = strErr(m.scene, `${where}.scene`, 64);
+      if (se) return fail(se);
+      if (!prog.scenes.includes(m.scene)) return fail(`${where}: scene '${m.scene}' is not in program '${m.program}'`);
+    }
+    if (m.note !== undefined) { const ne = strErr(m.note, `${where}.note`, LIMITS.menuNote); if (ne) return fail(ne); }
+    if (m.desc !== undefined) { const de = strErr(m.desc, `${where}.desc`, LIMITS.menuDesc); if (de) return fail(de); }
+    const o = { label: m.label };
+    if (m.program !== undefined) o.program = m.program; else o.action = m.action;
+    if (m.scene !== undefined) o.scene = m.scene;
+    if (m.note !== undefined) o.note = m.note;
+    if (m.desc !== undefined) o.desc = m.desc;
+    out.push(o);
   }
   return { ok: true, menu: out };
 }
@@ -297,11 +311,13 @@ export function validateManifest(obj, { trusted = false } = {}) {
   if (!Array.isArray(obj.programs) || obj.programs.length < 1 || obj.programs.length > LIMITS.programs) return fail(`'programs' must list 1 to ${LIMITS.programs} programs`);
   const programs = [];
   const programIds = new Set();
+  const programsById = new Map();
   for (let i = 0; i < obj.programs.length; i++) {
     const r = validateProgram(obj.programs[i], i, byId);
     if (!r.ok) return r;
     if (programIds.has(r.program.id)) return fail(`programs[${i}]: duplicate program id '${r.program.id}'`);
     programIds.add(r.program.id);
+    programsById.set(r.program.id, r.program);
     programs.push(r.program);
   }
   if (typeof obj.start !== 'string' || !programIds.has(obj.start)) return fail(obj.start === undefined ? "missing required field 'start'" : `'start' names no program: ${JSON.stringify(obj.start)}`);
@@ -309,7 +325,7 @@ export function validateManifest(obj, { trusted = false } = {}) {
   out.programs = programs;
   out.start = obj.start;
   if (obj.menu !== undefined) {
-    const r = validateMenu(obj.menu, programIds);
+    const r = validateMenu(obj.menu, programsById);
     if (!r.ok) return r;
     out.menu = r.menu;
   }

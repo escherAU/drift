@@ -54,11 +54,11 @@ export function createCartridgeRuntime(cart, scenes, palette, opts) {
   let fieldComp = fieldList.length ? createComposer({ scenes: fieldList.map((s) => s.scene), cols, rows, seed }) : null;
 
   const programs = new Map();
-  const mkSched = (def) => new Scheduler({
+  const mkSched = (def, start = 0) => new Scheduler({
     count: def.scenes.length,
     durationSec: def.sceneSeconds,
     fadeSec: def.transition === 'crossfade' ? (def.fadeSeconds ?? DEFAULT_FADE_SECONDS) : DISSOLVE_SECONDS,
-    start: 0,
+    start,
     ...(def.seconds ? { durations: def.scenes.map((id) => def.seconds[id] ?? def.sceneSeconds) } : {}),
   });
   for (const def of m.programs) {
@@ -92,17 +92,34 @@ export function createCartridgeRuntime(cart, scenes, palette, opts) {
       ...m.programs.map((p) => ({ label: p.title, program: p.id })),
       { label: 'Eject', action: 'eject' },
     ];
-    return list.map((e) => ({ label: e.label, program: e.program, action: e.action, current: e.program === cur }));
+    const playing = programs.get(cur).list[programs.get(cur).indexes[programs.get(cur).sched.state().a]];
+    const playingId = playing ? playing.id : null;
+    return list.map((e) => {
+      const o = { label: e.label, program: e.program, scene: e.scene, action: e.action, current: e.program === cur && (e.scene === undefined || e.scene === playingId) };
+      if (e.note !== undefined) o.note = e.note;
+      if (e.desc !== undefined) o.desc = e.desc;
+      return o;
+    });
   }
 
   function openMenu() { menu.open = true; menu.idle = 0; forced = true; }
   function closeMenu() { menu.open = false; forced = true; }
 
-  function switchProgram(id) {
-    if (id === cur || !programs.has(id)) return;
+  // Switch to a program, optionally starting at one of its scenes. Nothing happens for an unknown program,
+  // for the playing program when no scene is given, or for the scene that is already playing.
+  function switchProgram(id, sceneId) {
+    const prog = programs.get(id);
+    if (!prog) return;
+    if (sceneId === undefined && id === cur) return;
+    const start = sceneId === undefined ? 0 : prog.def.scenes.indexOf(sceneId);
+    if (start < 0) return;
+    if (id === cur && sceneId !== undefined) {
+      const st = prog.sched.state();
+      if (st.a === start) return;
+    }
     if (last) xfade = { glyphs: last.glyphs.slice(), shades: last.shades.slice(), t: 0 };
     cur = id;
-    programs.get(id).sched = mkSched(programs.get(id).def);
+    prog.sched = mkSched(prog.def, start);
     forced = true;
   }
 
@@ -113,7 +130,7 @@ export function createCartridgeRuntime(cart, scenes, palette, opts) {
       closeMenu();
       if (!e) return null;
       if (e.action === 'eject') return 'eject';
-      if (e.program) switchProgram(e.program);
+      if (e.program) switchProgram(e.program, e.scene);
       return null;
     },
     menuPrev() { if (menu.open) { const n = entries().length; menu.index = (menu.index + n - 1) % n; menu.idle = 0; forced = true; } return null; },

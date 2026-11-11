@@ -515,10 +515,37 @@ test('program rules: sceneSeconds range, fadeSeconds only on crossfade and short
   expectSkip(m({ id: 'main', transition: 'wipe', scenes: ['sandbox'] }), /transition must be 'dissolve' or 'crossfade'/);
   expectSkip(m({ id: 'main', transition: 'dissolve', scenes: ['sandbox'] }, { menu: [{ label: 'Go', program: 'nope' }] }), /unknown program "nope"/);
   expectSkip(m({ id: 'main', transition: 'dissolve', scenes: ['sandbox'] }, { menu: [{ label: 'Go', action: 'format-disk' }] }), /action must be one of eject/);
-  expectSkip(m({ id: 'main', transition: 'dissolve', scenes: ['sandbox'] }, { menu: Array(9).fill({ label: 'Go', program: 'main' }) }), /menu must list 1 to 8 entries/);
+  expectSkip(m({ id: 'main', transition: 'dissolve', scenes: ['sandbox'] }, { menu: Array(11).fill({ label: 'Go', program: 'main' }) }), /menu must list 1 to 10 entries/);
   const ok = one(m({ id: 'main', transition: 'dissolve', scenes: ['sandbox'] }, { menu: [{ label: 'Go', program: 'main' }, { label: 'Out', action: 'eject' }] })).r;
   assert.deepEqual(ok.errors, []);
   assert.equal(ok.cartridges[0].manifest.programs[0].sceneSeconds, 180, 'default scene time');
+});
+
+test('menu entries (item 4): ten entries load; scene, note and desc rules', () => {
+  const sc = [{ id: 'sandbox', kind: 'builtin', ref: 'sand' }, { id: 'pl', kind: 'builtin', ref: 'plasma' }];
+  const progs = [
+    { id: 'main', transition: 'dissolve', scenes: ['sandbox'] },
+    { id: 'two', transition: 'crossfade', scenes: ['pl'], sceneSeconds: 40 },
+  ];
+  const m = (menu) => ({ 'manifest.json': dataManifest('c1', { scenes: sc, programs: progs, menu }), 'label.txt': LABEL });
+  const ten = one(m(Array.from({ length: 10 }, (_, i) => ({ label: 'Go ' + i, program: 'main' })))).r;
+  assert.deepEqual(ten.errors, []);
+  assert.equal(ten.cartridges[0].manifest.menu.length, 10);
+  const ok = one(m([
+    { label: 'Sand', program: 'main', scene: 'sandbox', note: '16 chars exactly', desc: 'x'.repeat(76) },
+    { label: 'Out', action: 'eject', note: 'bye' },
+  ])).r;
+  assert.deepEqual(ok.errors, []);
+  assert.deepEqual(ok.cartridges[0].manifest.menu[0], { label: 'Sand', program: 'main', scene: 'sandbox', note: '16 chars exactly', desc: 'x'.repeat(76) });
+  assert.deepEqual(ok.cartridges[0].manifest.menu[1], { label: 'Out', action: 'eject', note: 'bye' });
+  expectSkip(m([{ label: 'Go', program: 'main', scene: 'pl' }]), /menu\[0\]: scene 'pl' is not in program 'main'/);
+  expectSkip(m([{ label: 'Go', program: 'two', scene: 'sandbox' }]), /menu\[0\]: scene 'sandbox' is not in program 'two'/);
+  expectSkip(m([{ label: 'Go', action: 'eject', scene: 'sandbox' }]), /menu\[0\]: 'scene' goes with 'program'/);
+  expectSkip(m([{ label: 'Go', program: 'main', scene: 5 }]), /menu\[0\]\.scene/);
+  expectSkip(m([{ label: 'Go', program: 'main', note: 'x'.repeat(17) }]), /menu\[0\]\.note/);
+  expectSkip(m([{ label: 'Go', program: 'main', desc: 'x'.repeat(77) }]), /menu\[0\]\.desc/);
+  expectSkip(m([{ label: 'Go', program: 'main', note: '' }]), /menu\[0\]\.note/);
+  expectSkip(m([{ label: 'Go', program: 'main', colour: 1 }]), /menu\[0\]/);
 });
 
 test('caps: more than 16 scenes, more than 8 programs', () => {
