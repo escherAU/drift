@@ -370,7 +370,7 @@ inside the running cartridge are checked against the real process in `tests/real
 
 Night Drive (DM-02) is an 80s neon highway: the Vantra Halcyon, a low coupe with the plate NITE86, driving out of the made-up Port Solace
 on Shoreline 9, with late-night radio on 88.1 Moonlow FM. Everything in it is original. It is built as one tape of eight tracks (sides A
-and B, 90 s each, about 12 minutes), added a few at a time; today the tape holds track A1, `onramp` Midnight On-Ramp, track A3, `sundown` Sundown Grid, and track B1, `redlight` Red Light, Rain. The skin gives it a
+and B, 90 s each, about 12 minutes), added a few at a time; today the tape holds track A1, `onramp` Midnight On-Ramp, track A3, `sundown` Sundown Grid, track B1, `redlight` Red Light, Rain, and track B4, `overdrive` Overdrive. The skin gives it a
 violet-black background (#0D0820), a heavy-line magenta console (`┏━┓┃┛━┗┃`, a stacked-vent grille, an equaliser
 stripe), the tape deck menu (the `list` layout with a 15 s countdown), an Owner's Manual help panel (groups Tracks and Glovebox) and a
 cassette on the boot screen. Its colours are in `cartridges/night-drive/lib/palette.js` (eight hues in four shades each, plus text, dim and
@@ -386,6 +386,13 @@ light in the rain, with a traffic light blurred by the rain into a bokeh, a pede
 send a trickle down) and one wiper that sweeps for 1.2 s every 4.2 s and clears the drops it crosses. At 58 s the red ramps down and the green ramps up over a
 second, never cutting from one to the other; from 62 s the far buildings slide a column every 0.2 s. Under 100 columns or 32 rows it drops the mirror, shrinks the
 bokeh to 9x5 and keeps a two-row dashboard. Its drops, wiper, bokeh and dashboard are in `lib/rain.js`, `lib/bokeh.js` and `lib/dash.js`.
+Overdrive is the busy one, also a simulation: A1's road at double pace while a far-silhouette tunnel mouth grows out of the vanishing point (0 to 15 s), then nested rings of
+light in perspective with a ceiling light on each, tail lights running away and headlights coming toward us, each with a trail of 4 to 10 cells fading to nothing (15 to 60 s),
+then the far end opens and the city is revealed inside it by a dissolve from the centre outward (60 to 62 s), and an elevated freeway with the skyline on both sides, a trail
+about every 2 s and the pace easing back to A1's (66 to 90 s). How many cells change in a frame is a function of the step count and of the window size, never of what the last
+frame did: rings move on ring slots (at most 2 in any 8 steps at full size, 1 at 80x24 and below), only the rings whose redraw is small enough for the window move at all (the big
+ones near the frame stand still), and new trails are born only on spawn slots. The worst frame changes about 13% of the cells or less at every size, at 1x and 4x. Under 100 columns or 32 rows (80x24) it keeps 4
+rings, 6 trails and the 20x4 car; under 60x18, 2 rings and 3 trails. Its skyline is in `lib/skyline.js`.
 `tests/night-drive-*.test.js` check the skin, palette, label, boot art, manifest, help panel and the scene's promises on rendered frames.
 
 `node bin\drift.js --cartridge night-drive` goes straight in.
@@ -545,7 +552,7 @@ install cartridge's scenes through the size, glyph, colour, determinism and flas
 that must fail), `cartridges` (glyph and import scans over `cartridges/`), `config-extras`, `shell-app`
 (the console at app level on a fake clock), `shell-draw` and `shell-flash` (every screen at every size,
 and the photosensitivity checks), `tools-cartridges` (the cartridge captures and `measure.mjs` options),
-`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge`, `night-drive-onramp`, `night-drive-sundown` and `night-drive-redlight` (Night Drive's skin, palette, label, boot art, manifest, help panel, the road, sprites and calm bounds of its first track, the sun, grid, loop and calm bounds of Sundown Grid, and the purity, light change, wiper, rain, buildings and calm bounds of Red Light, Rain), and the cartridge arms of `real-process` (below).
+`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge`, `night-drive-onramp`, `night-drive-sundown`, `night-drive-redlight` and `night-drive-overdrive` (Night Drive's skin, palette, label, boot art, manifest, help panel, the road, sprites and calm bounds of its first track, the sun, grid, loop and calm bounds of Sundown Grid, the purity, light change, wiper, rain, buildings and calm bounds of Red Light, Rain, and the ring schedule, light trails, phases, exit dissolve and changed-cell bounds of Overdrive), and the cartridge arms of `real-process` (below).
 
 Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 `tests/real-process.test.js`, which spawns the real `bin/drift.js` with piped stdio):
