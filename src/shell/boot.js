@@ -13,6 +13,7 @@
 //              state (cartridge seated, CART LED on, takeover applied) inside the console's screen rectangle
 //              (screenRect in library.js: 46 x 9 at the full tier, the 38 x 9 blurb box at the compact tier). Without
 //              it, or below the compact tier, the boot is drawn in a centred rectangle on a blank frame
+//   hint       optional text drawn on the progress bar's row instead of the bar, from when the screen is on
 //   consoleMap optional (shade) => shade: where the console's library colours live in the boot palette
 //              (mergeBootPalette); identity when absent
 //
@@ -45,7 +46,8 @@ export const TITLE_END = ZOOM_END + 0.6; // 5.2
 export const BOOT_END = TITLE_END + 0.6; // 5.8
 export const LINE_SECONDS = 0.25;
 export const REVEAL_SECONDS = 0.3; // the title card is revealed left to right over this long
-export const TEXT_CLEAR_SECONDS = 0.35; // the typed text dissolves away at the start of the zoom
+export const TEXT_CLEAR_SECONDS = 0.35; // the typed text dissolves away at the start of the zoom (this skin's bar end, bootPhases().barEnd)
+export const FIRST_INSERT_HINT = 'e ejects · h shows the keys'; // args.hint on the first insert of a process (shell.js)
 
 const DEFAULT_LINES_SECONDS = LINES_END - SCREEN_ON_END;
 const CONSOLE_COLOURS = 20; // the console's own palette entries (silver 0-15, amber, cyan, graphite, dim)
@@ -296,7 +298,10 @@ export function drawBoot(frame, args, consoleSkin) {
       const cells = lineCells(shownLines[k], ui, sk).slice(0, n);
       for (let c = 0; c < cells.length && c < textW; c++) if (cells[c].ch !== ' ' && keep(R0.x + 2 + c, y)) put(f, R0.x + 2 + c, y, cells[c].ch.codePointAt(0), cells[c].shade);
     }
-    if (T >= P.linesEnd) {
+    if (args.hint && T >= P.on) {
+      // the first insert of a process: the keys to know, on the bar's row, instead of the bar
+      putClipped(f, R0.x + 2, R0.y + R0.h - 2, args.hint, ui.text, textW, keep);
+    } else if (T >= P.linesEnd) {
       const barW = Math.max(2, R0.w - 6);
       const u = ramp(T, P.linesEnd, P.barEnd) * (loading ? 0.92 : 1);
       const eighths = Math.round(u * barW * 8);

@@ -20,7 +20,7 @@ import { parseHex, sgrFor } from '../color.js';
 import { driftmanSkin, classicBootSkin, plainBootSkin } from './driftman.js';
 import { drawLibrary, idleSignature, dipAt, DIP_SECONDS, makeLibraryMemo } from './library.js';
 import { drawInsert, INSERT_END } from './insert.js';
-import { drawBoot, bootPhases, mergeBootPalette } from './boot.js';
+import { drawBoot, bootPhases, mergeBootPalette, FIRST_INSERT_HINT } from './boot.js';
 import { createCartridgeRuntime, dissolveFrames } from './runtime.js';
 import { newFrame, clearFrame, ramp, sizeTier, dissolveThresholds } from './ui.js';
 
@@ -34,6 +34,10 @@ export const LIBRARY_FADE_SECONDS = 0.3; // the library dissolves in when opened
 export const MESSAGE_SECONDS = 2.5; // the locked-cartridge message (it also clears on the next key)
 const TINT_LEVELS = [4, 8, 12, 15];
 const DEFAULT_HUE = '#9DB8A8';
+
+// The first insert of the process shows the eject/help hint on the boot's bar row (per process, not saved anywhere).
+let firstInsertPending = true;
+export function resetFirstInsertHint() { firstInsertPending = true; }
 
 export function libraryPalette(carts, cmode) {
   const base = makeSkinPalette(driftmanSkin, cmode, 'driftman');
@@ -81,6 +85,7 @@ export function createShell(o) {
   let cartPal = libPal, bootMap = null; // the cartridge's own palette (the runtime's) and, for a skinned one, where the console's colours sit in bootPal
   let runtime = null;
   let bt = 0; // boot-local seconds
+  let hintNow = false; // this insert is the process's first: the boot shows the hint
 
   let resolveRunning = null;
   let runningPromise = null;
@@ -113,6 +118,7 @@ export function createShell(o) {
     cart = carts[i]; entry = libCarts[i];
     classic = cart.runtime === 'classic';
     skipped = false; menuOnArrive = true;
+    hintNow = firstInsertPending; firstInsertPending = false;
     host.persist({ lastCartridge: cart.id });
     screen = 'insert'; st = 0; forced = true;
     helpOpen = false; message = '';
@@ -343,7 +349,7 @@ export function createShell(o) {
         const P = bootPhases(bootSkin);
         drawBoot(f, {
           skin: bootSkin, labelArt: cart.label, bootArt: cart.boot, t: bt, loading: load.status !== 'ok', title: cart.title,
-          item: insertItem(), consoleMap: bootMap || undefined,
+          item: insertItem(), consoleMap: bootMap || undefined, hint: hintNow ? FIRST_INSERT_HINT : undefined,
         }, driftmanSkin);
         if (bt > P.titleEnd) {
           const p = ramp(bt, P.titleEnd, P.end);
