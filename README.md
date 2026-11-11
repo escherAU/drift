@@ -405,7 +405,9 @@ ones near the frame stand still), and new trails are born only on spawn slots. T
 rings, 6 trails and the 20x4 car; under 60x18, 2 rings and 3 trails. Its skyline is in `lib/skyline.js`.
 `tests/night-drive-*.test.js` check the skin, palette, label, boot art, manifest, help panel and the scene's promises on rendered frames.
 
-`node bin\drift.js --cartridge night-drive` goes straight in.
+`node bin\drift.js --cartridge night-drive` goes straight in. `q` quits from the library with Night Drive selected, from the playing tape, with the
+tape deck open and after a track picked from it (exit 0); `Ctrl+C` from the playing tape exits 130, as everywhere else; all are checked against the real
+process in `tests/real-process.test.js`, and the terminal is restored each time.
 
 ### Where cartridges are read from, and the trust rule
 

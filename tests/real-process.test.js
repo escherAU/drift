@@ -9,6 +9,7 @@ import { ENTER, LEAVE } from '../src/term.js';
 import { INSERT_END } from '../src/shell/insert.js';
 import { bootPhases } from '../src/shell/boot.js';
 import { classicBootSkin } from '../src/shell/driftman.js';
+import { discoverCartridges } from '../src/cartridge/loader.js';
 
 const BIN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'drift.js');
 const CFG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-rp-'));
@@ -212,6 +213,96 @@ test('real process (delza d): --cartridge delza with a thrown error after the Jo
   assert.notEqual(r.code, 0);
   assert.match(r.stderr, /DRIFT_TEST_THROW/);
   assert.ok(r.stdout.includes('THORNWELL'), 'the throw came after the Journal menu was drawn (a running cartridge, not the insert)');
+});
+
+// ---- Night Drive, the second real code cartridge (DRIFT-5). The tape deck menu shows at about 6 s (the insert is 1.5 s,
+// the boot 5.8 s): it is waited for by its prompt, 'Pick a track'. Enter then plays the first track; the running scene
+// prints no words, so "it is running" is shown by the bytes it draws after the Enter (and the deck's first row not being among them).
+// Quitting from the library is (library a); here the cartridge is selected on the shelf, and then quitting happens from
+// inside it: while it plays, with the deck open over it, and after a track picked from the deck.
+const NIGHT_BLURB = JSON.parse(fs.readFileSync(path.join(path.dirname(BIN), '..', 'cartridges', 'night-drive', 'manifest.json'), 'utf8')).blurb;
+const NIGHT_PROMPT = 'MIDNIGHT'; // the first row of the tape deck (A1 MIDNIGHT ON-RAMP), written in one piece
+// the shelf is the cartridge folders, Classic first, the rest by name (as src/app.js builds it)
+const SHELF = discoverCartridges({ dirs: [{ dir: path.join(path.dirname(BIN), '..', 'cartridges'), trusted: true }] }).cartridges
+  .map((c) => c.id).sort((a, b) => (a === 'classic' ? -1 : b === 'classic' ? 1 : 0));
+const NIGHT_SLOT = SHELF.indexOf('night-drive');
+const PLAIN = /\x1b\[[0-9;?]*[A-Za-z]/g; // an escape sequence, to read the screen text without them
+const RIGHT = '\x1b[C', DOWN = '\x1b[B';
+
+// send `keys` (a list of [delay ms after the previous key, bytes]) after the deck is up; collects what is drawn after
+// the first key into `seen.after`
+function afterDeck(keys, seen) {
+  return (c) => {
+    seen.after = '';
+    let at = 0;
+    keys.forEach(([delay, bytes], i) => {
+      at += delay;
+      setTimeout(() => {
+        if (i === 0) c.stdout.on('data', (d) => { seen.after += d.toString('utf8'); });
+        c.stdin.write(bytes);
+      }, at);
+    });
+  };
+}
+const NIGHT_RUN = (keys, seen, extraEnv = {}) => run({ args: ['--cartridge', 'night-drive'], env: { ...FORCE, ...freshConfig().env, ...extraEnv }, waitFor: NIGHT_PROMPT, timeoutMs: DELZA_TIMEOUT, drive: afterDeck(keys, seen) });
+
+test('real process (night-drive a): --library, Night Drive selected on the shelf, then q: exit 0; the other arms (not selected) also exit 0 and the output differs', async (t) => {
+  assert.ok(NIGHT_SLOT > 0, `Night Drive is on the shelf: ${SHELF.join(', ')}`);
+  const arms = [];
+  for (const rights of [NIGHT_SLOT, 0, 2]) {
+    const cfg = freshConfig();
+    const r = await run({
+      args: ['--library'], env: { ...FORCE, ...cfg.env }, timeoutMs: DELZA_TIMEOUT,
+      drive: (c) => {
+        // each slide takes 0.36 s: let it finish before the next key
+        for (let i = 0; i < rights; i++) setTimeout(() => c.stdin.write(RIGHT), i * 600);
+        setTimeout(() => c.stdin.write('q'), rights * 600 + 700);
+      },
+    });
+    assertRestored(r, t, `(night-drive a) ${rights} right arrows (${SHELF[rights]} selected)`);
+    assert.equal(r.code, 0);
+    arms.push({ rights, id: SHELF[rights], hasBlurb: r.stdout.replace(PLAIN, '').includes(NIGHT_BLURB.slice(0, 12)) });
+  }
+  t.diagnostic('(night-drive a) arms: ' + show(arms));
+  assert.equal(arms[0].id, 'night-drive');
+  assert.equal(arms[0].hasBlurb, true, 'with Night Drive selected, its blurb is on screen');
+  assert.equal(arms[1].hasBlurb, false, 'with the first cartridge selected, Night Drive\'s blurb is not (the arms differ)');
+  assert.equal(arms[2].hasBlurb, false, 'with another cartridge selected, Night Drive\'s blurb is not');
+});
+
+test('real process (night-drive b): --cartridge night-drive plays, then q from inside the running tape: exit 0', async (t) => {
+  const seen = {};
+  const r = await NIGHT_RUN([[0, '\r'], [2000, 'q']], seen);
+  assertRestored(r, t, '(night-drive b) q');
+  assert.equal(r.code, 0);
+  assert.ok(r.stdout.includes(NIGHT_PROMPT), 'the tape deck was drawn before the Enter');
+  assert.ok(seen.after.length > 1000 && !seen.after.includes('▶'), `the tape ran after the Enter: ${seen.after.length} bytes drawn`);
+});
+
+test('real process (night-drive b2): --cartridge night-drive playing, then byte 0x03 from inside the running tape: same exit code as Delza (130)', async (t) => {
+  const seen = {};
+  const r = await NIGHT_RUN([[0, '\r'], [2000, Buffer.from([0x03])]], seen);
+  assertRestored(r, t, '(night-drive b2) 0x03');
+  assert.equal(r.code, 130);
+  assert.ok(seen.after.length > 1000, `the tape ran after the Enter: ${seen.after.length} bytes drawn`);
+});
+
+test('real process (night-drive b3): q while the tape deck is open over the running scene: exit 0', async (t) => {
+  const seen = {};
+  const r = await NIGHT_RUN([[0, '\r'], [1500, '\r'], [900, 'q']], seen); // play, open the deck over the scene, quit
+  assertRestored(r, t, '(night-drive b3) q with the deck open');
+  assert.equal(r.code, 0);
+  assert.ok(seen.after.includes('▶') && seen.after.includes('┏'), 'the deck (its cursor and box) was drawn again over the running scene before the q');
+});
+
+test('real process (night-drive b4): pick track B2 from the deck (Enter, down arrows, Enter), then q: exit 0', async (t) => {
+  const seen = {};
+  // play A1, open the deck (its cursor starts on the next track, A2), four downs to B2, Enter, run a moment, quit
+  const keys = [[0, '\r'], [1500, '\r'], [900, DOWN], [200, DOWN], [200, DOWN], [200, DOWN], [600, '\r'], [2500, 'q']];
+  const r = await NIGHT_RUN(keys, seen);
+  assertRestored(r, t, '(night-drive b4) B2 then q');
+  assert.equal(r.code, 0);
+  assert.ok(seen.after.length > 5000, `the tape kept drawing through the pick: ${seen.after.length} bytes`);
 });
 
 test.after(() => fs.rmSync(CFG_DIR, { recursive: true, force: true }));
