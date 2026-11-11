@@ -264,3 +264,14 @@ test('menu header: when the card block is too narrow for both, the countdown sta
   assert.ok(t.includes('starts by itself in 15 s'));
   assert.ok(!t.includes('Choose where'));
 });
+
+test('edge title: the spaces between the words of a title are blanks, not the border showing through', () => {
+  const skin = { palette: { hue: '#7FB069' }, frame: { show: 'menu', glyphs: '◆═◆║◆═◆║', title: "THE WAYFARER'S JOURNAL" } };
+  const f = newFrame(60, 6);
+  drawChrome(f, skin);
+  assert.ok(frameLines(f)[0].includes("╡ THE WAYFARER'S JOURNAL ╞"), frameLines(f)[0]);
+  const plain = { palette: { hue: '#7FB069' }, frame: { show: 'menu', title: 'two words' } };
+  const g = newFrame(40, 6);
+  drawChrome(g, plain);
+  assert.ok(frameLines(g)[0].includes(' two words '), frameLines(g)[0]);
+});

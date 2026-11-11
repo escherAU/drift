@@ -87,8 +87,7 @@ export function putEdgeTitle(f, x, y, w, title, box, edgeShade, titleShade) {
   let cx = x + 2;
   if (caps) put(f, cx++, y, caps[0].codePointAt(0), edgeShade);
   put(f, cx++, y, 32, 0);
-  putText(f, cx, y, t, titleShade);
-  cx += lenOf(t);
+  for (const ch of t) put(f, cx++, y, ch.codePointAt(0), titleShade); // spaces inside the title are blanks, not the border
   put(f, cx++, y, 32, 0);
   if (caps) put(f, cx, y, caps[1].codePointAt(0), edgeShade);
   return true;
