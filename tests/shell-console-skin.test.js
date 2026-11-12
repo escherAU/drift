@@ -154,7 +154,9 @@ const hashFrames = (frames) => {
   for (const f of frames) { h.update(Buffer.from(f.glyphs.buffer, f.glyphs.byteOffset, f.glyphs.byteLength)); h.update(Buffer.from(f.shades.buffer, f.shades.byteOffset, f.shades.byteLength)); }
   return h.digest('hex');
 };
-const TIMES = [0, 0.3, 0.6, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5];
+// (DRIFT-7: 0.6 s is no longer in the pinned times - step 3, 0.45 - 0.85 s, is a dissolve now and its frames are checked in
+// shell-insert-step3.test.js; the digests below are the ones the tree drew BEFORE that change, over the other times)
+const TIMES = [0, 0.3, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5];
 const BOOT_SKIN_PLAIN = { ...plainSkin, boot: { lines: ['CARTRIDGE ...... FIXTURE', 'MEMORY 64K ..... OK'], art: false } };
 const bootFrame = (cols, rows, t, skin, it, o = {}) => {
   const cartPal = makeSkinPalette(skin, 'truecolor', 'fixture');
@@ -170,8 +172,8 @@ const digests = () => ({
   boot: hashFrames([[120, 40], [80, 24], [40, 12]].flatMap(([c, r]) => [0.1, BP.on + 0.5, BP.zoomEnd - 0.1, BP.zoomEnd + 0.1, BP.titleEnd].map((t) => bootFrame(c, r, t, BOOT_SKIN_PLAIN, item(plainSkin))))),
 });
 const GOLDEN = {
-  insertSkinned: 'bb7474c93f67454444eec5ca6031b3759a49acbb',
-  insertClassic: '54d028d23be6d9a8499d8e4900d3711e2bd76fe9',
+  insertSkinned: 'b1afe403922307e52670fabe6d0e47e3932ff9a2',
+  insertClassic: '55067db8fe6cd1b8f943633ac4b96b6720a0c04d',
   // DRIFT-4 flash fix: the 40x12 (list tier) boot frames of the rectangle opening and zooming are now a dissolve, not
   // moving edges (tests/shell-flash-sizes.test.js); the 120x40 and 80x24 frames in this hash are byte-identical to before
   // (the old digest e25276f4631c8574cfe955a3a91e07d3b5788e0d is the same three sizes with the old 40x12 frames).

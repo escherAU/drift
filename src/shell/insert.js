@@ -16,13 +16,16 @@
 // Timeline (seconds; the whole insert + boot is 5.8 s, see boot.js):
 //   0    - 0.15  step 1  the cartridge lifts one row (at 0.075), its shell LED is solid
 //   0.15 - 0.45  step 2  the neighbours slide off to their sides and dissolve; dots, hint and details dissolve
-//   0.45 - 0.85  step 3  the cartridge drops three rows, accelerating; the tongue is hidden from the slot floor down
+//   0.45 - 0.85  step 3  the lifted picture (as at 0.45) dissolves into the seated one (the cartridge dropped three rows in the
+//                        slot, the tongue hidden from the slot floor down). One dissolve, so each cell changes at most once
+//                        (DRIFT-7: the old row-by-row drop striped the picture and flipped a cell several times)
 //   0.85 - 1.0   step 4  click: the housing brightens one shade and eases back, the CART LED goes on in the accent colour
 //   1.0  - 1.5   step 5  a BAND_W-column band sweeps left to right over the console; behind it the console shows the
 //                        cartridge's skin (frame glyphs, colour). Classic: the band is only a one-shade shimmer
 // Eject (shell.js) plays this backwards. Every brightness change is a one-shade step or a dissolve; the background
 // never changes.
-import { clearFrame, putCentered, ramp, sizeTier, drawTooSmall } from './ui.js';
+import { newFrame, clearFrame, putCentered, ramp, sizeTier, drawTooSmall, dissolveThresholds } from './ui.js';
+import { dissolveFrames } from './runtime.js';
 import { drawShelf, shelfLayout, takeoverStyle, CONSOLE_W, MINI_W } from './library.js';
 import { DRIFTMAN_COLOURS } from './driftman.js';
 
@@ -67,9 +70,39 @@ export function sweepStyle(item, ui) {
   return takeoverStyle(item.cartSkin || null, item.cartridge.tint, !!item.classic, item.cartSkin && item.cartSkin.console, ui);
 }
 
+// Step 3's lifted picture is held in a scratch frame per size (cols x rows); the seated picture is drawn straight into the frame.
+const STEP3_SEATED = INSERT_DROP_END - 1e-9; // the last instant before the click: the cartridge seated, CART still off
+const scratch = new Map();
+function scratchFor(cols, rows) {
+  const key = cols + 'x' + rows;
+  let f = scratch.get(key);
+  if (!f) {
+    if (scratch.size > 8) scratch.clear();
+    f = newFrame(cols, rows);
+    scratch.set(key, f);
+  }
+  return f;
+}
+
 export function drawInsert(frame, args, skin) {
-  const { item, t } = args;
+  const { t } = args;
   const T = Number.isFinite(t) ? Math.max(0, Math.min(INSERT_END, t)) : 0;
+  if (T > INSERT_SLIDE_END && T < INSERT_DROP_END) {
+    const tier = sizeTier(frame.cols, frame.rows);
+    if (tier === 'full' || tier === 'compact') {
+      const from = scratchFor(frame.cols, frame.rows);
+      drawPlain(from, args, skin, INSERT_SLIDE_END);
+      drawPlain(frame, args, skin, STEP3_SEATED);
+      dissolveFrames(from, frame, ramp(T, INSERT_SLIDE_END, INSERT_DROP_END), dissolveThresholds(frame.cols * frame.rows), frame);
+      return;
+    }
+  }
+  drawPlain(frame, args, skin, T);
+}
+
+// The picture at time T (already clamped), with no step 3 dissolve: step 3's two end pictures are drawn through here.
+function drawPlain(frame, args, skin, T) {
+  const { item } = args;
   clearFrame(frame);
   const ui = skin.palette.ui;
   const view = item.view;

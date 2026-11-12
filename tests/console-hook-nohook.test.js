@@ -26,8 +26,17 @@ async function runHash(cartId, cols, rows) {
   const h = crypto.createHash('sha256');
   let frames = 0;
   const screens = [];
+  // DRIFT-7: the frames of insert step 3 (0.45 - 0.85 s, now a dissolve, see shell-insert-step3.test.js) and of the eject frames that play
+  // it backwards are counted but not hashed; every other frame is still pinned to the hashes recorded before the hook (705e471).
+  let ejectAt = -1;
+  const inStep3 = (screen, k) => {
+    if (screen === 'insert') { const t = k * DT; return t > 0.45 && t < 0.85; }
+    if (screen === 'eject') { const a = (k - ejectAt) * DT - 0.3, T = 1.5 * (1 - a / 1.6); return a >= 0 && T > 0.45 && T < 0.85; }
+    return false;
+  };
   const step = () => {
     const f = sh.frame();
+    if (inStep3(sh.state().screen, frames)) { frames++; sh.tick(DT); return; }
     h.update(Buffer.from(f.glyphs.buffer, f.glyphs.byteOffset, f.glyphs.byteLength));
     h.update(Buffer.from(f.shades.buffer, f.shades.byteOffset, f.shades.byteLength));
     if (f.fg) { h.update('fg'); h.update(Buffer.from(f.fg.buffer, f.fg.byteOffset, f.fg.byteLength)); h.update(Buffer.from(f.bg.buffer, f.bg.byteOffset, f.bg.byteLength)); }
@@ -41,20 +50,21 @@ async function runHash(cartId, cols, rows) {
   if (sh.state().screen === 'running') {
     for (let k = 0; k < 40; k++) step(); // a little of the running picture
     sh.key('e');
+    ejectAt = frames;
     for (let k = 0; k < 400 && sh.state().screen === 'eject'; k++) step();
     for (let k = 0; k < 8; k++) step(); // the library again
   }
   return { hash: h.digest('hex'), frames, screens: screens.join('>') };
 }
 
-// recorded on 705e471 (before the console hook): { frames, hash }
+// recorded before the console hook (705e471 rules) and re-recorded on 47597de (the tree before DRIFT-7 item 1) with the step 3 frames skipped: { frames, hash }
 const EXPECTED = {
-  'classic 120x40': { frames: 100, hash: '94140406cd2cba578354cbaa84a020540ef0a38a874004fa8da95efb5de724d4' },
-  'classic 80x24': { frames: 100, hash: '7d10b53839ac42941923a50a25264e9afca6500954c0ffc3b5694a3cbc8358df' },
-  'night-drive 120x40': { frames: 188, hash: '79b884b85f0e3bece8e1b582067b63d2293945ebd87fca1ed9e4cb86ade08f74' },
-  'night-drive 80x24': { frames: 188, hash: '03f152551c133a9c00a879feeecbe4892deb07f34a78bf2c005fa28c5753df3c' },
-  'delza 120x40': { frames: 188, hash: '61310defeeb1ee24a7833c36b6db1fb7d83983aba8d787b02462a6b79c2d917b' },
-  'delza 80x24': { frames: 188, hash: '5c370437f010cda17179e46c22aa6399e0096201b847aecf04bdf7d66a3f6939' },
+  'classic 120x40': { frames: 100, hash: '91f875e624cdaa1a63bab7a034c1e3c0741fa30aea4a285bb3f6a937aafd719c' },
+  'classic 80x24': { frames: 100, hash: '077e5829328ec99f9c872b3845b6bd85c11addefebbbe9286e47159b120463d9' },
+  'night-drive 120x40': { frames: 188, hash: '2194ac25c43533b5d9b38abbe0fea33f757127826c580ff485c2800009d7d3dc' },
+  'night-drive 80x24': { frames: 188, hash: 'd7c007e7230aa8050c654b94670b29ca97c4dc990f43f5f1e1804cfedcd71ee8' },
+  'delza 120x40': { frames: 188, hash: 'f78a6c3908ba79581ad51289b1d7e27f42a59cde0ed7390d735e290945bd9faf' },
+  'delza 80x24': { frames: 188, hash: 'c3dc624a53f8e1cd0d7996ddaedf9628b4316dd202307b8e047401c1b8bcf379' },
 };
 
 for (const key of Object.keys(EXPECTED)) {

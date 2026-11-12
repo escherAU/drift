@@ -234,15 +234,14 @@ test('eject: any key during the fade skips to the library at once; a resize duri
 // just above each layout breakpoint (full 88x39, compact 78x24, list 40x10).
 //   L1 (7 transitions in 1 s), R (saturated red) and L3 (the worst single step) pass at every size; L3 is 13.8 to 16.3%
 //   (the eject before this change: 69.1 to 71.5%).
-//   L2 (3 transitions in 1 s, field of a ninth of the screen) is the insert animation's own: cells that light, slide away and
-//   light again, and the blank in between adds one more transition. It was already over the 25% rule at five of the six sizes
-//   before this change, at 4x; it is held here by a ratchet (the maximum measured on this commit plus 3 points; it only goes down)
-//   and NOT by the 25% rule. The measured values are printed as a TABLE.
+//   L2 (3 transitions in 1 s, field of a ninth of the screen) was the insert animation's own (cells that lit, slid away and lit again,
+//   and the blank in between added one more transition); the old ratchet allowed up to 44% at 1x. DRIFT-7 item 1 made the insert's step 3 a dissolve, so at 1x it
+//   passes the 25% rule at every size, and is held ABSOLUTELY: the rule, plus a ceiling per size (the measured value plus a hair, to the
+//   next tenth of a point). At 4x it still fails (about 38% at 80x24, 78x24 and 40x10): the shell's eject is a 1x condition (the speed key
+//   reaches only the scene clock), so the 4x L2 is printed in the TABLE and NOT asserted. L1, L3 and R pass at both.
 const METER_SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [78, 24], [40, 10]];
-const L2_RATCHET = { // x1, x4
-  '120x40': [0.218, 0.341], '80x24': [0.433, 0.771], '240x67': [0.119, 0.210], '88x39': [0.256, 0.479], '78x24': [0.443, 0.766], '40x10': [0.119, 0.405],
-};
-test('flash meter over the whole eject at 1x and 4x on a lit full-colour fixture at six sizes: L1, L3 and R pass; L2 is held by its ratchet', async () => {
+const L2_CEIL_X1 = { '120x40': 0.047, '80x24': 0.084, '240x67': 0.020, '88x39': 0.075, '78x24': 0.107, '40x10': 0.090 };
+test('flash meter over the whole eject at 1x and 4x on a lit full-colour fixture at six sizes: L1, L3 and R pass; L2 at 1x passes and sits under its absolute ceiling (4x is printed, not asserted)', async () => {
   const lines = [], bad = [];
   for (const [cols, rows] of METER_SIZES) {
     const { sh } = await running(cols, rows);
@@ -251,12 +250,11 @@ test('flash meter over the whole eject at 1x and 4x on a lit full-colour fixture
     sh.key('e');
     for (let k = 0; k < Math.round((EJECT_SECONDS + 1) * FPS); k++) { sh.tick(1 / FPS); meter.push(sh.frame()); }
     const rep = meter.report();
-    const p = (r) => `${(r.worstFraction * 100).toFixed(1)}%`;
+    const p = (r) => `${(r.worstFraction * 100).toFixed(2)}%`;
     lines.push(`${cols}x${rows}: L1 ${p(rep.l1.x1)}/${p(rep.l1.x4)}, L2 ${p(rep.l2.x1)}/${p(rep.l2.x4)}, L3 ${p(rep.l3)}, R ${p(rep.r.x1)}/${p(rep.r.x4)} (x1/x4)`);
     for (const [name, r] of [['l1.x1', rep.l1.x1], ['l1.x4', rep.l1.x4], ['l3', rep.l3], ['r.x1', rep.r.x1], ['r.x4', rep.r.x4]]) if (!r.pass) bad.push(`${cols}x${rows} ${name} ${p(r)}`);
-    const [l1, l4] = L2_RATCHET[`${cols}x${rows}`];
-    if (rep.l2.x1.worstFraction > l1) bad.push(`${cols}x${rows} l2.x1 ${p(rep.l2.x1)} > ${(l1 * 100).toFixed(1)}%`);
-    if (rep.l2.x4.worstFraction > l4) bad.push(`${cols}x${rows} l2.x4 ${p(rep.l2.x4)} > ${(l4 * 100).toFixed(1)}%`);
+    if (!rep.l2.x1.pass) bad.push(`${cols}x${rows} l2.x1 ${p(rep.l2.x1)} is over the rule`);
+    if (rep.l2.x1.worstFraction > L2_CEIL_X1[`${cols}x${rows}`]) bad.push(`${cols}x${rows} l2.x1 ${p(rep.l2.x1)} > ${(L2_CEIL_X1[`${cols}x${rows}`] * 100).toFixed(1)}%`);
   }
   console.log(['TABLE eject flash meter', ...lines.map((l) => '  ' + l)].join('\n'));
   assert.deepEqual(bad, []);

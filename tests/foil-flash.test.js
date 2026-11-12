@@ -9,6 +9,8 @@
 //          flow may not be worse than it by more than SLACK. The only difference between the two flows is the brightness of a foil cell: safeHue's
 //          colour is within 0.011 of the luminance of the palette colour it stands for (6-bit grid), which moves a cell whose swing sits right
 //          at the meter's 0.10 across the line. With a foil of exactly the palette luminance the two flows are identical (measured).
+//   insert  insert + boot (1x and 4x) and eject (1x) of a foil cartridge, foil frozen at t = 0: ABSOLUTE limits (DRIFT-7 item 1), every rule at its limit and a
+//          per-size L2 ceiling (CEIL_L2). SLACK no longer applies to them; it still applies to the walk (the library slide, item 2).
 //   control  the rest flow with the brightness of every foil cell also modulated (on alternate steps the fg of every foil cell is scaled up to full lightness, so a label at level 1-3 flashes to the brightest the hue allows,
 //          a test-only post-filter on the frames the shell drew): the meter must flag it.
 // Sizes: the three usual ones and the size just above each layout breakpoint (full 88x39, extra-large 176x58, compact 78x24).
@@ -22,8 +24,14 @@ import { flush } from './helpers-console-hook.js';
 
 const SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [176, 58], [78, 24]];
 const RULES = [['l1.x1', (r) => r.l1.x1], ['l1.x4', (r) => r.l1.x4], ['l2.x1', (r) => r.l2.x1], ['l2.x4', (r) => r.l2.x4], ['l3', (r) => r.l3], ['r.x1', (r) => r.r.x1], ['r.x4', (r) => r.r.x4]];
-const SLACK = 0.015; // 1.5 points, only where the shelf without the foil is already over the rule
-const pc = (x) => (x * 100).toFixed(1);
+const SLACK = 0.015; // 1.5 points, only where the shelf without the foil is already over the rule (the SHELF WALK only: the library slide itself, item 2)
+const pc = (x) => (x * 100).toFixed(2);
+// Insert + boot and eject of a foil cartridge are held to ABSOLUTE limits (DRIFT-7 item 1: insert step 3 is a dissolve now, so these flows no longer
+// sit over a rule): every rule at its own limit, and a ceiling on L2 per size, the measured value (Delza's art) plus a hair, to the next tenth of a
+// point. [insert+boot 1x, insert+boot 4x, eject 1x]. The eject at 4x gets no ceiling: playback speed reaches only the scene clock.
+const CEIL_L2 = { // fractions
+  '120x40': [0.046, 0.162, 0.010], '80x24': [0.094, 0.177, 0.024], '240x67': [0.020, 0.055, 0.004], '88x39': [0.083, 0.216, 0.029], '176x58': [0.037, 0.095, 0.004], '78x24': [0.083, 0.169, 0.035],
+};
 const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
 
 // the 30 s at rest: wait for nothing, the library is the start screen
@@ -139,18 +147,19 @@ for (const [cols, rows] of SIZES) {
 }
 
 for (const [cols, rows] of SIZES) {
-  test(`foil flash ${cols}x${rows}: insert + boot and eject of a foil cartridge (the foil frozen at t = 0) are no worse than the same cartridge without the foil`, async () => {
+  test(`foil flash ${cols}x${rows}: insert + boot (1x and 4x) and eject (1x) of a foil cartridge (the foil frozen at t = 0) pass every rule and sit under the absolute L2 ceilings`, async () => {
     const a = await insertFlow(cols, rows, true), b = await insertFlow(cols, rows, false);
     TABLE.push(`${cols}x${rows}`.padEnd(8) + 'insert foil      ' + show(a.ins) + ' | eject ' + show(a.eje));
     TABLE.push(`${cols}x${rows}`.padEnd(8) + 'insert no foil   ' + show(b.ins) + ' | eject ' + show(b.eje));
     const tier = sizeTier(cols, rows);
     assert.equal(a.sawFoil, tier === 'full' || tier === 'compact', 'the insert draws the foil label (frozen) at the tiers that show it');
     const bad = [];
-    for (const [flow, x, y] of [['insert+boot', a.ins, b.ins], ['eject', a.eje, b.eje]]) {
-      for (const [name, get] of RULES) {
-        const r = get(x), base = get(y);
-        if (base.pass) { if (!r.pass) bad.push(`${flow} ${name}: ${pc(r.worstFraction)}% is over ${pc(r.limit)}% (without the foil it passes at ${pc(base.worstFraction)}%)`); } else if (r.worstFraction > base.worstFraction + SLACK) bad.push(`${flow} ${name}: ${pc(r.worstFraction)}% is worse than without the foil, ${pc(base.worstFraction)}%`);
-      }
+    const [i1, i4, e1] = CEIL_L2[`${cols}x${rows}`];
+    for (const [flow, x] of [['insert+boot', a.ins], ['eject', a.eje]]) {
+      for (const [name, get] of RULES) { const r = get(x); if (!r.pass) bad.push(`${flow} ${name}: ${pc(r.worstFraction)}% is over ${pc(r.limit)}%`); }
+    }
+    for (const [name, r, ceil] of [['insert+boot l2.x1', a.ins.l2.x1, i1], ['insert+boot l2.x4', a.ins.l2.x4, i4], ['eject l2.x1', a.eje.l2.x1, e1]]) {
+      if (r.worstFraction > ceil) bad.push(`${name}: ${pc(r.worstFraction)}% is over its ceiling ${pc(ceil)}%`);
     }
     assert.deepEqual(bad, []);
   });

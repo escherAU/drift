@@ -117,13 +117,14 @@ test('insert step 2 (0.15 - 0.45 s): neighbours slide off to their sides and fad
   for (const t of frameTimes(INSERT_LIFT_END, INSERT_SLIDE_END)) { const n = lit(at(120, 40, t)); assert.ok(n <= litPrev + 0, `lit cells never grow while they fade (${n} > ${litPrev} at ${t})`); litPrev = n; }
 });
 
-test('insert step 3 (0.45 - 0.85 s): the cartridge drops three rows accelerating; the tongue is hidden from the slot floor down; S15 on the housing row, S16 in the mouth', () => {
+test('insert step 3 (0.45 - 0.85 s): the lifted picture dissolves into the cartridge seated three rows down; the tongue is hidden from the slot floor down; S15 on the housing row, S16 in the mouth', () => {
+  // DRIFT-7: step 3 is one dissolve (each cell changes at most once, see shell-insert-step3.test.js), no longer a drop in rows:
+  // the first frame has the cartridge one row up, the last has it three rows down, and in between a row holds both pictures.
   const r0 = rowOf(at(120, 40, 0), label);
   const rows = frameTimes(INSERT_SLIDE_END, INSERT_DROP_END).map((t) => rowOf(at(120, 40, t), label) - r0);
-  assert.ok(rows.every((r, i) => i === 0 || r >= rows[i - 1]), `monotone: ${rows}`);
-  assert.deepEqual([...new Set(rows)].filter((r) => r >= 0), [0, 1, 2, 3], 'passes through 0, 1, 2 and 3 rows');
-  assert.equal(rows[rows.length - 1], 3);
-  // accelerating: each row is crossed faster than the one before (checked on the continuous timeline)
+  assert.equal(rows[0], -1, 'lifted at the start of the step');
+  assert.equal(rows[rows.length - 1], 3, 'seated at the end of it');
+  // cartridgeOffset keeps the old drop's timeline (the dissolve's end pictures are its endpoints): accelerating, each row crossed faster
   const dwell = new Map();
   for (let t = INSERT_SLIDE_END; t < INSERT_DROP_END; t += 0.0005) dwell.set(cartridgeOffset(t), (dwell.get(cartridgeOffset(t)) || 0) + 0.0005);
   assert.ok(dwell.get(0) > dwell.get(1) && dwell.get(1) > dwell.get(2), `dwell times ${[0, 1, 2].map((k) => dwell.get(k).toFixed(3))}`);
@@ -249,7 +250,9 @@ test('eject (insert backwards, 1.6 s): the console reverts, the cartridge pops u
   // the cartridge never goes down while ejecting
   const rowsOf = frames.map((f) => rowOf(f, entries[1].label[1].trim()));
   const cart = frames.map((f) => { const ls = frameLines(f); return ls.findIndex((l) => l.includes('│ │') && l.includes(entries[1].label[1])); });
-  const rising = cart.filter((r, i) => ejectT(times[i]) >= INSERT_LIFT_END / 2);
+  // (inside step 3's window the frame is the dissolve between the seated and the lifted picture - both cartridges in one frame - so those frames have no single row)
+  const inStep3 = (t) => t > INSERT_SLIDE_END && t < INSERT_DROP_END;
+  const rising = cart.filter((r, i) => ejectT(times[i]) >= INSERT_LIFT_END / 2 && !inStep3(ejectT(times[i])));
   assert.ok(rising.every((r, i) => i === 0 || r <= rising[i - 1]), `the cartridge only rises while it comes out: ${cart}`);
   assert.equal(cart[cart.length - 1], cart[cart.length - 2] + 1, 'and is set back on the shelf by the last frame');
   void rowsOf;
