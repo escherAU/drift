@@ -439,6 +439,9 @@ vision, Rosette (a kaleidoscope whose hue goes round the wheel through `safeHue`
 code sorts it between Delza and Last Fantasy on the shelf. On a 256-colour terminal the renderer's lookup is red-safe: a colour with a linear red share under
 0.8 never lands on a saturated red of the 256 palette.
 
+Bloomfall is the second vision: seeded blooms of colour (5 to 9 petals, an envelope that rises over 1.5 s and falls over 2.5 s) open over `lib/huefield.js`, a field
+of hue that turns about 90 degrees a second at one dim lightness (always through `safeHue`), with pollen falling from fading blooms and small pops between.
+
 ### Where cartridges are read from, and the trust rule
 
 | folder | trusted | may hold |
