@@ -25,8 +25,9 @@ const PHASES = [0, 0.25, 0.5, 0.75];
 const HOST = { persist() {}, quit() {}, leaveToClassic() {} };
 
 // L2 ceilings (fractions) per size: [insert+boot 1x, insert+boot 4x, eject 1x]. See the TABLE of measured values.
+// C15: re-measured when the menu went from one entry to two (Bloomfall): the library cells under the console moved, so 120x40, 88x39 and 176x58 rose (insert+boot 4x 4.0 to 5.8, 9.8 to 10.8, 2.3 unchanged; eject 1.5 to 2.2, 1.8 to 3.6, 0.4 to 0.6). The absolute rules (L2 25 %) are untouched and every one passes.
 const CEIL_L2 = { // the largest measured over the four phases, rounded up to the next tenth of a point
-  '120x40': [0.001, 0.040, 0.015], '80x24': [0.001, 0.200, 0.033], '240x67': [0.001, 0.016, 0.004], '88x39': [0.003, 0.098, 0.018], '176x58': [0.001, 0.023, 0.004], '78x24': [0.001, 0.193, 0.034],
+  '120x40': [0.001, 0.058, 0.022], '80x24': [0.001, 0.200, 0.033], '240x67': [0.001, 0.016, 0.004], '88x39': [0.003, 0.108, 0.036], '176x58': [0.001, 0.023, 0.006], '78x24': [0.001, 0.193, 0.034],
 };
 
 // A dark running scene in place of the Rosette (blank cells, palette colour 0), keeping the cartridge's console hook.
