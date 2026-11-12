@@ -1,5 +1,6 @@
 // DRIFT-7 C13: the Driftman 9000's console hook (cartridges/driftman-9000/console.js). The contract (what the shell relies on), purity,
-// the size classes, the trust wall, and the hook in a real shell. The look (rest frame, morph, budget) is in the sections below it.
+// the trust wall and the hook in a real shell. The look is in driftman-9000-console-rest.test.js (rest frame, size classes) and
+// driftman-9000-console-morph.test.js (shed, unfold, light, cell budget); the flash meter and CPU budget are in driftman-9000-console-flash.test.js.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -139,7 +140,7 @@ test('9000 console: the console files hold none of the banned glyphs, even in co
     const src = fs.readFileSync(path.join(DIR, file), 'utf8');
     for (const g of BANNED) assert.ok(!src.includes(g), `${file} holds ${g}`);
     for (const m of src.matchAll(/from\s+'([^']+)'/g)) {
-      assert.match(m[1], /^(\.\/|\.\.\/\.\.\/src\/pixels\.js$)/, `${file} imports ${m[1]}`);
+      assert.match(m[1], /^(\.\/(lib\/)?[a-z0-9-]+\.js|(\.\.\/){2,3}src\/pixels\.js)$/, `${file} imports ${m[1]}`);
     }
   }
 });

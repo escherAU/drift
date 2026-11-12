@@ -83,3 +83,30 @@ export function shell9000(cols, rows, { withHook = true } = {}) {
 export function copyFrame(f) {
   return { glyphs: f.glyphs.slice(), shades: f.shades.slice(), fg: f.fg ? f.fg.slice() : null, bg: f.bg ? f.bg.slice() : null, palette: f.palette, cols: f.cols, rows: f.rows };
 }
+
+// The hook's real call sequence in a real shell: every (phase, p, t) the shell drew, through insert + boot, and through the eject.
+// -> { up: [{ phase, p, t }], down: [{ phase, p, t }], tier }
+export async function recordCalls(cols, rows) {
+  const { loadScenes } = await import('../src/cartridge/loader.js');
+  const log = [];
+  const d = discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] });
+  const sh = createShell({
+    cols, rows, cartridges: d.cartridges, seed: 1, cmode: 'truecolor', host: HOST,
+    consts: { SPEEDS, DISSOLVE_SECONDS: 2, DEFAULT_FADE_SECONDS: 15 },
+    start: { cartridge: 'driftman-9000' },
+    loadScenes: async (cart) => {
+      const r = await loadScenes(cart);
+      if (!r.console) return r;
+      const inner = r.console;
+      return { ...r, console: { id: inner.id, drawConsole(f, c) { log.push({ phase: c.phase, p: c.p, t: c.t, tier: c.tier }); return inner.drawConsole(f, c); } } };
+    },
+  });
+  await flush();
+  for (let k = 0; k < 400 && sh.state().screen !== 'running'; k++) { sh.frame(); sh.tick(DT); }
+  const mark = log.length;
+  for (let k = 0; k < 10; k++) { sh.frame(); sh.tick(DT); }
+  sh.key('e');
+  for (let k = 0; k < 400 && sh.state().screen === 'eject'; k++) { sh.frame(); sh.tick(DT); }
+  const tier = log.length ? log[0].tier : 'full';
+  return { up: log.slice(0, mark), down: log.slice(mark), tier };
+}
