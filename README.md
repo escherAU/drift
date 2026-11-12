@@ -442,6 +442,8 @@ code sorts it between Delza and Last Fantasy on the shelf. On a 256-colour termi
 Bloomfall is the second vision: seeded blooms of colour (5 to 9 petals, an envelope that rises over 1.5 s and falls over 2.5 s) open over `lib/huefield.js`, a field
 of hue that turns about 90 degrees a second at one dim lightness (always through `safeHue`), with pollen falling from fading blooms and small pops between.
 
+Cortex sits between them: the rest between the loud visions. Four panes of glass (`#0E1426`, edge `#4A6AB0`) over the skin background: a braille icosahedron turning 0.3 rad/s with one hue per edge, a scrolling thought trace, a ring of 24 numerals (one re-rolled every 0.5 s) and captions typed at 24 characters a second. The glass slides 2 columns either way (a step ripples down its rows over 0.6 s) over content that stays put; an ion pulse runs along one hairline connector every 3 s and the focus edge moves to the next pane every 8 s. Under 5 % of the cells change in any frame (measured 3.0 % worst at 120x40, 3.1 % at 80x24, 1.0 % at 240x67), and it is dark (mean luminance 0.007 to 0.03), so the program goes Rosette (lit), Cortex, Bloomfall.
+
 ### Where cartridges are read from, and the trust rule
 
 | folder | trusted | may hold |

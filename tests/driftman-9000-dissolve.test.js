@@ -51,9 +51,10 @@ function pairRun(idA, idB, cols, rows, { speed = 1, reduce256 = false, seed = 1,
 
 test('9000 dissolves: the pairs are every ordered pair of different scenes in the manifest program (read, not typed), hold 60 s, dissolve 2 s', () => {
   assert.ok(ORDER.length >= 2);
-  assert.ok(ORDER.includes('rosette') && ORDER.includes('bloomfall'));
+  assert.deepEqual(ORDER, ['rosette', 'cortex', 'bloomfall']);
   assert.equal(PAIRS.length, ORDER.length * (ORDER.length - 1));
   assert.ok(PAIRS.some(([a, b]) => a === 'rosette' && b === 'bloomfall') && PAIRS.some(([a, b]) => a === 'bloomfall' && b === 'rosette'));
+  for (const id of ['rosette', 'bloomfall']) assert.ok(PAIRS.some(([a, b]) => a === 'cortex' && b === id) && PAIRS.some(([a, b]) => a === id && b === 'cortex'), `cortex and ${id} dissolve both ways`);
   assert.equal(HOLD, 60);
   console.log(`DISSOLVE pairs (${PAIRS.length}): ${PAIRS.map(([a, b]) => `${a}>${b}`).join(', ')}`);
 });
