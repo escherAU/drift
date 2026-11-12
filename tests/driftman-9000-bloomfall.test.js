@@ -624,11 +624,11 @@ test('bloomfall constants: the shipped scene is id bloomfall, kind cells, rgb; f
   assert.equal(bf.RATE, 0.8); assert.equal(bf.MAX_ALIVE, 4); assert.equal(bf.MIN_GAP, 20);
 });
 
-test('bloomfall manifest: the scene is in the 9000 manifest as a full-colour cells scene, second in the menu and the program (Cortex will go between Rosette and it), with the designer\'s label, note and text', async () => {
+test('bloomfall manifest: the scene is in the 9000 manifest as a full-colour cells scene, last in the menu and the program (Cortex sits between Rosette and it), with the designer\'s label, note and text', async () => {
   const { default: fs } = await import('node:fs');
   const man = JSON.parse(fs.readFileSync(new URL('../cartridges/driftman-9000/manifest.json', import.meta.url), 'utf8'));
-  assert.deepEqual(man.scenes.map((x) => x.id), ['rosette', 'bloomfall']);
-  assert.deepEqual(man.scenes[1], { id: 'bloomfall', kind: 'cells', title: 'Bloomfall', rgb: true });
-  assert.deepEqual(man.programs[0].scenes, ['rosette', 'bloomfall']);
-  assert.deepEqual(man.menu[1], { label: 'BLOOMFALL', program: 'transmission', scene: 'bloomfall', note: 'colour blooms', desc: 'Blooms of colour open and fade; small sparks pop between.' });
+  assert.deepEqual(man.scenes.map((x) => x.id), ['rosette', 'cortex', 'bloomfall']);
+  assert.deepEqual(man.scenes[2], { id: 'bloomfall', kind: 'cells', title: 'Bloomfall', rgb: true });
+  assert.deepEqual(man.programs[0].scenes, ['rosette', 'cortex', 'bloomfall']);
+  assert.deepEqual(man.menu[2], { label: 'BLOOMFALL', program: 'transmission', scene: 'bloomfall', note: 'colour blooms', desc: 'Blooms of colour open and fade; small sparks pop between.' });
 });

@@ -4,8 +4,8 @@
 // of a frame into the step) at the three usual sizes and the size just above each layout breakpoint (full 88x39, extra-large 176x58, compact 78x24).
 // Held to ABSOLUTE limits, as every shell flow is (DRIFT-7 item 1): every rule (L1, L2, L3, R) at its own limit for insert + boot at 1x AND 4x and for the
 // eject at 1x and 4x, at every size, with no exception (DRIFT-7 stage C: the compact screens' L2 at 4x was 27.8 to 29.8 % because the boot lines'
-// typed cells sat on the library's blurb cells and were cleared again within the meter's 4 s window; the 9000's skin.json holds the lines 0.25 s longer,
-// boot.seconds 1.75, which puts the clear outside it), and a constant 10 % headroom pin on L2 (L2_HEADROOM, below). The eject at 4x gets no L2 pin: playback speed reaches only the scene clock, so the shell's eject is a 1x condition.
+// typed cells sat on the library's blurb cells and were cleared again within the meter's 4 s window; the 9000's skin.json holds the lines 0.5 s longer,
+// boot.seconds 2.0 (1.75 until the third menu entry, when the menu list at 80x24 and 78x24 came to overlap the typed lines), which puts the clear outside it), and a constant 10 % headroom pin on L2 (L2_HEADROOM, below). The eject at 4x gets no L2 pin: playback speed reaches only the scene clock, so the shell's eject is a 1x condition.
 // The control: the same flow with the brightness of every console cell flipped between black and white on alternate frames must fail the meter.
 // A load-proof CPU budget for the hook at 240x67 (a ratio to a calibration loop, with a 3x-slower control) closes the file. TABLE lines print every measured value.
 import test from 'node:test';
@@ -27,8 +27,8 @@ const HOST = { persist() {}, quit() {}, leaveToClassic() {} };
 // L2 regression pin (DRIFT-7 stage E). The hand-measured per-size ceilings (CEIL_L2) had to be re-measured every time the menu grew by one entry
 // (library cells under the console move), so they are gone. What matters is the shell's own absolute L2 limit (25 %), checked below for every flow
 // at every size with no exception; on top of that one constant pin that never needs re-measuring: no flow may use more than L2_HEADROOM of the limit
-// (22.5 % of 25 %), so a change that eats the last tenth of the margin fails here before it fails the limit. The worst measured value is 20.0 %
-// (80x24, insert + boot at 4x; unchanged by the third menu entry), and the TABLE below prints every value so a drift is visible.
+// (22.5 % of 25 %), so a change that eats the last tenth of the margin fails here before it fails the limit. The worst measured value is 21.3 %
+// (80x24, insert + boot at 4x, with the third menu entry, the 2.0 s boot hold and the shortened menu hint: see tests/driftman-9000-cartridge.test.js), and the TABLE below prints every value so a drift is visible.
 const L2_HEADROOM = 0.9;
 
 // A dark running scene in place of the Rosette (blank cells, palette colour 0), keeping the cartridge's console hook.

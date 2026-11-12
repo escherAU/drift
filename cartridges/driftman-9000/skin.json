@@ -38,7 +38,7 @@
   "boot": {
     "lines": ["CORE 2.0 ....... SUPERSEDED", "LUMEN CORE ..... 9.0", "MEMORY ......... ALL OF IT", "Good morning. It has been a while."],
     "art": false,
-    "seconds": 1.75,
+    "seconds": 2.0,
     "valueColour": 23
   },
   "insert": { "text": "SIGNAL FROM THE FAR FUTURE · HOLD STILL" },
@@ -57,6 +57,6 @@
       "help": "show or hide these keys",
       "quit": "quit Drift"
     },
-    "menuHint": "arrows choose · Enter wakes it · e folds away · h keys"
+    "menuHint": "arrows · Enter wakes · e folds · h keys"
   }
 }

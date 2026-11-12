@@ -13,14 +13,16 @@
   "foil": { "hues": ["#3FE8FF", "#A77BFF", "#FF4FD8", "#FFD36B", "#5CFFB8"], "style": "holo" },
   "scenes": [
     { "id": "rosette", "kind": "cells", "title": "Rosette", "rgb": true },
+    { "id": "cortex", "kind": "cells", "title": "Cortex", "rgb": true },
     { "id": "bloomfall", "kind": "cells", "title": "Bloomfall", "rgb": true }
   ],
   "programs": [
-    { "id": "transmission", "title": "The transmission", "transition": "dissolve", "scenes": ["rosette", "bloomfall"], "sceneSeconds": 60 }
+    { "id": "transmission", "title": "The transmission", "transition": "dissolve", "scenes": ["rosette", "cortex", "bloomfall"], "sceneSeconds": 60 }
   ],
   "start": "transmission",
   "menu": [
     { "label": "ROSETTE", "program": "transmission", "scene": "rosette", "note": "kaleidoscope", "desc": "Twelve mirrors turning a field of colour that never repeats." },
+    { "label": "CORTEX", "program": "transmission", "scene": "cortex", "note": "thinking", "desc": "The machine thinks aloud on floating panes of glass." },
     { "label": "BLOOMFALL", "program": "transmission", "scene": "bloomfall", "note": "colour blooms", "desc": "Blooms of colour open and fade; small sparks pop between." }
   ]
 }

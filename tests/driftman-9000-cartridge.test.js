@@ -112,9 +112,10 @@ test('driftman-9000 skin: validates, background #05060C, palette and every colou
   assert.deepEqual(s.help.groups, { Cartridge: 'Visions', Other: 'Machine' });
   assert.deepEqual(s.boot.lines, ['CORE 2.0 ....... SUPERSEDED', 'LUMEN CORE ..... 9.0', 'MEMORY ......... ALL OF IT', 'Good morning. It has been a while.']);
   assert.equal(s.boot.art, false);
-  assert.equal(s.boot.seconds, 1.75, 'the lines are held 0.25 s longer than the default 1.5, which puts the typed text clearing outside the flash meter 4 s window (DRIFT-7 C14a; see driftman-9000-console-flash.test.js)');
+  assert.equal(s.boot.seconds, 2.0, 'the lines are held 0.5 s longer than the default 1.5, which puts the typed text clearing outside the flash meter 4 s window (DRIFT-7 C14a, moved from 1.75 when the menu got its third entry in C16: at 80x24 and 78x24 the menu list then overlaps the typed lines and 1.75 read 31.9 % and 29.8 % at 4x; 1.8 to 2.1 read 19.0 to 16.7 %; see driftman-9000-console-flash.test.js)');
   assert.equal(s.insert.text, 'SIGNAL FROM THE FAR FUTURE · HOLD STILL');
-  assert.equal(s.wording.menuHint, 'arrows choose · Enter wakes it · e folds away · h keys');
+  // DRIFT-7 C16: shortened from 'arrows choose · Enter wakes it · e folds away · h keys' (design text) when the menu got its third entry: with it the 80x24 and 78x24 console flows read 23.6 % (insert + boot at 4x) and 25.9 % (eject at 4x) of the L2 limit 25 %, because the menu list is as wide as its hint and the wider box puts more text cells over the cartridge's own picture; the shorter line reads 21.3 % and about 19 %
+  assert.equal(s.wording.menuHint, 'arrows · Enter wakes · e folds · h keys');
   const keys = Object.entries(s.wording.keys);
   assert.deepEqual(keys.map(([k]) => k).sort(), ['close', 'eject', 'faster', 'help', 'menu', 'menu-next', 'menu-prev', 'pause', 'quit', 'scene-next', 'seasons', 'slower']);
   for (const [k, label] of keys) {
