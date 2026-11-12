@@ -21,7 +21,7 @@ import { rgbTo256 } from '../src/color.js';
 
 const RULES = ['l1.x1', 'l1.x4', 'l2.x1', 'l2.x4', 'l3', 'r.x1', 'r.x4'];
 const cell = (rep, rule) => { const [a, b] = rule.split('.'); return b ? rep[a][b] : rep[a]; };
-// the rules a report fails (every one of the seven, L2 at 4x included even though it is advisory)
+// the rules a report fails (every one of the seven; all are binding)
 const failed = (rep) => RULES.filter((r) => !cell(rep, r).pass);
 const pct = (rep, rule) => (cell(rep, rule).worstFraction * 100).toFixed(1) + '%';
 const table = [];
@@ -229,15 +229,14 @@ test('control 2: 0.6 s bloom fails L2 (passes L1 at 1x; fails L1 at 4x)', () => 
   assert.equal(rep.r.x1.pass && rep.r.x4.pass, true);
 });
 
-test('control 3: 2 s bloom passes at 1x and fails at 4x (L2 at 4x; L1 and R still pass)', () => {
+test('control 3: 2 s bloom passes at 1x and fails at 4x (L2 at 4x is the rule; L1 and R still pass)', () => {
   const rep = control('3 bloom 2 s', (c, r) => bloom(c, r, { period: 2 }));
   assert.equal(rep.l1.x1.pass && rep.l2.x1.pass && rep.l3.pass && rep.r.x1.pass, true, 'all rules pass at 1x');
-  assert.deepEqual(failed(rep), ['l2.x4']);
+  assert.deepEqual(failed(rep), ['l2.x4'], 'WHICH rule: L2 at 4x, and only that');
   assert.equal(rep.l1.x4.pass && rep.r.x4.pass, true);
-  assert.equal(rep.l2.x4.binding, false, 'L2 is the in-house rule at 1x; its 4x reading is advisory');
-  assert.equal(rep.l2.x1.binding, true);
-  assert.equal(rep.pass, true, 'binding rules: pass');
-  assert.equal(rep.passStrict, false, 'with the advisory 4x reading: fail');
+  assert.equal(rep.pass, false, 'L2 at 4x counts: the report fails');
+  assert.equal(rep.passStrict, undefined, 'one verdict: pass');
+  assert.equal(rep.l2.x4.binding, undefined, 'no rule is advisory any more');
 });
 
 test('control 4: 2 Hz red pulse fails R (at both speeds)', () => {
@@ -263,7 +262,7 @@ test('control 6a: same-brightness kaleidoscope WITHOUT safeHue passes L1-L3 and 
 test('control 6b: the same pattern WITH safeHue passes everything at 1x and 4x', () => {
   const rep = control('6b safeHue kaleidoscope', safeKaleidoscope);
   assert.deepEqual(failed(rep), []);
-  assert.equal(rep.pass && rep.passStrict, true);
+  assert.equal(rep.pass, true);
 });
 
 test('control 7: gradient passes at 1x; at 4x R is the rule that moves', () => {
@@ -366,9 +365,10 @@ test('report shape and meter edge cases', () => {
     assert.equal(typeof c.worstFraction, 'number');
     assert.equal(typeof c.limit, 'number');
     assert.equal(typeof c.pass, 'boolean');
+    assert.equal('binding' in c, false);
     assert.ok(c.details && 'frame' in c.details && 'timeS' in c.details);
   }
-  assert.deepEqual(Object.keys(rep).sort(), ['cols', 'field', 'fps', 'frames', 'l1', 'l2', 'l3', 'pass', 'passStrict', 'r', 'rows'].sort());
+  assert.deepEqual(Object.keys(rep).sort(), ['cols', 'field', 'fps', 'frames', 'l1', 'l2', 'l3', 'pass', 'r', 'rows'].sort());
   assert.throws(() => m.push(newFrame(40, 11)), /size/);
   // no allocation per push after warm-up: heap growth over 300 pushes stays small
   const mm = createFlashMeter(120, 40, 18), fr = strobe(120, 40);

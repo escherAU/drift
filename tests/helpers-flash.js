@@ -114,8 +114,8 @@ export function brightnessJumps(a, b, cols) {
 // grid). It passes when the worst fraction is <= FIELD_FRACTION (0.25).
 //
 // Rules:  l1.x1, l1.x4  WCAG: cells with >= 7 transitions in 1 s, at 1x and 4x.
-//         l2.x1         in-house: >= 3 transitions in 1 s at 1x. l2.x4 is measured too but is ADVISORY
-//                       (binding: false): it does not count in report().pass, only in report().passStrict.
+//         l2.x1, l2.x4  in-house: >= 3 transitions in 1 s, at 1x and 4x. Both are binding: a scene must stay quiet
+//                       when the same frames are played four times as fast (a 2 s bloom fails l2.x4).
 //         l3            worst single frame step: the share of ALL cells whose Y moved >= 0.10 since the frame
 //                       before; passes when <= STEP_FRACTION (0.30). Hue changes at steady brightness are free.
 //         r.x1, r.x4    cells with >= 2 red transitions in 1 s, at 1x and 4x.
@@ -123,13 +123,12 @@ export function brightnessJumps(a, b, cols) {
 // report() -> {
 //   cols, rows, fps, frames, field: { w, h },
 //   l1: { x1: RULE, x4: RULE }, l2: { x1: RULE, x4: RULE }, l3: STEP, r: { x1: RULE, x4: RULE },
-//   pass,        // every binding rule passes
-//   passStrict,  // every rule passes, advisory ones included
+//   pass,        // every rule passes
 // }
-// RULE = { worstFraction, limit, pass, binding, details: { frame, timeS, field: { x, y, w, h }, hotCells } }
+// RULE = { worstFraction, limit, pass, details: { frame, timeS, field: { x, y, w, h }, hotCells } }
 //        (frame = frame index of the worst reading; timeS = its time at that speed; field = top-left cell and size of
 //         the worst field; hotCells = hot cells in it)
-// STEP = { worstFraction, limit, pass, binding, details: { frame, timeS, cells } }  (the step INTO `frame`)
+// STEP = { worstFraction, limit, pass, details: { frame, timeS, cells } }  (the step INTO `frame`)
 // Nothing pushed yet: all fractions 0, details frame -1.
 export const FIELD_FRACTION = 0.25;
 export const STEP_FRACTION = 0.30;
@@ -323,9 +322,8 @@ export function createFlashMeter(cols, rows, fps) {
 
   function ruleOf(sp) {
     const frac = sp.best.count / fieldCells;
-    const binding = sp.id !== 'l2.x4';
     return {
-      worstFraction: frac, limit: FIELD_FRACTION, pass: frac <= FIELD_FRACTION, binding,
+      worstFraction: frac, limit: FIELD_FRACTION, pass: frac <= FIELD_FRACTION,
       details: {
         frame: sp.best.frame, timeS: sp.best.frame < 0 ? 0 : sp.best.frame / (fps * sp.speed),
         field: { x: sp.best.x, y: sp.best.y, w: field.w, h: field.h }, hotCells: sp.best.hotCells,
@@ -337,15 +335,14 @@ export function createFlashMeter(cols, rows, fps) {
     const [l1x1, l1x4, l2x1, l2x4, rx1, rx4] = specs.map(ruleOf);
     const frac = step.count / n;
     const l3 = {
-      worstFraction: frac, limit: STEP_FRACTION, pass: frac <= STEP_FRACTION, binding: true,
+      worstFraction: frac, limit: STEP_FRACTION, pass: frac <= STEP_FRACTION,
       details: { frame: step.frame, timeS: step.frame < 0 ? 0 : step.frame / fps, cells: step.count },
     };
     const all = [l1x1, l1x4, l2x1, l2x4, l3, rx1, rx4];
     return {
       cols, rows, fps, frames: k + 1, field: { ...field },
       l1: { x1: l1x1, x4: l1x4 }, l2: { x1: l2x1, x4: l2x4 }, l3, r: { x1: rx1, x4: rx4 },
-      pass: all.every((r) => r.pass || !r.binding),
-      passStrict: all.every((r) => r.pass),
+      pass: all.every((r) => r.pass),
     };
   }
 
