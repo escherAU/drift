@@ -8,7 +8,17 @@ import { renderScene, sceneKind, createCellComposer } from '../src/cells.js';
 import { Scheduler, createComposer } from '../src/compose.js';
 import { isAllowedGlyph } from '../src/glyphs.js';
 import { isWide, isInvisible } from './helpers-width.js';
-import { flashTimesOf, snap } from './helpers-flash.js';
+import { flashTimesOf, snap, createFlashMeter } from './helpers-flash.js';
+import { RGB_CELL, PALETTE_BG } from '../src/renderer.js';
+import { makePalette } from '../src/color.js';
+
+// Full-colour scenes (DRIFT-7 C4b). A scene with rgb: true gets extra rules, each in the check it belongs to:
+//   checkSizes        colour 255 (RGB_CELL) is allowed; fg and bg of those cells are <= 0xFFFFFF (bg may be PALETTE_BG).
+//   checkDeterminism, checkBufferFill, checkVisibleAndChanging   fg and bg are compared as well as glyphs and colours.
+//   checkSoloFlash, checkPairFlash   judged by the full-colour flash meter (createFlashMeter) over the same frames; palette
+//                     cells in the frame resolve through METER_PALETTE (override with { palette }).
+// Palette scenes (no rgb flag) go through the code they always did.
+export const METER_PALETTE = makePalette([200, 100, 50], 'truecolor');
 
 export const FPS = 18;
 export const SIZES = [[120, 40], [240, 67], [80, 24], [1, 1], [0, 0], [2, 200]];
@@ -17,6 +27,18 @@ export const CROSSFADE_LIMIT = 0.075; // share of cells that may change glyph or
 
 const hex = (cp) => 'U+' + cp.toString(16).toUpperCase().padStart(4, '0');
 const same = (a, b) => assert.deepEqual(Array.from(a), Array.from(b));
+const isRgb = (scene) => scene && scene.rgb === true;
+// Two renders of an rgb scene agree on glyphs and colours, and on fg and bg of every full-colour cell
+// (the colours of a palette cell are in the palette, so its fg/bg are not asked about).
+function sameRgbFrame(a, b, what) {
+  same(a.glyphs, b.glyphs);
+  same(a.colours, b.colours);
+  for (let i = 0; i < a.glyphs.length; i++) {
+    if (a.colours[i] !== RGB_CELL) continue;
+    assert.equal(a.fg[i], b.fg[i], `${what}: fg of cell ${i}`);
+    assert.equal(a.bg[i], b.bg[i], `${what}: bg of cell ${i}`);
+  }
+}
 
 // ---- cells, sim and text scenes
 
@@ -41,16 +63,24 @@ export function checkDeterminism(scene, { seedIndependent = false } = {}) {
     const b = renderScene(scene, t, 100, 30, 5);
     same(a.glyphs, b.glyphs);
     same(a.colours, b.colours);
+    if (isRgb(scene)) sameRgbFrame(a, b, `t=${t}`);
   }
   if (seedIndependent) {
     for (const t of [0, 1, 2, 5, 10, 20]) {
       const x = renderScene(scene, t, 100, 30, 5), y = renderScene(scene, t, 100, 30, 6);
       same(x.glyphs, y.glyphs);
       same(x.colours, y.colours);
+      if (isRgb(scene)) sameRgbFrame(x, y, `seed t=${t}`);
     }
   } else {
     const x = renderScene(scene, 10, 100, 30, 5), y = renderScene(scene, 10, 100, 30, 6);
-    assert.notDeepEqual(Array.from(x.glyphs), Array.from(y.glyphs), 'seed matters');
+    if (isRgb(scene)) {
+      // a full-colour scene may let the seed move only its colours
+      const sig = (f) => Array.from(f.glyphs).join(',') + '|' + Array.from(f.fg).join(',') + '|' + Array.from(f.bg).join(',');
+      assert.notEqual(sig(x), sig(y), 'seed matters');
+    } else {
+      assert.notDeepEqual(Array.from(x.glyphs), Array.from(y.glyphs), 'seed matters');
+    }
   }
 }
 
@@ -61,9 +91,16 @@ export function checkSizes(scene, paletteLength) {
       assert.equal(f.glyphs.length, w * h, `${w}x${h}`);
       assert.equal(f.colours.length, w * h);
       assert.ok(f.glyphs instanceof Uint16Array && f.colours instanceof Uint8Array);
+      const rgb = isRgb(scene);
+      if (rgb) assert.ok(f.fg instanceof Uint32Array && f.bg instanceof Uint32Array && f.fg.length === w * h && f.bg.length === w * h);
       for (let i = 0; i < f.glyphs.length; i++) {
         assert.ok(isAllowedGlyph(f.glyphs[i]), `${w}x${h} t=${t} cell ${i}: ${hex(f.glyphs[i])}`);
-        assert.ok(f.colours[i] < paletteLength, `${w}x${h} colour ${f.colours[i]} >= ${paletteLength}`);
+        if (rgb && f.colours[i] === RGB_CELL) {
+          assert.ok(f.fg[i] <= 0xffffff, `${w}x${h} t=${t} cell ${i}: fg ${f.fg[i].toString(16)} > 0xFFFFFF`);
+          assert.ok(f.bg[i] <= 0xffffff || f.bg[i] === PALETTE_BG, `${w}x${h} t=${t} cell ${i}: bg ${f.bg[i].toString(16)} > 0xFFFFFF and not PALETTE_BG`);
+        } else {
+          assert.ok(f.colours[i] < paletteLength, `${w}x${h} colour ${f.colours[i]} >= ${paletteLength}`);
+        }
       }
     }
   }
@@ -85,26 +122,50 @@ export function checkGlyphWidth(scene) {
   assert.ok(seen.size >= 2, 'draws at least two different glyphs');
 }
 
+// A full-colour scene also gets fg/bg buffers full of stale values: it must write fg and bg of every full-colour cell
+// (so the result equals a render into fresh buffers), and the same buffers reused at a different shape with the same
+// cell count (30x40 after 60x20) must show nothing of the earlier call.
 export function checkBufferFill(scene) {
+  const rgb = isRgb(scene);
   const g = new Uint16Array(60 * 20).fill(0x1f), c = new Uint8Array(60 * 20).fill(200);
-  const out = renderScene(scene, 5, 60, 20, 1, g, c);
+  const F = rgb ? new Uint32Array(60 * 20).fill(0xa5a5a5) : null, B = rgb ? new Uint32Array(60 * 20).fill(0x5a5a5a) : null;
+  const out = renderScene(scene, 5, 60, 20, 1, g, c, F, B);
   assert.equal(out.glyphs, g);
   assert.equal(out.colours, c);
   const fresh = renderScene(scene, 5, 60, 20, 1);
   same(g, fresh.glyphs);
   same(c, fresh.colours);
+  if (rgb) {
+    assert.equal(out.fg, F);
+    assert.equal(out.bg, B);
+    sameRgbFrame(out, fresh, '60x20 into stale buffers');
+    const out2 = renderScene(scene, 9, 30, 40, 1, g, c, F, B);
+    assert.equal(out2.fg, F);
+    const fresh2 = renderScene(scene, 9, 30, 40, 1);
+    sameRgbFrame(out2, fresh2, '30x40 into the 60x20 buffers');
+  }
 }
 
 // Sampled over several times (a text scene holds one card for seconds, so two fixed times can match).
+// A full-colour scene may fill the screen with colour (a field of half blocks is 100% "lit"), so its wall rule is that the
+// screen is not ONE flat cell look (same glyph, fg and bg everywhere); and its signature includes fg and bg, so glyphs that
+// never change while the colours move are not frozen.
 export function checkVisibleAndChanging(scene) {
+  const rgb = isRgb(scene);
   const lit = (f) => f.glyphs.reduce((n, v) => n + (v !== 32 ? 1 : 0), 0);
-  const sig = (f) => Array.from(f.glyphs).join(',') + '|' + Array.from(f.colours).join(',');
+  const sig = (f) => Array.from(f.glyphs).join(',') + '|' + Array.from(f.colours).join(',') + (rgb ? '|' + Array.from(f.fg).join(',') + '|' + Array.from(f.bg).join(',') : '');
+  const looks = (f) => {
+    const s = new Set();
+    for (let i = 0; i < f.glyphs.length; i++) s.add(f.colours[i] === RGB_CELL ? `${f.glyphs[i]}|${f.fg[i]}|${f.bg[i]}` : `${f.glyphs[i]}|p${f.colours[i]}`);
+    return s.size;
+  };
   let best = 0;
   const sigs = new Set();
   for (const t of [1, 2, 4, 6, 9, 13, 20, 30]) {
     const f = renderScene(scene, t, 120, 40, 1);
     const n = lit(f);
-    assert.ok(n < 120 * 40 * 0.9, `t=${t}: not a solid wall (lit ${n})`);
+    if (rgb) assert.ok(looks(f) > 1, `t=${t}: not one flat colour`);
+    else assert.ok(n < 120 * 40 * 0.9, `t=${t}: not a solid wall (lit ${n})`);
     best = Math.max(best, n);
     sigs.add(sig(f));
   }
@@ -123,9 +184,27 @@ function runSolo(scene, W, H, secs) {
   return frames;
 }
 
-// 60 s alone: no flash closer than 3 s, and at most one in the minute.
-export function checkSoloFlash(scene, { seconds = 60, sizes = [[120, 40], [80, 24]] } = {}) {
+// The full-colour verdict: runs `frames` (an iterable of composer frames, in order) through the flash meter and asserts
+// every rule passes. The message names each failing rule, its worst fraction, and where it happened.
+function assertMeterPasses(frames, W, H, palette, what) {
+  const meter = createFlashMeter(W, H, FPS);
+  for (const f of frames) meter.push(f, palette);
+  const rep = meter.report();
+  const rules = [['l1.x1', rep.l1.x1], ['l1.x4', rep.l1.x4], ['l2.x1', rep.l2.x1], ['l2.x4', rep.l2.x4], ['l3', rep.l3], ['r.x1', rep.r.x1], ['r.x4', rep.r.x4]];
+  const bad = rules.filter(([, r]) => !r.pass).map(([id, r]) => `${id} ${(r.worstFraction * 100).toFixed(1)}% > ${(r.limit * 100).toFixed(0)}% (frame ${r.details.frame})`);
+  assert.ok(rep.pass && bad.length === 0, `${what}: flash meter fails ${bad.join('; ')}`);
+}
+
+function* soloFrames(scene, W, H, secs) {
+  const cc = createCellComposer({ scenes: [scene], cols: W, rows: H, seed: 1 });
+  for (let k = 0; k < secs * FPS; k++) yield cc.frame({ a: 0, b: 0, p: 0 }, k / FPS);
+}
+
+// 60 s alone: no flash closer than 3 s, and at most one in the minute. A full-colour scene instead passes the flash meter
+// (every rule L1, L2, L3, R at 1x and 4x) over the same frames.
+export function checkSoloFlash(scene, { seconds = 60, sizes = [[120, 40], [80, 24]], palette = METER_PALETTE } = {}) {
   for (const [W, H] of sizes) {
+    if (isRgb(scene)) { assertMeterPasses(soloFrames(scene, W, H, seconds), W, H, palette, `${scene.id} ${W}x${H}`); continue; }
     const times = flashTimesOf(runSolo(scene, W, H, seconds), FPS);
     assertSpaced(times, `${scene.id} ${W}x${H}`);
     assert.ok(times.length <= 1, `${scene.id} ${W}x${H}: ${times.length} flashes in ${seconds} s`);
@@ -133,9 +212,15 @@ export function checkSoloFlash(scene, { seconds = 60, sizes = [[120, 40], [80, 2
 }
 
 // The dissolve from A to B (one direction) over 60 s at 120x40.
-export function checkPairFlash(A, B, { seconds = 60, W = 120, H = 40 } = {}) {
+// If either scene is full-colour the dissolve frames (the composer's per-cell pick) go through the flash meter.
+export function checkPairFlash(A, B, { seconds = 60, W = 120, H = 40, palette = METER_PALETTE } = {}) {
   const cc = createCellComposer({ scenes: [A, B], cols: W, rows: H, seed: 1 });
   const sched = new Scheduler({ count: 2, durationSec: 12, fadeSec: 2, start: 0 });
+  if (isRgb(A) || isRgb(B)) {
+    const frames = (function* () { for (let k = 0; k < seconds * FPS; k++) { sched.advance(1 / FPS); yield cc.frame(sched.state(), k / FPS); } })();
+    assertMeterPasses(frames, W, H, palette, `${A.id} -> ${B.id}`);
+    return;
+  }
   const frames = [];
   for (let k = 0; k < seconds * FPS; k++) {
     sched.advance(1 / FPS);
