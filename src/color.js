@@ -94,10 +94,31 @@ export function detectColorMode(env = {}) {
   return '256';
 }
 
+export const packRgb = (c) => ((c[0] << 16) | (c[1] << 8) | c[2]) >>> 0;
+export const unpackRgb = (n) => [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+
+// DRIFT-7 C1: the per-palette colour tables a full-colour frame resolves palette cells through.
+//   fgRgb / bgRgb  Uint32Array by shade, 0xRRGGBB (the true colour, whatever the SGR mode)
+//   fg256 / bg256  Uint8Array by shade, the 256-colour index from rgbTo256 (the same function the 256-mode SGR uses)
+// An entry with no background of its own gets the palette's own background when the palette has one, else
+// 0x000000 (bg256 = rgbTo256 of that, i.e. 16). Nothing marks "no bg" in the tables; the palette's `bg` flag does.
+// fgs: array of [r,g,b]; bgs: one [r,g,b] (or null) for every entry, or an array of them, one per entry.
+export function colourTables(fgs, bgs) {
+  const n = fgs.length;
+  const fgRgb = new Uint32Array(n), bgRgb = new Uint32Array(n), fg256 = new Uint8Array(n), bg256 = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const b = (Array.isArray(bgs) && Array.isArray(bgs[0]) ? bgs[i] : bgs) || [0, 0, 0];
+    fgRgb[i] = packRgb(fgs[i]); fg256[i] = rgbTo256(fgs[i]);
+    bgRgb[i] = packRgb(b); bg256[i] = rgbTo256(b);
+  }
+  return { fgRgb, bgRgb, fg256, bg256 };
+}
+
 export function makePalette(rgb, mode) {
   const sgr = new Array(LEVELS);
-  for (let l = 0; l < LEVELS; l++) sgr[l] = sgrFor(rgb, l, mode);
-  return { key: `${mode}:${rgb[0]},${rgb[1]},${rgb[2]}`, sgr };
+  const fgs = new Array(LEVELS);
+  for (let l = 0; l < LEVELS; l++) { sgr[l] = sgrFor(rgb, l, mode); fgs[l] = shadeRGB(rgb, l); }
+  return { key: `${mode}:${rgb[0]},${rgb[1]},${rgb[2]}`, sgr, ...colourTables(fgs, null) };
 }
 
 // ---- DRIFT-2 palettes for the non-calm modes (calm's makePalette above is untouched)
@@ -122,13 +143,14 @@ const fg = (rgb, mode) => (mode === 'truecolor' ? `\x1b[38;2;${rgb[0]};${rgb[1]}
 
 export function makeMultiPalette(id, mode) {
   const def = CHAOS_PALETTES[chaosIndex(id)] || CHAOS_PALETTES[0];
-  const sgr = [];
+  const sgr = [], fgs = [];
   for (const hex of def.hues) {
     const rgb = parseHex(hex);
-    for (const f of CHAOS_BRIGHT) sgr.push(fg(rgb.map((v) => Math.round(v * f)), mode));
+    for (const f of CHAOS_BRIGHT) fgs.push(rgb.map((v) => Math.round(v * f)));
   }
-  sgr.push(fg([240, 240, 240], mode), fg([130, 130, 130], mode), fg(parseHex(def.hues[1]), mode));
-  return { key: `multi:${mode}:${def.id}`, sgr, ui: CHAOS_UI };
+  fgs.push([240, 240, 240], [130, 130, 130], parseHex(def.hues[1]));
+  for (const c of fgs) sgr.push(fg(c, mode));
+  return { key: `multi:${mode}:${def.id}`, sgr, ui: CHAOS_UI, ...colourTables(fgs, null) };
 }
 
 // High contrast: strictly two-tone. One entry carries foreground AND background, so every
@@ -139,5 +161,5 @@ export function makeTwoTone(invert, mode) {
   const sgr = mode === 'truecolor'
     ? `\x1b[38;2;${f[0]};${f[1]};${f[2]}m\x1b[48;2;${b[0]};${b[1]};${b[2]}m`
     : `\x1b[38;5;${invert ? 16 : 231}m\x1b[48;5;${invert ? 231 : 16}m`;
-  return { key: `twotone:${mode}:${invert ? 'inv' : 'norm'}`, sgr: [sgr], bg: true, base: sgr, ui: { text: 0, dim: 0, head: 0 } };
+  return { key: `twotone:${mode}:${invert ? 'inv' : 'norm'}`, sgr: [sgr], bg: true, base: sgr, ui: { text: 0, dim: 0, head: 0 }, ...colourTables([f], b) };
 }

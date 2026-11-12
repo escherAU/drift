@@ -2,7 +2,7 @@
 // levels Classic uses (shadeRGB / sgrFor), entries 16 and up are the skin's own fixed colours. With a
 // background, every entry is its foreground plus the background SGR and `base` is the background
 // SGR alone, which is exactly what the renderer's existing bg path expects.
-import { parseHex, sgrFor, rgbTo256 } from '../color.js';
+import { parseHex, sgrFor, rgbTo256, shadeRGB, colourTables } from '../color.js';
 import { LEVELS } from '../ramp.js';
 
 export const DEFAULT_UI = Object.freeze({ text: 15, dim: 7, head: 15, accent: 15 });
@@ -32,10 +32,11 @@ export function makeSkinPalette(skin, cmode, key) {
   const hue = parseHex(p.hue);
   const bgRgb = p.bg ? parseHex(p.bg) : null;
   const bgSgr = bgRgb ? bgFixed(bgRgb, cmode) : '';
-  const sgr = [];
-  for (let l = 0; l < LEVELS; l++) sgr.push(sgrFor(hue, l, cmode) + bgSgr);
-  for (const c of p.colours || []) sgr.push(fgFixed(parseHex(c), cmode) + bgSgr);
-  const pal = { key: `skin:${key}:${cmode}`, sgr, ui: { ...DEFAULT_UI, ...(p.ui || {}) } };
+  const sgr = [], fgs = [];
+  for (let l = 0; l < LEVELS; l++) { sgr.push(sgrFor(hue, l, cmode) + bgSgr); fgs.push(shadeRGB(hue, l)); }
+  for (const c of p.colours || []) { const rgb = parseHex(c); sgr.push(fgFixed(rgb, cmode) + bgSgr); fgs.push(rgb); }
+  // Every entry sits on the skin's background when it has one, else bgRgb is 0 (see colourTables).
+  const pal = { key: `skin:${key}:${cmode}`, sgr, ui: { ...DEFAULT_UI, ...(p.ui || {}) }, ...colourTables(fgs, bgRgb) };
   if (bgRgb) { pal.bg = true; pal.base = bgSgr; }
   return pal;
 }

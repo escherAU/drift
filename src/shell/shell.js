@@ -16,7 +16,7 @@ import { SHELL_KEYS, SHELL_HELP_OPEN_ACTIONS, shellHelpLines } from '../keymap.j
 import { drawHelp } from '../overlay.js';
 import { makeSkinPalette } from '../cartridge/palette.js';
 import { loadScenes as defaultLoadScenes } from '../cartridge/loader.js';
-import { parseHex, sgrFor } from '../color.js';
+import { parseHex, sgrFor, shadeRGB, colourTables, unpackRgb } from '../color.js';
 import { driftmanSkin, classicBootSkin, plainBootSkin } from './driftman.js';
 import { drawLibrary, idleSignature, dipAt, DIP_SECONDS, makeLibraryMemo } from './library.js';
 import { drawInsert, INSERT_END } from './insert.js';
@@ -42,13 +42,19 @@ export function resetFirstInsertHint() { firstInsertPending = true; }
 export function libraryPalette(carts, cmode) {
   const base = makeSkinPalette(driftmanSkin, cmode, 'driftman');
   const sgr = base.sgr.slice();
+  const fgs = []; // the tint colours, in step with the sgr entries added after the skin's own
   const tints = [];
   for (const c of carts) {
     const hue = parseHex((c.manifest && c.manifest.labelHue) || DEFAULT_HUE) || parseHex(DEFAULT_HUE);
     tints.push(sgr.length);
-    for (const lv of TINT_LEVELS) sgr.push(sgrFor(hue, lv, cmode) + base.base);
+    for (const lv of TINT_LEVELS) { sgr.push(sgrFor(hue, lv, cmode) + base.base); fgs.push(shadeRGB(hue, lv)); }
   }
-  return { pal: { ...base, key: `lib:${cmode}:${carts.length}`, sgr }, tints };
+  // Tables: the skin's own entries, then the tints on the skin's background (base.bgRgb is the same for every entry).
+  const tint = colourTables(fgs, unpackRgb(base.bgRgb[0]));
+  const cat = (A, B) => { const o = new A.constructor(A.length + B.length); o.set(A); o.set(B, A.length); return o; };
+  const tables = {};
+  for (const k of ['fgRgb', 'bgRgb', 'fg256', 'bg256']) tables[k] = cat(base[k], tint[k]);
+  return { pal: { ...base, key: `lib:${cmode}:${carts.length}`, sgr, ...tables }, tints };
 }
 
 export function createShell(o) {

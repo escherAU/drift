@@ -34,6 +34,7 @@ import { screenRect } from './library.js';
 import { cartridgeLines } from './driftman.js';
 import { drawChrome } from './chrome.js';
 import { FONT } from '../scenes/blockfont.js';
+import { rgbTo256, unpackRgb } from '../color.js';
 import {
   newFrame, clearFrame, uiOf, put, putText, putCentered, centerX, fillRect, drawBox, ramp, dissolveThresholds, wrapWords, lenOf, sizeTier,
 } from './ui.js';
@@ -127,7 +128,20 @@ export function mergeBootPalette(cartPal, libPal, tint) {
   for (let i = 0; i < CONSOLE_COLOURS; i++) sgr.push(take(i));
   for (let k = 0; k < 4; k++) sgr.push(take(tint + k));
   const map = (i) => (i < CONSOLE_COLOURS ? off + i : (i >= tint && i < tint + 4 ? off + CONSOLE_COLOURS + (i - tint) : off + 18));
-  return { pal: { ...cartPal, key: `boot:${cartPal.key}:${tint}`, sgr }, map };
+  // Tables, in step with sgr: the cartridge's entries as they are, then the same console / tint colours as `take`
+  // picks (foreground from the library entry, background from the cartridge: its own bg, else 0).
+  const picks = [];
+  for (let i = 0; i < CONSOLE_COLOURS; i++) picks.push(i);
+  for (let k = 0; k < 4; k++) picks.push(tint + k);
+  const cb = cartPal.bg ? cartPal.bgRgb[0] : 0;
+  const tables = {};
+  for (const [k, arr] of [['fgRgb', libPal.fgRgb], ['bgRgb', null], ['fg256', libPal.fg256], ['bg256', null]]) {
+    const A = cartPal[k], o = new A.constructor(A.length + picks.length);
+    o.set(A);
+    picks.forEach((p, j) => { o[A.length + j] = arr ? arr[p] : (k === 'bgRgb' ? cb : rgbTo256(unpackRgb(cb))); });
+    tables[k] = o;
+  }
+  return { pal: { ...cartPal, key: `boot:${cartPal.key}:${tint}`, sgr, ...tables }, map };
 }
 
 // ---- drawing pieces
