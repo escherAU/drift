@@ -119,7 +119,7 @@ async function helpAt41() {
   return text;
 }
 
-test('shell edges (E7 todo a) 41x11: the manual names the playing track (the tape and track line is cut at the box)', { todo: "at 41x11 the manual title line reads 'OWNER'S MANUAL · keys  tape: Night Dr', cut at the 37-column box: the tape name is cut and 'track: Midnight On-Ramp' never shows; the manual does not name the playing track" }, async () => {
+test('shell edges (E7 a) 41x11: the manual names the playing track (the head wraps onto more rows, so the tape and track show whole)', async () => {
   const text = await helpAt41();
   assert.ok(text.includes('tape: Night Drive'), 'the tape is named');
   assert.ok(text.includes(`track: ${titleOf(ORDER[0])}`), `the playing track is named: ${JSON.stringify(text.split('\n').filter((l) => l.includes('MANUAL')))}`);
