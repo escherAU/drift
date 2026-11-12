@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { discoverCartridges, INSTALL_DIR } from '../src/cartridge/loader.js';
 
-const README = fs.readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+// line endings normalised: a git archive export on Windows carries CRLF (the repository's text=auto), and the needles below span lines
+const README = fs.readFileSync(new URL('../README.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const ANSI_DIR = new URL('../captures-ansi/', import.meta.url);
 const section = (text) => {
   const a = text.indexOf('### Driftman 9000, the full-colour cartridge');
