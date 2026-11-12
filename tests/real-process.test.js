@@ -194,11 +194,11 @@ test('real process (delza c): --library, right arrow twice to Delza, Enter, then
   const r = await run({
     args: ['--library'], env: { ...FORCE, ...cfg.env }, timeoutMs: DELZA_TIMEOUT,
     drive: (c) => {
-      // the shelf is Classic, Arcade, Delza: a step takes 1.2 s (DRIFT-7 item 2), so leave that long before the next key
+      // the shelf is Classic, Arcade, Delza: the second key comes 0.6 s after the first, while the shelf is still scrubbing (DRIFT-7 item 2b); Enter inserts the cursor's cartridge
       c.stdin.write('\x1b[C');
-      setTimeout(() => c.stdin.write('\x1b[C'), 1300);
-      setTimeout(() => c.stdin.write('\r'), 2000);
-      setTimeout(() => c.stdin.write('q'), 2350); // 350 ms into the 1.5 s insert
+      setTimeout(() => c.stdin.write('\x1b[C'), 600);
+      setTimeout(() => c.stdin.write('\r'), 1300);
+      setTimeout(() => c.stdin.write('q'), 1650); // 350 ms into the 1.5 s insert
     },
   });
   assertRestored(r, t, '(delza c) mid-insert');
@@ -254,9 +254,9 @@ test('real process (night-drive a): --library, Night Drive selected on the shelf
     const r = await run({
       args: ['--library'], env: { ...FORCE, ...cfg.env }, timeoutMs: DELZA_TIMEOUT,
       drive: (c) => {
-        // each step takes 1.2 s (DRIFT-7 item 2): let it finish before the next key
-        for (let i = 0; i < rights; i++) setTimeout(() => c.stdin.write(RIGHT), i * 1300);
-        setTimeout(() => c.stdin.write('q'), rights * 1300 + 700);
+        // a key every 0.6 s: every press registers at once and the shelf scrubs (DRIFT-7 item 2b)
+        for (let i = 0; i < rights; i++) setTimeout(() => c.stdin.write(RIGHT), i * 600);
+        setTimeout(() => c.stdin.write('q'), rights * 600 + 700);
       },
     });
     assertRestored(r, t, `(night-drive a) ${rights} right arrows (${SHELF[rights]} selected)`);

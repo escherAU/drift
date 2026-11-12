@@ -154,16 +154,18 @@ test('flash: Classic <-> library round trips: only the key steps are big (the re
   c.done();
 });
 
-// A2: the library's motion. Idle, a slide (with its queued second press), and the locked dip, driven through the real app.
+// A2: the library's motion. Idle, a slide (with two more presses at once, which scrub the shelf: DRIFT-7 item 2b), and the locked dip, driven through the real app.
 for (const [cols, rows] of [...SIZES, [240, 67]]) {
-  test(`flash ${cols}x${rows}: library idle 60 s, slides (one queued, one dropped) and a locked dip stay under the limit`, (t) => {
+  test(`flash ${cols}x${rows}: library idle 60 s, slides (a slide, then two presses that scrub the shelf) and a locked dip stay under the limit`, (t) => {
     const c = mkShell({ startScreen: { screen: 'library' }, cols, rows });
     c.app.start();
     const r = recorder(c);
     r.run(30); // idle: LED, ripple, scanline, cursor
-    r.press('\x1b[C'); r.press('\x1b[C'); r.press('\x1b[C'); r.run(2.5); // one slide, a queued one (starts at 1.2 s), a dropped one
+    r.press('\x1b[C'); r.press('\x1b[C'); r.press('\x1b[C'); r.run(2.5); // one slide, then two presses at once: three steps, all registered, the art settles on the last
+    assert.equal(c.sh().cartridge, 'classic');
     r.press('\x1b[D'); r.run(1.3);
     r.press('\x1b[C'); r.run(1.3);
+    r.press('\x1b[D'); r.run(1.3);
     assert.equal(c.sh().cartridge, 'locker');
     r.press('\r'); r.run(1.2); // locked: dip, spring back, message
     r.press('\x1b[D'); r.run(1.3);

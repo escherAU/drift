@@ -112,7 +112,7 @@ for (const mode of MODES) {
       assert.equal(tints.length, n);
       note('library', pal);
     }
-    assert.equal(libraryPalette(Array.from({ length: LIMITS.cartridges }, () => ({ manifest: {} })), mode).pal.sgr.length, 20 + 4 * LIMITS.cartridges);
+    assert.equal(libraryPalette(Array.from({ length: LIMITS.cartridges }, () => ({ manifest: {} })), mode).pal.sgr.length, 20 + 4 * LIMITS.cartridges + 2); // + the scrub's two shared dim greys (no room for any of its own per cartridge at 50)
   });
   test(`mergeBootPalette tables match sgr (${mode}): cartridge skins with and without a background`, () => {
     const carts = Array.from({ length: 5 }, (_, i) => ({ manifest: { labelHue: hex(i + 3) } }));
@@ -145,7 +145,7 @@ test('existing palette properties are unchanged: key, sgr, ui, bg, base', () => 
 
 test('maximum palette sizes stay under 256 so index 255 is never a real shade', () => {
   assert.equal(sizes.skin, LEVELS + LIMITS.paletteColours); // 64
-  assert.equal(sizes.library, 20 + 4 * LIMITS.cartridges); // 220
+  assert.equal(sizes.library, 20 + 4 * LIMITS.cartridges + 2); // 222: 20 + 4 per cartridge, then the scrub's two shared dim greys (DRIFT-7 item 2b)
   assert.equal(sizes.boot, 88);
   assert.equal(sizes.multi, 35);
   assert.equal(sizes.calm, 16);

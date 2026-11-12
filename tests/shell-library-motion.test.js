@@ -69,7 +69,9 @@ test('slide: through the real app the selected cartridge moves left in 0.36 s, m
   c.done();
 });
 
-test('slide: one key press is queued while sliding and runs after the first; a third is dropped', () => {
+// DRIFT-7 item 2b (this was "one key press is queued while sliding and runs after the first; a third is dropped", then "... waits 1.2 s"): a press is
+// never queued or dropped. Every press moves the cursor at once (state().cartridge is the cursor), whatever the slide is doing; the art settles on it.
+test('slide: every key press moves the cursor at once, during the slide too (none is queued or dropped); a press after the shelf has settled slides as usual', () => {
   const c = mkShell({ startScreen: LIB, cols: 120, rows: 40 });
   c.app.start();
   c.tick(0.5);
@@ -77,32 +79,28 @@ test('slide: one key press is queued while sliding and runs after the first; a t
   c.key('\x1b[C');
   assert.equal(c.sh().cartridge, 'fixture');
   c.tick(0.1);
-  c.key('\x1b[C'); // queued
-  c.key('\x1b[C'); // dropped
-  assert.equal(c.sh().cartridge, 'fixture', 'the queued press waits');
-  c.tick(0.2);
-  assert.equal(c.sh().cartridge, 'fixture', 'still sliding');
-  c.tick(0.2);
-  assert.equal(c.sh().cartridge, 'fixture', 'the slide is over but 1.2 s have not passed: the queued press still waits');
-  c.tick(0.7);
-  assert.equal(c.sh().cartridge, 'locker', 'the queued press ran when 1.2 s had passed since the first');
-  c.tick(2);
-  assert.equal(c.sh().cartridge, 'locker', 'and the third was dropped (three cartridges: it would be classic)');
-  // the other arm: a press after the slide has settled runs at once
   c.key('\x1b[C');
-  assert.equal(c.sh().cartridge, 'classic');
+  assert.equal(c.sh().cartridge, 'locker', 'the second press registered at once, mid-slide');
+  c.key('\x1b[C');
+  assert.equal(c.sh().cartridge, 'classic', 'and the third (three cartridges: round to classic)');
+  c.tick(3);
+  assert.equal(c.sh().cartridge, 'classic', 'nothing is left waiting: the cursor stays where the last press put it');
+  // the other arm: a press after the shelf has settled slides as it always did
+  c.key('\x1b[C');
+  assert.equal(c.sh().cartridge, 'fixture');
   c.done();
 });
 
-test('slide: a queued press of the other direction also waits its turn, then goes that way', () => {
+test('slide: a press of the other direction mid-slide goes that way at once', () => {
   const c = mkShell({ startScreen: LIB, cols: 120, rows: 40 });
   c.app.start();
   c.tick(0.5);
   c.key('\x1b[C');
   c.tick(0.1);
   c.key('\x1b[D');
-  c.tick(1.2);
-  assert.equal(c.sh().cartridge, 'classic', 'right then left ends where it began');
+  assert.equal(c.sh().cartridge, 'classic', 'right then left is back where it began, at once');
+  c.tick(3);
+  assert.equal(c.sh().cartridge, 'classic');
   c.done();
 });
 

@@ -147,7 +147,7 @@ function realRun(cols, rows) {
   r.press('\x1b[C'); r.run(1.3);
   r.press('\r'); r.run(1.2); // the locked dip on a real locked cartridge
   assert.equal(c.sh().screen, 'library');
-  r.press('\x1b[D'); r.press('\x1b[D'); r.run(1.4); // one slide with a queued second
+  r.press('\x1b[D'); r.press('\x1b[D'); r.run(1.4); // one slide with a second press at once (the shelf scrubs, DRIFT-7 item 2b)
   r.run(30);
   assert.equal(c.sh().screen, 'library');
   c.done();

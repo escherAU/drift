@@ -19,8 +19,9 @@ import { makeSkinPalette } from '../cartridge/palette.js';
 import { loadScenes as defaultLoadScenes } from '../cartridge/loader.js';
 import { parseHex, sgrFor, shadeRGB, colourTables, unpackRgb } from '../color.js';
 import { driftmanSkin, classicBootSkin, plainBootSkin } from './driftman.js';
-import { drawLibrary, idleSignature, dipAt, DIP_SECONDS, makeLibraryMemo } from './library.js';
+import { drawLibrary, answerAreas, idleSignature, dipAt, DIP_SECONDS, makeLibraryMemo } from './library.js';
 import { makeFoil } from './foil.js';
+import { scrubTwins, dimFrame, dissolveScrub, shadeLstars, SCRUB_STRIP_SECONDS, SCRUB_GATE_SECONDS, SCRUB_IN_SECONDS, SCRUB_HOLD_SECONDS, SCRUB_OUT_SECONDS } from './scrub.js';
 import { drawInsert, INSERT_END, INSERT_CLICK_END } from './insert.js';
 import { drawBoot, bootPhases, mergeBootPalette, FIRST_INSERT_HINT } from './boot.js';
 import { createCartridgeRuntime, dissolveFrames } from './runtime.js';
@@ -33,7 +34,6 @@ export const EJECT_ANIM_SECONDS = 1.6; // eject phase 2: the insert animation ba
 export const EJECT_SECONDS = 1.9; // EJECT_FADE_SECONDS + EJECT_ANIM_SECONDS (written out: 0.3 + 1.6 is 1.9000000000000001)
 export const LOCKED_MESSAGE = 'This cartridge isn\'t ready yet. Pick another with ◀ ▶.';
 export const SLIDE_SECONDS = 0.36; // the carousel slide (34 columns, ease-out)
-export const SHELF_MOVE_SECONDS = 1.2; // the shelf takes one step per this long (the slide itself is SLIDE_SECONDS); holding an arrow browses at this pace
 export const TYPE_SECONDS = 0.3; // the console screen retypes left to right
 export { DIP_SECONDS };
 export const LIBRARY_FADE_SECONDS = 0.3; // the library dissolves in when opened from Classic (a hard cut would flash)
@@ -62,7 +62,15 @@ export function libraryPalette(carts, cmode) {
   const cat = (A, B) => { const o = new A.constructor(A.length + B.length); o.set(A); o.set(B, A.length); return o; };
   const tables = {};
   for (const k of ['fgRgb', 'bgRgb', 'fg256', 'bg256']) tables[k] = cat(base[k], tint[k]);
-  return { pal: { ...base, key: `lib:${cmode}:${carts.length}`, sgr, ...tables }, tints };
+  // The dim twins the shelf scrub draws with (scrub.js), appended after the tints so every existing shade keeps its number.
+  // Two shared greys plus two per cartridge in its hue; when those would not stay under RGB_CELL (255), the cartridges share the greys.
+  const start = sgr.length;
+  const skinFgs = Array.from(base.fgRgb, unpackRgb);
+  const ownHues = start + 2 + 2 * carts.length < RGB_CELL;
+  const tw = scrubTwins({ start, skinFgs, tintHues: carts.map((c) => (ownHues ? labelHueOf(c) : null)), tints, cmode, base: base.base });
+  const twT = colourTables(tw.fgs, unpackRgb(base.bgRgb[0]));
+  for (const k of ['fgRgb', 'bgRgb', 'fg256', 'bg256']) tables[k] = cat(tables[k], twT[k]);
+  return { pal: { ...base, key: `lib:${cmode}:${carts.length}`, sgr: sgr.concat(tw.sgr), ...tables }, tints, scrub: { text: tw.text, block: tw.block } };
 }
 
 export function createShell(o) {
@@ -76,6 +84,8 @@ export function createShell(o) {
 
   const lib = libraryPalette(carts, cmode);
   const libPal = lib.pal;
+  const scrubOn = o.scrub !== false && !!lib.scrub; // (a test seam: o.scrub false is the hard-sliding shelf, which the flash tests show is not safe)
+  const lstar = shadeLstars(libPal.fgRgb); // L* of every library shade (the scrub dissolves read it)
   const memo = makeLibraryMemo(); // the art grids the library keeps between ticks (library.js, F3)
   const libCarts = carts.map((c, i) => ({
     id: c.id, title: c.title, code: (c.manifest && c.manifest.code) || '', blurb: c.manifest.blurb, facts: c.manifest.facts || [],
@@ -87,10 +97,17 @@ export function createShell(o) {
   let screen = 'library';
   let st = 0; // seconds in the current screen
   let index = Math.max(0, carts.findIndex((c) => c.id === o.lastCartridge));
-  let moveT = SHELF_MOVE_SECONDS; // time since the last step started; the next step may start at SHELF_MOVE_SECONDS
   let prev = index, slideT = SLIDE_SECONDS, message = '', msgT = 0, dipT = DIP_SECONDS;
   let idleT = 0, drawnSig = ''; // the library's idle clock (runs while it is settled and in view) and the idle picture last drawn
-  let lastDir = 1, dial = index, queued = 0; // the way the last move went, the TUNE dial's step count, one waiting key press (+1 / -1)
+  let lastDir = 1, dial = index; // the way the last move went, the TUNE dial's step count
+  // The shelf scrub (scrub.js). index/dial are the cursor, which moves at once on every press; artIndex/artDial are what the art layer
+  // shows (the same, except while the shelf scrubs). phase: 'rest' (art = cursor), 'stale' (the art waits, the dots and the console
+  // screen follow the cursor), 'in' (dissolving into the dim strip, which follows the cursor), 'dim' (the strip), 'out' (dissolving
+  // back to the full picture of outIndex). sincePress = seconds since the last arrow press; evAge1/evAge2 = seconds since the last
+  // two full-contrast changes (a slide counts as two, a dissolve as one); scrubFrom = the frame on screen when the dissolve in began.
+  let artIndex = index, artDial = dial, phase = 'rest', inT = SCRUB_IN_SECONDS, outT = 0, outIndex = index, outDial = dial, outFrom = 'dim', scrubFrom = null;
+  let stripIndex = index, stripDial = dial, stripAge = 0; // the cartridge the dim strip shows (it follows the cursor at most every SCRUB_STRIP_SECONDS: each redraw rewrites the whole shelf)
+  let sincePress = 1e9, evAge1 = 1e9, evAge2 = 1e9;
   let helpOpen = false; // library help (the runtime keeps its own)
   let enterT = o.from === 'classic' ? 0 : LIBRARY_FADE_SECONDS; // seconds since the library was opened from Classic
   // The library takes over from the eject animation (or the error card) by dissolve: at the list tier those are text
@@ -135,12 +152,12 @@ export function createShell(o) {
   const palette = () => (screen === 'boot' || screen === 'error' || (screen === 'running') ? bootPal : libPal);
 
   const view = () => ({
-    cartridges: libCarts, index, prev, slide: Math.min(1, slideT / SLIDE_SECONDS), dir: lastDir, dial, type: Math.min(1, slideT / TYPE_SECONDS), idle: idleT, message,
+    cartridges: libCarts, index: artIndex, prev, slide: Math.min(1, slideT / SLIDE_SECONDS), dir: lastDir, dial: artDial, type: Math.min(1, slideT / TYPE_SECONDS), idle: idleT, message,
     dip: dipAt(dipT), tier: sizeTier(cols, rows),
   });
 
   function resetLibrary(newFrom) {
-    screen = 'library'; st = 0; helpOpen = false; message = ''; slideT = SLIDE_SECONDS; moveT = SHELF_MOVE_SECONDS; dipT = DIP_SECONDS; prev = index; queued = 0; idleT = 0; drawnSig = '';
+    screen = 'library'; st = 0; helpOpen = false; message = ''; slideT = SLIDE_SECONDS; dipT = DIP_SECONDS; prev = index; artIndex = index; artDial = dial; sincePress = evAge1 = evAge2 = 1e9; phase = 'rest'; idleT = 0; drawnSig = '';
     runtime = null; load = { status: 'none', scenes: null, error: null }; cart = null; entry = null; skipped = false; hookUse = null;
     if (newFrom !== undefined) from = newFrom;
     forced = true;
@@ -149,7 +166,7 @@ export function createShell(o) {
   // ---- screen changes
 
   function enterInsert(i) {
-    index = i; prev = i; queued = 0;
+    index = i; prev = i; artIndex = i; artDial = dial; phase = 'rest';
     cart = carts[i]; entry = libCarts[i];
     classic = cart.runtime === 'classic';
     skipped = false; menuOnArrive = true; hookUse = null;
@@ -235,16 +252,45 @@ export function createShell(o) {
 
   // ---- key handlers (names match SHELL_KEYMAP actions)
 
-  // One step of the cursor. Until SHELF_MOVE_SECONDS has passed since the last step started, one more press waits (and
-  // runs when the time is up); a third is dropped.
+  // One step of the cursor, at once, whatever came before (no press is ever dropped or delayed): the dots, the console screen and
+  // Enter follow it. A lone press (nothing scrubbing, and no full-contrast change within SCRUB_GATE_SECONDS) is the normal slide.
+  // Any other press leaves the art to the scrub (scrub.js), which changes it at most twice a second and never at full contrast
+  // faster than the flash rules allow.
   function moveCursor(dir) {
     if (carts.length < 2) return;
-    if (moveT < SHELF_MOVE_SECONDS) { if (!queued) queued = dir; return; }
-    startMove(dir, 0);
+    const lone = phase === 'rest' && evAge1 >= SCRUB_GATE_SECONDS;
+    sincePress = 0;
+    if (lone || !scrubOn || tier === 'tiny') {
+      if (phase !== 'rest') { phase = 'rest'; artIndex = index; artDial = dial; } // (no scrub palette: the art always follows)
+      startMove(dir, 0); evAge1 = evAge2 = 0;
+      return;
+    }
+    index = (index + carts.length + dir) % carts.length; dial += dir; message = '';
+    if (phase === 'rest') phase = 'stale';
   }
   function startMove(dir, carry) {
-    prev = index; index = (index + carts.length + dir) % carts.length;
-    lastDir = dir; dial += dir; slideT = carry; moveT = 0; message = '';
+    prev = index; index = (index + carts.length + dir) % carts.length; artIndex = index;
+    lastDir = dir; dial += dir; artDial = dial; slideT = carry; message = '';
+  }
+  const fire = () => { evAge2 = evAge1; evAge1 = 0; forced = true; };
+  // Keep the frame on screen (if it is a library frame of this size) as the picture the dissolve into the strip starts from.
+  function beginIn() {
+    const ok = libShown && fb.cols === cols && fb.rows === rows;
+    if (ok) {
+      if (!scrubFrom || scrubFrom.cols !== cols || scrubFrom.rows !== rows) scrubFrom = newFrame(cols, rows);
+      scrubFrom.glyphs.set(fb.glyphs); scrubFrom.shades.set(fb.shades); scrubFrom.fg.set(fb.fg); scrubFrom.bg.set(fb.bg);
+      scrubFrom.cols = cols; scrubFrom.rows = rows;
+    }
+    phase = 'in'; inT = ok ? 0 : SCRUB_IN_SECONDS; stripIndex = index; stripDial = dial; stripAge = 0; idleT = 0; drawnSig = ''; fire();
+  }
+  function beginOut() {
+    outFrom = phase === 'stale' ? 'stale' : 'dim';
+    phase = 'out'; outT = 0; outIndex = index; outDial = dial; idleT = 0; drawnSig = ''; fire();
+  }
+  function endOut() {
+    artIndex = outIndex; artDial = outDial; prev = artIndex; slideT = SLIDE_SECONDS; idleT = 0; drawnSig = '';
+    phase = index === outIndex ? 'rest' : 'stale';
+    forced = true;
   }
 
   const actions = {
@@ -306,17 +352,25 @@ export function createShell(o) {
         if (slideT < SLIDE_SECONDS) {
           slideT += d; forced = true;
         }
-        if (moveT < SHELF_MOVE_SECONDS) {
-          moveT += d;
-          // the queued step starts from the top of its ease, not part-way in: it is a key press that was waiting, and
-          // starting part-way put a big move in its very first frame
-          if (moveT >= SHELF_MOVE_SECONDS && queued) { const q = queued; queued = 0; startMove(q, 0); forced = true; }
+        sincePress = Math.min(sincePress + d, 1e9); evAge1 = Math.min(evAge1 + d, 1e9); evAge2 = Math.min(evAge2 + d, 1e9);
+        if (phase !== 'rest') {
+          // the art waits for the flash gate (a third full-contrast change within a second would flash), then dissolves into the
+          // dim strip while presses keep coming, or back to the full picture once they have stopped
+          const open = evAge2 >= SCRUB_GATE_SECONDS;
+          if (phase === 'stale') { if (open) { if (sincePress < SCRUB_HOLD_SECONDS) beginIn(); else beginOut(); } }
+          else if (phase === 'in' || phase === 'dim') {
+            if (phase === 'in') { inT += d; forced = true; if (inT >= SCRUB_IN_SECONDS) phase = 'dim'; }
+            stripAge += d;
+            if (stripAge >= SCRUB_STRIP_SECONDS && stripIndex !== index) { stripIndex = index; stripDial = dial; stripAge = 0; forced = true; }
+            if (phase === 'dim' && open && sincePress >= SCRUB_HOLD_SECONDS) beginOut();
+          }
+          else { outT += d; forced = true; if (outT >= SCRUB_OUT_SECONDS) endOut(); }
         }
         if (dipT < DIP_SECONDS) { dipT += d; forced = true; }
-        if (slideT >= SLIDE_SECONDS && dipT >= DIP_SECONDS) {
+        if (slideT >= SLIDE_SECONDS && dipT >= DIP_SECONDS && (phase === 'rest' || phase === 'stale')) {
           // at rest: the idle clock runs, and a redraw is asked for only when what it draws has changed
           idleT += d;
-          if (idleSignature(idleT, libCarts[index], tier, memo) !== drawnSig) forced = true;
+          if (idleSignature(idleT, libCarts[artIndex], tier, memo) !== drawnSig) forced = true;
         }
         if (message) { msgT += d; if (msgT >= MESSAGE_SECONDS) { message = ''; forced = true; } }
         break;
@@ -386,13 +440,64 @@ export function createShell(o) {
     insFrom = { glyphs: fb.glyphs.slice(), shades: fb.shades.slice(), fg: fb.fg.slice(), bg: fb.bg.slice(), cols, rows };
   }
 
+  // The library while the shelf scrubs (scrub.js). The dim strip is the library drawn at rest (no slide, no idle, no foil, the console
+  // screen fully typed) for the CURSOR, passed through the dim cap. Its answer parts (the dots, the console screen / blurb / list) show
+  // the cursor at once in every phase: over the waiting art ('stale'), over the dissolve into the strip ('in') and the strip itself.
+  const fullView = (i, dl) => ({ ...view(), index: i, dial: dl, prev: i, slide: 1, type: 1, idle: 0, memo });
+  function drawDim(dst, i = index, dl = dial) {
+    drawLibrary(dst, { ...view(), index: i, dial: dl, prev: i, slide: 1, type: 1, idle: 0, memo, scrub: true }, driftmanSkin);
+    dimFrame(dst, lib.scrub, answerAreas(cols, rows, sizeTier(cols, rows)).dotsY);
+  }
+  function copyAnswers(dst, src) {
+    for (const r of answerAreas(cols, rows, sizeTier(cols, rows)).rects) {
+      for (let y = Math.max(0, r.y); y < Math.min(rows, r.y + r.h); y++) {
+        for (let x = Math.max(0, r.x); x < Math.min(cols, r.x + r.w); x++) {
+          const i = y * cols + x;
+          dst.glyphs[i] = src.glyphs[i]; dst.shades[i] = src.shades[i]; dst.fg[i] = src.fg[i]; dst.bg[i] = src.bg[i];
+        }
+      }
+    }
+    const dy = answerAreas(cols, rows, sizeTier(cols, rows)).dotsY;
+    if (dy >= 0 && dy < rows) for (let x = 0; x < cols; x++) { const i = dy * cols + x; dst.glyphs[i] = src.glyphs[i]; dst.shades[i] = src.shades[i]; dst.fg[i] = src.fg[i]; dst.bg[i] = src.bg[i]; }
+  }
+  // the waiting art (drawn from artIndex as it would be at rest or mid-slide) with the cursor's answer parts over it; uses fbh as scratch
+  function drawStale(dst) {
+    drawLibrary(dst, { ...view(), memo }, driftmanSkin);
+    drawDim(fbh);
+    copyAnswers(dst, fbh);
+  }
+  // the dim strip (of stripIndex) with the cursor's answer parts over it; uses fbh as scratch
+  function drawStrip(dst) {
+    drawDim(dst, stripIndex, stripDial);
+    if (stripIndex !== index) { drawDim(fbh); copyAnswers(dst, fbh); }
+  }
+  function drawScrub(f) {
+    const thr = dissolveThresholds(cols * rows);
+    if (phase === 'stale') { drawStale(f); drawnSig = libCarts[artIndex] ? idleSignature(idleT, libCarts[artIndex], sizeTier(cols, rows), memo) : ''; return; }
+    drawnSig = '';
+    if (phase === 'out') {
+      if (outFrom === 'stale') drawStale(fb2); else drawStrip(fb2);
+      drawLibrary(fbh, fullView(outIndex, outDial), driftmanSkin);
+      dissolveScrub(fb2, fbh, ramp(outT, 0, SCRUB_OUT_SECONDS), thr, f, lib.scrub, lstar);
+      return;
+    }
+    drawStrip(fb2);
+    if (phase === 'in' && scrubFrom && scrubFrom.cols === cols && scrubFrom.rows === rows) {
+      dissolveScrub(scrubFrom, fb2, ramp(inT, 0, SCRUB_IN_SECONDS), thr, f, lib.scrub, lstar);
+      copyAnswers(f, fb2);
+    } else { f.glyphs.set(fb2.glyphs); f.shades.set(fb2.shades); f.fg.set(fb2.fg); f.bg.set(fb2.bg); }
+  }
+
   function frame() {
     const f = fb;
     libShown = screen === 'library';
     switch (screen) {
       case 'library':
-        drawLibrary(f, { ...view(), memo }, driftmanSkin);
-        drawnSig = libCarts[index] ? idleSignature(idleT, libCarts[index], sizeTier(cols, rows), memo) : '';
+        if (phase !== 'rest') drawScrub(f);
+        else {
+          drawLibrary(f, { ...view(), memo }, driftmanSkin);
+          drawnSig = libCarts[artIndex] ? idleSignature(idleT, libCarts[artIndex], sizeTier(cols, rows), memo) : '';
+        }
         if (enterT < LIBRARY_FADE_SECONDS) {
           const p = ramp(enterT, 0, LIBRARY_FADE_SECONDS), thr = dissolveThresholds(cols * rows);
           for (let i = 0; i < f.glyphs.length; i++) if (p < thr[i]) { f.glyphs[i] = 32; f.shades[i] = 0; }
@@ -476,7 +581,7 @@ export function createShell(o) {
 
   function resize(c, r) {
     cols = c; rows = r; tier = sizeTier(c, r);
-    fb = newFrame(c, r); fb2 = newFrame(c, r); fbh = newFrame(c, r); blank = newFrame(c, r); runShown = false;
+    fb = newFrame(c, r); fb2 = newFrame(c, r); fbh = newFrame(c, r); blank = newFrame(c, r); runShown = false; scrubFrom = null;
     if (runtime) runtime.resize(c, r);
     forced = true;
   }

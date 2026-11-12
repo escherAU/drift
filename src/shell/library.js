@@ -663,6 +663,16 @@ export function screenRect(cols, rows, tier = sizeTier(cols, rows)) {
   return { x: L.listX, y: L.cartTop + 9, w: L.listW, h: 9 };
 }
 
+// The parts of the library that answer a key press while the shelf scrubs (shell.js, scrub.js): the row of position dots
+// (kept at full brightness) and the rectangles that show the selected cartridge's name and blurb (drawn in the dim strip's
+// cap but never dissolved, so they show the new cursor on the first frame). At the list tier all of it is text.
+export function answerAreas(cols, rows, tier) {
+  if (tier === 'full') return { dotsY: shelfLayout(cols, rows, 'full').dotsY, rects: [screenRect(cols, rows, 'full')] };
+  if (tier === 'compact') { const L = shelfLayout(cols, rows, 'compact'); return { dotsY: -1, rects: [{ x: L.listX, y: L.cartTop, w: L.listW, h: 18 }] }; }
+  if (tier === 'list') return { dotsY: -1, rects: [{ x: 0, y: 0, w: cols, h: rows }] };
+  return { dotsY: -1, rects: [] };
+}
+
 // Ease-out: fast first, settling softly (1 - (1 - p)^1.3). The exponent is 1.3, not the 2 of a quadratic ease, so
 // the first moving frame at 18 fps covers 7 columns (steps 7, 6, 6, 5, 5, 4, 1) instead of 10. With the real label art
 // a frame that moves the shelf 8 columns or more changes over 30% of the cells at 120x40 (10 columns: 30.2%, 8: 30.7%,
@@ -941,7 +951,7 @@ export function drawShelf(f, view, skin, o = {}) {
   const putCard = (idx, G, x, y, opts) => {
     blit(f, G, x, y, opts);
     const c = view.cartridges[idx];
-    if (c.foil && !c.locked) applyFoil(f, c, x, y, idx === view.index ? foilT : 0, opts);
+    if (c.foil && !c.locked && !view.scrub) applyFoil(f, c, x, y, idx === view.index ? foilT : 0, opts); // the scrub strip (view.scrub) is drawn without the foil, which is full colour
   };
 
   // the console, then the takeover band over it

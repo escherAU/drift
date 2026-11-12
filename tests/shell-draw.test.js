@@ -60,9 +60,9 @@ test('driftman skin: validates with validateSkin, has a dark background, and the
   assert.equal(validateSkin(JSON.parse(JSON.stringify(classicBootSkin))).ok, true);
   assert.ok(driftmanSkin.palette.bg);
   assert.equal(validateSkin({ ...JSON.parse(JSON.stringify(driftmanSkin)), palette: { ...driftmanSkin.palette, bg: '#F0F0F0' } }).ok, false, 'a light background is refused (other arm)');
-  // the library palette is the driftman palette plus 4 levels per cartridge
-  assert.equal(LIB_LEN, 20 + 4 * cartridges.length);
-  assert.ok(LIB_LEN <= 256);
+  // the library palette is the driftman palette plus 4 levels per cartridge, then the scrub's dim twins (two greys and two per cartridge)
+  assert.equal(LIB_LEN, 20 + 4 * cartridges.length + 2 + 2 * cartridges.length);
+  assert.ok(LIB_LEN <= 255);
 });
 
 test('library: every size draws allowed, single-width glyphs with in-palette shades, and overwrites a dirty frame completely', () => {

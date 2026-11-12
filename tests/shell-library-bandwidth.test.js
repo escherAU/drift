@@ -135,3 +135,32 @@ test('bandwidth 240x67: the far slot the shelf moves towards keeps its old pictu
   assert.equal(during[5] === before, false, 'frame 6: the far slot has changed to the new far cartridge');
   c.done();
 });
+
+// DRIFT-7 item 2b: a held key. The first press slides; the key repeats every 30 ms from 0.5 s to 3.5 s (the shelf scrubs: the dim strip follows the
+// cursor at most every SCRUB_STRIP_SECONDS because each redraw rewrites the shelf), then 4.5 s of settling and rest: 8 s in all. The budget is cycling
+// <= 40 KB/s, so 327680 bytes; measured here (seed 1, seven cartridges): 240x67 305774 (37.3 KB/s), 120x40 264123 (32.2 KB/s), 80x24 132739
+// (16.2 KB/s). Without the strip's pace (a redraw on every frame) the same run writes 1023966, 746145 and 254146. The 80x24 bound is the measurement + 25%.
+function heldBytes(cols, rows) {
+  const c = mkShell({ startScreen: { screen: 'library' }, cols, rows, dirs });
+  c.app.start();
+  c.tick(3);
+  const presses = [0.2];
+  for (let t = 0.5; t < 3.5; t += 0.03) presses.push(t);
+  const before = bytesOf(c);
+  let next = 0;
+  for (let k = 0; k < Math.round(8 * 18); k++) {
+    while (next < presses.length && presses[next] <= k * DT + 1e-9) { c.key(RIGHT); next++; }
+    c.app.tick(DT);
+  }
+  const total = bytesOf(c) - before;
+  c.done();
+  return { total, presses: next };
+}
+for (const [cols, rows, bound] of [[240, 67, 327680], [120, 40, 327680], [80, 24, 166000]]) {
+  test(`bandwidth ${cols}x${rows}: a held key (3 s of repeats) and the 4.5 s after it write under ${bound} bytes`, (t) => {
+    const { total, presses } = heldBytes(cols, rows);
+    t.diagnostic(`${cols}x${rows}: ${presses} presses, ${total} bytes in 8 s = ${(total / 8 / 1024).toFixed(1)} KB/s`);
+    assert.ok(presses > 90, `the key was held (${presses} presses)`);
+    assert.ok(total < bound, `a held key wrote ${total} bytes (bound ${bound}; the budget is 40 KB/s = 327680 over 8 s)`);
+  });
+}

@@ -337,7 +337,7 @@ export async function withCartApp({ seed, cols, rows, dirs, id }, fn) {
   try {
     app.tick(0.05);
     const n = installed(dirs).length;
-    for (let i = 0; i < n + 1 && app.getState().shell.cartridge !== id; i++) { app.handleKey('\x1b[C'); app.tick(1.2); } // a shelf step takes 1.2 s (DRIFT-7 item 2)
+    for (let i = 0; i < n + 1 && app.getState().shell.cartridge !== id; i++) { app.handleKey('\x1b[C'); app.tick(1.2); } // each press waits out the flash gate (SCRUB_GATE_SECONDS, DRIFT-7 item 2b), so every step is a plain slide and the frames are the ones they always were
     app.tick(0.5);
     let t = 0;
     const step = async (to) => { while (t < to - 1e-9) { const d = Math.min(CART_DT, to - t); app.tick(d); t += d; } await settle(); };

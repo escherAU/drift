@@ -2,10 +2,10 @@
 // foil label. The old 30% changed-cell count is blind to full-colour frames; this meter is not.
 //   rest   30 s of the selected foil card at rest (the holo shimmer, 6 steps a second), absolute limits: L1, L2, L3, R must all pass.
 //   moves  a 30 s walk over the shelf: rest, a slide right onto the second foil card, back, a slide onto the plain card, a slide back,
-//          then two quick presses (one queued), with the foil neighbours dimming and brightening as they move. The library slide
+//          then two quick presses (the second scrubs the shelf, DRIFT-7 item 2b: the art waits for the flash gate and dissolves to the cursor), with the foil neighbours dimming and brightening as they move. The library slide
 //          is not the foil's doing, so the same shelf is also run with the foil switched off (same labels, same ink, palette colours), with the
-//          dense fixture label AND the real art of Delza. Both flows are held to ABSOLUTE limits (DRIFT-7 item 2: a step takes SHELF_MOVE_SECONDS,
-//          so the slide is no longer over a rule): every 1x rule at its own limit and a per-size L2 ceiling (WALK_L2). The only difference between the two flows is the brightness of a foil cell: safeHue's
+//          dense fixture label AND the real art of Delza. Both flows are held to ABSOLUTE limits (DRIFT-7 item 2b: the scrub keeps the shelf under every
+//          rule, so the walk is no longer over one): every 1x rule at its own limit and a per-size L2 ceiling (WALK_L2). The only difference between the two flows is the brightness of a foil cell: safeHue's
 //          colour is within 0.011 of the luminance of the palette colour it stands for (6-bit grid), which moves a cell whose swing sits right
 //          at the meter's 0.10 across the line. With a foil of exactly the palette luminance the two flows are identical (measured).
 //   insert  insert + boot (1x and 4x) and eject (1x) of a foil cartridge, foil frozen at t = 0: ABSOLUTE limits (DRIFT-7 item 1), every rule at its limit and a
@@ -33,7 +33,9 @@ const CEIL_L2 = { // fractions
 // The shelf walk is held to ABSOLUTE limits at 1x only (shell flows are held at 1x for the L2 rule): every 1x rule at its limit, and a ceiling on L2 per
 // size, the worst measured over both arts, foil on and off, plus a hair, rounded up to the next tenth of a point (fractions).
 const WALK_RULES = RULES.filter(([name]) => !name.endsWith('.x4'));
-const WALK_L2 = { '120x40': 0.063, '80x24': 0.001, '240x67': 0.011, '88x39': 0.085, '176x58': 0.017, '78x24': 0.001 };
+// Re-measured for the scrub (DRIFT-7 item 2b): the walk's last two presses used to be a queued step; now they scrub, and the console text and dots (the
+// answer to the press) add a few hot cells. Measured 6.429, 0, 2.500, 9.231, 3.475, 0 percent; the 25% limit itself is untouched.
+const WALK_L2 = { '120x40': 0.065, '80x24': 0.001, '240x67': 0.026, '88x39': 0.093, '176x58': 0.035, '78x24': 0.001 };
 const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
 
 // the 30 s at rest: wait for nothing, the library is the start screen

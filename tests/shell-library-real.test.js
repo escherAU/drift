@@ -128,21 +128,25 @@ const synth = (n) => Array.from({ length: n }, (_, i) => {
   return { ...base, id: `cart-${i}`, title: `Cart ${String(i).padStart(2, '0')}`, locked: i % 3 !== 0 && base.locked !== false ? true : base.locked, manifest: { ...base.manifest, id: `cart-${i}`, code: `DM-${String(i).padStart(2, '0')}`, labelHue: hue } };
 });
 
-test('(d) palette budget: 20 library entries plus 4 per labelHue, at most 220 of 256 slots at 50 cartridges, and the first 20 never change', () => {
+// DRIFT-7 item 2b: the dim twins the shelf scrub draws with (src/shell/scrub.js) are appended AFTER the tints: two greys, plus two in the
+// hue of each cartridge while that stays under 255 (else the cartridges share the two greys). Everything before them is as it was.
+const TWINS = (n) => 2 + (20 + 4 * n + 2 + 2 * n < 255 ? 2 * n : 0);
+test('(d) palette budget: 20 library entries plus 4 per labelHue (then the scrub twins), at most 222 of 256 slots at 50 cartridges, and the first 20 never change', () => {
   const one = libraryPalette(synth(1), 'truecolor');
-  assert.equal(one.pal.sgr.length, 24);
+  assert.equal(one.pal.sgr.length, 24 + TWINS(1));
   const base20 = one.pal.sgr.slice(0, 20);
   for (const n of [1, 5, 20, 50]) {
     const l = libraryPalette(synth(n), 'truecolor');
-    assert.equal(l.pal.sgr.length, 20 + 4 * n, `n=${n}`);
-    assert.ok(l.pal.sgr.length <= 220, `n=${n}: ${l.pal.sgr.length} of 256`);
+    assert.equal(l.pal.sgr.length, 20 + 4 * n + TWINS(n), `n=${n}`);
+    assert.ok(l.pal.sgr.length <= 222 || n < 50, `n=${n}: ${l.pal.sgr.length} of 256`);
+    assert.ok(l.pal.sgr.length < 255, `n=${n}: ${l.pal.sgr.length}: 255 is the full-colour cell`);
     assert.deepEqual(l.pal.sgr.slice(0, 20), base20, `n=${n}: no per-cartridge colour in the library's own 20`);
     assert.deepEqual(l.tints, Array.from({ length: n }, (_, i) => 20 + 4 * i), `n=${n}: tints are 4 slots each, in order`);
   }
   // the same at the lower colour modes (the 256-colour and 16-colour palettes keep the count)
   for (const cmode of ['256', '16']) {
     const l = libraryPalette(synth(50), cmode);
-    assert.ok(l.pal.sgr.length <= 220, `${cmode}: ${l.pal.sgr.length}`);
+    assert.ok(l.pal.sgr.length <= 222, `${cmode}: ${l.pal.sgr.length}`);
   }
 });
 
