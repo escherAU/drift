@@ -12,8 +12,8 @@ export const FORMAT = 2;
 
 // Fields that need a newer cartridge format than 1 (DRIFT-7). A cartridge that uses one while declaring an older format is
 // refused with "needs a newer Drift", so an older build says that instead of "unknown field". Add a field here to gate it
-// (the foil label is meant to join: foil: 2); formatGate(name, format) is the one check.
-export const FORMAT_GATES = Object.freeze({ rgb: 2, console: 2 });
+// (foil, the shiny label, joined in DRIFT-7 C12); formatGate(name, format) is the one check.
+export const FORMAT_GATES = Object.freeze({ rgb: 2, console: 2, foil: 2 });
 export function formatGate(name, format) {
   const need = FORMAT_GATES[name];
   if (need === undefined || format >= need) return null;
@@ -59,10 +59,25 @@ export const SCENE_KINDS = Object.freeze(['cells', 'sim', 'field', 'text', 'buil
 export const CODE_KINDS = Object.freeze(['cells', 'sim', 'field']);
 export const MENU_ACTIONS = Object.freeze(['eject']);
 
-const OPEN_KEYS = ['format', 'id', 'title', 'version', 'author', 'blurb', 'runtime', 'locked', 'labelHue', 'scenes', 'programs', 'start', 'menu', 'chapters', 'code', 'facts', 'console'];
+const OPEN_KEYS = ['format', 'id', 'title', 'version', 'author', 'blurb', 'runtime', 'locked', 'labelHue', 'scenes', 'programs', 'start', 'menu', 'chapters', 'code', 'facts', 'console', 'foil'];
 const LOCKED_KEYS = ['format', 'id', 'title', 'version', 'author', 'blurb', 'locked', 'code', 'facts', 'labelHue'];
 
 const fail = (reason) => ({ ok: false, reason });
+
+// foil: { hues: [2 to 6 colours], style } (DRIFT-7 C12): the shiny label of a cartridge on the shelf. Data only, so any folder.
+// A hue is only a hue: the shelf shows its red-safe colour (pixels.js safeHue), so a hue that is too red is mapped, not refused.
+export const FOIL_STYLES = Object.freeze(['sweep', 'holo']);
+export const FOIL_MIN_HUES = 2;
+export const FOIL_MAX_HUES = 6;
+function validateFoil(v) {
+  if (!isObj(v)) return fail("'foil' must be an object with 'hues' (2 to 6 colours) and 'style'");
+  const uk = unknownKey(v, ['hues', 'style'], 'foil');
+  if (uk) return fail(uk);
+  if (!Array.isArray(v.hues) || v.hues.length < FOIL_MIN_HUES || v.hues.length > FOIL_MAX_HUES) return fail(`foil.hues must list ${FOIL_MIN_HUES} to ${FOIL_MAX_HUES} colours`);
+  for (let i = 0; i < v.hues.length; i++) if (typeof v.hues[i] !== 'string' || !HEX_RE.test(v.hues[i])) return fail(`foil.hues[${i}] must be a colour like #3FE8FF`);
+  if (!FOIL_STYLES.includes(v.style)) return fail(`foil.style must be one of ${FOIL_STYLES.join(', ')}`);
+  return { ok: true, foil: { hues: v.hues.slice(), style: v.style } };
+}
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const hex4 = (cp) => 'U+' + cp.toString(16).toUpperCase().padStart(4, '0');
 
@@ -296,6 +311,15 @@ export function validateManifest(obj, { trusted = false } = {}) {
     if (!Array.isArray(obj.facts) || obj.facts.length > LIMITS.facts) return fail(`'facts' must list at most ${LIMITS.facts} lines`);
     for (let i = 0; i < obj.facts.length; i++) { const e = strErr(obj.facts[i], `facts[${i}]`, LIMITS.factChars); if (e) return fail(e); }
     out.facts = obj.facts.slice();
+  }
+
+  // foil: format 2 or later (a locked cartridge never gets here: 'foil' is an open field, refused above)
+  if (obj.foil !== undefined) {
+    const gate = formatGate('foil', obj.format);
+    if (gate) return fail(`'foil': ${gate}`);
+    const r = validateFoil(obj.foil);
+    if (!r.ok) return r;
+    out.foil = r.foil;
   }
 
   if (locked) {
