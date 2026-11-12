@@ -431,18 +431,63 @@ rings, 6 trails and the 20x4 car; under 60x18, 2 rings and 3 trails. Its skyline
 tape deck open and after a track picked from it (exit 0); `Ctrl+C` from the playing tape exits 130, as everywhere else; all are checked against the real
 process in `tests/real-process.test.js`, and the terminal is restored each time.
 
-### Driftman 9000, the full-colour cartridge (in progress)
+### Driftman 9000, the full-colour cartridge
 
-The Driftman 9000 (DM-9K, `cartridges/driftman-9000/`, format 2) is the first cartridge whose scenes are full colour (`rgb`) and whose shelf card has a
-holo `foil`. This stage is the shell: manifest, skin, a symmetric 24x10 label, the Lumen Core wording for the keys and the menu, and one placeholder
-vision, Rosette (a kaleidoscope whose hue goes round the wheel through `safeHue` at one lightness; below 60 x 20 it draws a centred dim line instead). Its
-code sorts it between Delza and Last Fantasy on the shelf. On a 256-colour terminal the renderer's lookup is red-safe: a colour with a linear red share under
-0.8 never lands on a saturated red of the 256 palette.
+The Driftman 9000 (DM-9K, `cartridges/driftman-9000/`, format 2) is the first cartridge whose scenes are full colour (`rgb`): each cell carries its own foreground and
+background, sent as 24-bit colour. Its shelf card has a holo `foil` and a symmetric 24x10 label, and it ships a console hook (`console.js`), so inserting it turns the
+Driftman 2000 into a 9000. Its code sorts it between Delza and Last Fantasy on the shelf. It is a screen to leave running beside your work, like the rest of Drift:
+nothing flashes (every vision, dissolve, panel and console move is held to the flash meter, see Tests).
 
-Bloomfall is the second vision: seeded blooms of colour (5 to 9 petals, an envelope that rises over 1.5 s and falls over 2.5 s) open over `lib/huefield.js`, a field
-of hue that turns about 90 degrees a second at one dim lightness (always through `safeHue`), with pollen falling from fading blooms and small pops between.
+**The three visions.** The program, "The transmission", plays them in this order with a 2 s dissolve between, 60 s each (about three minutes, then round again).
+Each needs a screen of 60 x 20 or more; below that it draws one centred dim line, "This vision needs 60 x 20.".
 
-Cortex sits between them: the rest between the loud visions. Four panes of glass (`#0E1426`, edge `#4A6AB0`) over the skin background: a braille icosahedron turning 0.3 rad/s with one hue per edge, a scrolling thought trace, a ring of 24 numerals (one re-rolled every 0.5 s) and captions typed at 24 characters a second. The glass slides 2 columns either way (a step ripples down its rows over 0.6 s) over content that stays put; an ion pulse runs along one hairline connector every 3 s and the focus edge moves to the next pane every 8 s. Under 5 % of the cells change in any frame (measured 3.0 % worst at 120x40, 3.1 % at 80x24, 1.0 % at 240x67), and it is dark (mean luminance 0.007 to 0.03), so the program goes Rosette (lit), Cortex, Bloomfall.
+- **Rosette** (the one that is lit): twelve mirrors turning a field of colour that never repeats. The hue goes round the wheel at 200 degrees a second at one lightness
+  (always through `safeHue`), the fold count steps 6, 8, 12, 10 every 15 s through a 3 s melt, and thin contour lines mark where the field crosses zero (lightness 0.72, hue
+  turned 180 degrees from the field around them).
+- **Cortex** (the rest between the loud ones): the machine thinks aloud on four panes of glass (`#0E1426`, edge `#4A6AB0`): a braille icosahedron turning 0.3 rad/s with one
+  hue per edge, a scrolling thought trace, a ring of 24 numerals (one re-rolled every 0.5 s) and captions typed at 24 characters a second. The glass slides 2 columns either way
+  (a step ripples down its rows over 0.6 s) over content that stays put; an ion pulse runs along one hairline connector every 3 s and the focus edge moves to the next pane
+  every 8 s. Under 5 % of the cells change in any frame (3.0 % worst at 120x40, 3.1 % at 80x24, 1.0 % at 240x67) and it is dark (mean luminance 0.007 to 0.03).
+- **Bloomfall**: blooms of colour (5 to 9 petals, an envelope that rises over 1.5 s and falls over 2.5 s) open over `lib/huefield.js`, a field of hue that turns about 90 degrees a
+  second at one dim lightness, with pollen falling from fading blooms and small pops between.
+
+**The console.** Insert turns the 2000 into the 9000 in one continuous morph (`lib/morph.js`): the 2000's own cells shed to single dots at hue 200, the edges first (0 to 0.30 of
+the morph); the 9000 unfolds outward from the slot (0.10 to 0.55, over the last third of the 1.5 s insert); then the lights open from ion to their resting hue, the centre first
+(0.55 to 1, over the first 0.4 s of the boot). The boot types the console's two lines and the cartridge's four, then zooms to the title; the 9000 holds its lines 2.0 s, so Enter
+to the running screen takes about 6.3 s. Eject folds the morph back from 0.55. The menu, "THE THREE VISIONS", opens when the cartridge arrives and starts the program by itself after
+15 s; the screen carries the chrome border `DRIFTMAN 9000` while it is up.
+
+**Keys.** No new keys: the table is the one every cartridge has, worded by the 9000's skin. Enter opens the index (the menu) or chooses, up/left and down/right move in it,
+Esc closes the index or the keys, `e` (or `l`) folds the cartridge away and ejects, space is the next vision, `p` holds the moment, `+` and `-` dream faster and slower, `c` is the
+colours key (the 9000 has no seasons, so it does nothing), `h` shows or hides the keys, `q` or Ctrl+C quits.
+
+To try it (from this folder; each command was run for this section, see `tests/real-process-9000.test.js`):
+
+```
+node bin\drift.js --cartridge driftman-9000   # straight in: insert, boot, the menu over the Rosette (the program starts by itself after 15 s)
+node bin\drift.js --library                   # the shelf: Classic, Arcade, Delza, then the Driftman 9000 (right arrow three times, a step takes 1.2 s), Enter inserts it
+```
+
+`q` quits from the library with the 9000 selected and from inside each vision (exit 0; Ctrl+C exits 130); a key that is not a quit key leaves the process running. Both arms, and the
+terminal restored each time, are checked against the real process. Read what it looks like without a terminal: `captures-ansi/` (below).
+
+**Caveats: what could not be verified, and what differs from the design.**
+- Not seen on a real screen: the colours in your terminal, whether the half-block rows meet without seams in your font, how the morph reads at speed, the real-time feel of the
+  dissolves and the panels. Everything above was measured on rendered frames and on the bytes written; the pictures in `captures-ansi/` were rebuilt from those bytes and viewed
+  as images, which is not the same as a terminal.
+- A 256-colour terminal is degraded, not identical: colours go through the renderer's nearest-colour lookup (red-safe, so a safe hue never lands on a saturated red). It passes the
+  same flash checks, but the pictures differ.
+- Words changed from the design: the menu hint is `arrows · Enter wakes · e folds · h keys` (it was longer; the longer hint made the 80x24 menu list wide enough to push the console
+  flows over the flash limit), and the boot holds its lines 2.0 s (not 1.5 s; a longer hold clears the typed text outside the flash meter's window).
+- Looks changed from the design to pass the flash meter, with the numbers in the tests: Rosette's hue rate is 200 degrees a second (the design had 90), and its contours are lightness
+  0.72 with the hue turned 180 degrees (0.82 failed the meter in truecolor, 0.78 failed it on the 256-colour cube). The contour share of the Rosette's cells is 4.7 % at the median and
+  10 to 14 % at the peak.
+- Cortex's content is fixed while its glass slides (the slide is the motion; moving the content too would have been the cost).
+- The meter's own 4x view of L2 is printed but not judged for the menu and help ramps and the shelf walk: the shell's flows are held at 1x (the speed key reaches only the scene
+  clock). Every other rule (L1, L3, R, and L2 at 1x) is judged at every size, at 1x and 4x runtime speed.
+- Delza's four key labels exceed 23 characters and are pinned as known (`tests/install-key-labels.test.js`); the 9000's are all within 23.
+- Deferred, not built: the visions Spindle, Silk Wake, Reverie, Filigree, Tidefield and The Archive; the menu says THE THREE VISIONS for now; `shelf: "last"` (open the library on the
+  last cartridge) is not built.
 
 ### Where cartridges are read from, and the trust rule
 
@@ -559,7 +604,7 @@ src/config.js     JSON config                 src/app.js       the loop that wir
 src/cells.js      cell scenes + sims, dissolve  src/keymap.js    the one key table (help and --help come from it)
 src/overlay.js    help panel                  src/glyphs.js    glyph allow-list
 src/modes.js      the four modes              src/scenes/*.js  the non-calm scenes (blockfont.js is the blocktype font)
-bin/drift.js      entry   bin/drift.cmd  shim  tools/          capture.mjs measure.mjs calm.mjs
+bin/drift.js      entry   bin/drift.cmd  shim  tools/          capture.mjs capture-ansi.mjs measure.mjs calm.mjs
 src/cartridge/    schema.js (ids, limits, validators)  loader.js (discover + load)  textscene.js  palette.js
 src/shell/        the console: shell.js (screen machine)  runtime.js (a running cartridge)  library.js insert.js
                   boot.js menu.js chrome.js ui.js (pure draw functions)  driftman.js (the console's own skin)
@@ -592,14 +637,14 @@ not a TTY, drift prints a message and exits 0 without emitting any escape sequen
 npm test            # node --test, no dependencies
 ```
 
-The suite is 2037 tests in `tests/*.test.js` and takes 45 to 80 seconds depending on the machine (test files run in parallel; the real-process arms start the real program and wait in real time, about 28 s of that). The cartridge work is
+The suite is 2321 tests in `tests/*.test.js` and takes about 165 seconds on a 32-thread machine (test files run in parallel; the longest are the 9000's flash-meter runs over its menu and help, about 2 minutes by themselves, and the real-process arms, which start the real program and wait in real time). The cartridge work is
 covered by `cartridge-schema` (validators, text scene, skin palette), `cartridge-loader`
 (every way a cartridge can be wrong, and both arms of the trust rule), `cartridge-scenes` (every
 install cartridge's scenes through the size, glyph, colour, determinism and flash checks, with controls
 that must fail), `cartridges` (glyph and import scans over `cartridges/`), `config-extras`, `shell-app`
 (the console at app level on a fake clock), `shell-draw` and `shell-flash` (every screen at every size,
 and the photosensitivity checks), `tools-cartridges` (the cartridge captures and `measure.mjs` options),
-`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge`, `night-drive-onramp`, `night-drive-skyline`, `night-drive-sundown`, `night-drive-coast`, `night-drive-redlight`, `night-drive-diner`, `night-drive-caller`, `night-drive-overdrive`, `night-drive-menu`, `night-drive-phase`, `night-drive-flash`, `night-drive-matrix-cells`, `night-drive-matrix-dissolve`, `night-drive-matrix-sims`, `night-drive-phase-sizes`, `night-drive-redlight-sizes`, `night-drive-shell-edges`, `night-drive-shell-edges-b`, `night-drive-shell-eject`, `night-drive-shell-keyframes`, `night-drive-skin-contrast` and `night-drive-banned-glyphs`, `driftman-9000-cartridge` (the Driftman 9000: loader, manifest, skin, label, trust arms, the Rosette placeholder), `install-key-labels` (every install cartridge words its keys in 23 characters or fewer) and `renderer-256-redsafe` (the 256-colour lookup never turns a red-safe colour into a saturated red), with the helpers `helpers-night-drive`, `helpers-night-drive-matrix` and `helpers-night-drive-shell` (Night Drive's skin, palette, label, boot art, manifest, help panel, the road, sprites and calm bounds of its first track, the sun, grid, loop and calm bounds of Sundown Grid, the purity, light change, wiper, rain, buildings and calm bounds of Red Light, Rain, and the ring schedule, light trails, phases, exit dissolve and changed-cell bounds of Overdrive), and the cartridge arms of `real-process` (below).
+`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge`, `night-drive-onramp`, `night-drive-skyline`, `night-drive-sundown`, `night-drive-coast`, `night-drive-redlight`, `night-drive-diner`, `night-drive-caller`, `night-drive-overdrive`, `night-drive-menu`, `night-drive-phase`, `night-drive-flash`, `night-drive-matrix-cells`, `night-drive-matrix-dissolve`, `night-drive-matrix-sims`, `night-drive-phase-sizes`, `night-drive-redlight-sizes`, `night-drive-shell-edges`, `night-drive-shell-edges-b`, `night-drive-shell-eject`, `night-drive-shell-keyframes`, `night-drive-skin-contrast` and `night-drive-banned-glyphs`, `driftman-9000-cartridge` (the Driftman 9000: loader, manifest, skin, label, trust arms), `driftman-9000-console`, `-console-rest`, `-console-morph` and `-console-flash` (its console hook: every phase and size writes only inside its rect, the machine at rest, the morph, the flash meter over insert, boot and eject), `driftman-9000-huefield`, `driftman-9000-rosette`, `-rosette-flash`, `driftman-9000-cortex`, `-cortex-flash`, `driftman-9000-bloomfall` and `-bloomfall-flash` (the three visions: what each promises, the flash meter at 1x and 4x on truecolor and 256-colour output, the phase test, byte and CPU budgets), `driftman-9000-dissolve` (every ordered pair of visions through the real dissolve), `driftman-9000-rulef` (the menu, the prompt row, the countdown and the help box over each vision are palette cells with text at 4.5:1 on the skin's background), `driftman-9000-panels-flash` (the meter over the menu and the help box opening and closing over each vision), `driftman-9000-size-mutation` (one-line breakages of the size handling, run in a temp copy, must each fail the size tests), `capture-ansi` (the `.ansi` captures, below) and `real-process-9000` (quitting the 9000 from the library and from inside each vision, with the arms that must not quit), with the helpers `helpers-driftman-console`, `helpers-driftman-panels`, `helpers-ansi` (an independent reader of the terminal bytes) and `helpers-real-process`, `install-key-labels` (every install cartridge words its keys in 23 characters or fewer) and `renderer-256-redsafe` (the 256-colour lookup never turns a red-safe colour into a saturated red), with the helpers `helpers-night-drive`, `helpers-night-drive-matrix` and `helpers-night-drive-shell` (Night Drive's skin, palette, label, boot art, manifest, help panel, the road, sprites and calm bounds of its first track, the sun, grid, loop and calm bounds of Sundown Grid, the purity, light change, wiper, rain, buildings and calm bounds of Red Light, Rain, and the ring schedule, light trails, phases, exit dissolve and changed-cell bounds of Overdrive), and the cartridge arms of `real-process` (below).
 The console hook (DRIFT-7) is covered by `console-hook-loader` (the manifest field, the export check, both arms of the trust rule, the smoke render), `console-hook-shell` (the body and overlay split, writes only inside the rect, the insert, boot and eject wiring, the single decision, the morph's seam and the palette remap), `console-hook-flash` (the flash meter over the whole insert, boot and eject at six sizes, with a strobing control) and `console-hook-nohook` (every frame of a whole run of Classic, Night Drive and Delza, hashed against the tree before the hook), with the helper `helpers-console-hook`.
 
 Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
@@ -645,6 +690,33 @@ where the story moves (sundown 75 s, redlight 9, 11, 61 and 62 s, diner 25 s mid
 `-80x24` (the tape deck open over the playing track, the `*` on it and the cursor on the next); `help-120x40` and `-80x24` (the
 reskinned help panel); and `console-120x40` and `-80x24` (the console takeover as the tape boots, the only time it is on screen).
 Seventy-two files in all, on top of the generic library, insert, boot and eject files it already had.
+
+The Driftman 9000 adds ten text files, `cart-driftman-9000-*.txt`: `menu-120x40` (three tiles, the prompt row and the countdown over the running Rosette) and `menu-80x24` (the list),
+`help-120x40` and `-80x24` (its reskinned help box over the Rosette), and `morph-t1000` to `morph-t1500` (the 2000 turning into the 9000, every 0.1 s from 1.0 to 1.5 s after Enter, 120x40).
+Its generic insert, boot and eject files are the usual ones. The full capture command prints `wrote 24 calm files, 39 mode files, 19 gallery files and 220 cartridge files`, and
+`git status` shows nothing changed after it.
+
+```
+node tools/capture-ansi.mjs [--out captures-ansi]     # 32 full-frame truecolor .ansi files of the Driftman 9000 (944,526 bytes), about 5 s
+```
+
+Each file in `captures-ansi/` is one frame of the real app, taken with the same drivers as the text captures above and written by the app's own renderer (a fresh
+`createRenderer().render(app.screenshot())`, which is what the app writes the first time it paints that frame: clear the screen, then every cell addressed with its 24-bit colours),
+plus a tail that resets the colours and puts the cursor on the last row. The renderer never draws the bottom-right cell, so that one cell is blank in every file. They are tracked
+in git (`captures-ansi/*.ansi -text`), unlike the git-ignored `captures/*.ansi`. The name carries the size; view one in a truecolor terminal at least that big (it clears the screen and
+addresses cells, so a smaller window will scroll):
+
+```
+cat captures-ansi/menu-grid-120x40.ansi                                      # Git Bash, WSL, macOS, Linux; then `clear`
+type captures-ansi\menu-grid-120x40.ansi                                     # cmd.exe in Windows Terminal, after `chcp 65001`; then `cls`
+Get-Content -Raw -Encoding utf8 captures-ansi\menu-grid-120x40.ansi | Write-Host -NoNewline      # PowerShell
+```
+
+The 32 files: `library-driftman-9000-selected-120x40`, `label-24x10` (its label cut from that frame, foil and all), `insert-t400`, `-t900`, `-t1250`, `morph-insert-t1000` to `-t1500`,
+`morph-boot-t1700` and `-t1800`, `morph-rest-t2000` (all 120x40), `boot-t2500`, `-t4200`, `-t5600` (120x40), `console-rest-120x40` and `-80x24`, `menu-grid-120x40`, `menu-list-80x24`,
+`help-120x40`, `help-80x24`, `rosette`, `cortex` and `bloomfall` at `-120x40` and `-80x24` (20 s into each), and `eject-t727`, `-t1260`, `-t1633` (120x40). Twenty-three of them have a
+text capture of the same frame in `captures/`, and a test checks the glyphs agree. `tests/capture-ansi.test.js` also rebuilds every file's screen with an independent reader (it knows
+nothing of the renderer) and compares every cell's glyph, foreground and background with the frame the renderer was given; and checks that two runs are byte-identical.
 
 `captures/*.ansi` are git-ignored (large) except the calm scenes' and the crossfade's; regenerate with the
 capture command and view with `type captures\sunburst-120x40.ansi` in a truecolor terminal.
