@@ -1,7 +1,7 @@
 // Cartridge discovery and loading (DRIFT-4).
 //
 //   discoverCartridges({ dirs: [{ dir, trusted }] })   SYNC   -> { cartridges, errors: [{ where, reason }] }
-//   loadScenes(cart)                                    ASYNC  -> { scenes, errors }
+//   loadScenes(cart)                                    ASYNC  -> { scenes, errors, console? }   console = the console hook (DRIFT-7 C11)
 //
 // Discovery reads data only (manifest, label, skin, boot art, text scenes). It never imports code.
 // loadScenes imports a cartridge's scene modules, and only when cart.trusted: code runs only from the
@@ -19,6 +19,7 @@ import { PLAYLISTS } from '../scenes/index.js';
 import { renderScene, sceneKind } from '../cells.js';
 import { isAllowedGlyph } from '../glyphs.js';
 import { RGB_CELL, PALETTE_BG } from '../renderer.js';
+import { checkConsoleExport, smokeConsole } from './consolehook.js';
 
 // <repo>/cartridges, found from this file's own location.
 export const INSTALL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'cartridges');
@@ -170,6 +171,15 @@ function loadOne(dir, name, trusted) {
       cart.sceneFiles[sc.id] = contained(realDir, file, rel.replace(/\\/g, '/'));
     }
   }
+  // console.js (manifest "console": "code"): the console hook, found the way a scene file is, imported by loadScenes
+  if (manifest.console === 'code') {
+    const file = path.join(cartDir, 'console.js');
+    let fst;
+    try { fst = fs.lstatSync(file); } catch (e) { skip(e && e.code === 'ENOENT' ? 'console.js is missing (the manifest says "console": "code")' : `console.js cannot be read: ${errText(e)}`); }
+    if (fst.isSymbolicLink()) skip('console.js is a link or junction; links are not followed');
+    if (!fst.isFile()) skip('console.js is not a file');
+    cart.consoleFile = contained(realDir, file, 'console.js');
+  }
   return cart;
 }
 
@@ -297,5 +307,22 @@ export async function loadScenes(cart) {
     if (reason) errors.push({ where, reason });
     else scenes.push({ id: sc.id, kind: sc.kind, title: sc.title, ...(sc.ref ? { ref: sc.ref } : {}), ...(sc.rgb === true ? { rgb: true } : {}), family: sceneFamily(sc), scene });
   }
-  return errors.length ? { scenes: [], errors } : { scenes, errors };
+  // the console hook: the same wall as scene code (install folder only), then its export is checked and it is smoke-rendered
+  let hook = null;
+  if (m.console === 'code') {
+    let reason = null;
+    if (!cart.trusted) reason = CODE_REASON;
+    else if (!cart.consoleFile) reason = 'console.js was not found';
+    else {
+      try {
+        const mod = await import(pathToFileURL(cart.consoleFile).href);
+        reason = checkConsoleExport(mod);
+        if (!reason) { hook = mod.default; reason = smokeConsole(hook); }
+      } catch (e) {
+        reason = `console.js cannot be loaded: ${errText(e)}`;
+      }
+    }
+    if (reason) { errors.push({ where: cart.dir, reason }); hook = null; }
+  }
+  return errors.length ? { scenes: [], errors } : { scenes, errors, ...(hook ? { console: hook } : {}) };
 }

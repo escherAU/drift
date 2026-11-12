@@ -12,8 +12,8 @@ export const FORMAT = 2;
 
 // Fields that need a newer cartridge format than 1 (DRIFT-7). A cartridge that uses one while declaring an older format is
 // refused with "needs a newer Drift", so an older build says that instead of "unknown field". Add a field here to gate it
-// (the console hook and the foil label are meant to join: console: 2, foil: 2); formatGate(name, format) is the one check.
-export const FORMAT_GATES = Object.freeze({ rgb: 2 });
+// (the foil label is meant to join: foil: 2); formatGate(name, format) is the one check.
+export const FORMAT_GATES = Object.freeze({ rgb: 2, console: 2 });
 export function formatGate(name, format) {
   const need = FORMAT_GATES[name];
   if (need === undefined || format >= need) return null;
@@ -59,7 +59,7 @@ export const SCENE_KINDS = Object.freeze(['cells', 'sim', 'field', 'text', 'buil
 export const CODE_KINDS = Object.freeze(['cells', 'sim', 'field']);
 export const MENU_ACTIONS = Object.freeze(['eject']);
 
-const OPEN_KEYS = ['format', 'id', 'title', 'version', 'author', 'blurb', 'runtime', 'locked', 'labelHue', 'scenes', 'programs', 'start', 'menu', 'chapters', 'code', 'facts'];
+const OPEN_KEYS = ['format', 'id', 'title', 'version', 'author', 'blurb', 'runtime', 'locked', 'labelHue', 'scenes', 'programs', 'start', 'menu', 'chapters', 'code', 'facts', 'console'];
 const LOCKED_KEYS = ['format', 'id', 'title', 'version', 'author', 'blurb', 'locked', 'code', 'facts', 'labelHue'];
 
 const fail = (reason) => ({ ok: false, reason });
@@ -311,7 +311,7 @@ export function validateManifest(obj, { trusted = false } = {}) {
   if (obj.runtime === 'classic') {
     if (!trusted) return fail("runtime 'classic' is only for the install folder");
     if (obj.id !== 'classic') return fail("runtime 'classic' belongs to the cartridge with id 'classic'");
-    for (const k of ['scenes', 'programs', 'start', 'menu', 'chapters']) if (obj[k] !== undefined) return fail(`the classic cartridge cannot have '${k}'`);
+    for (const k of ['scenes', 'programs', 'start', 'menu', 'chapters', 'console']) if (obj[k] !== undefined) return fail(`the classic cartridge cannot have '${k}'`);
     return { ok: true, manifest: out };
   }
   if (obj.id === 'classic') return fail("id 'classic' is reserved for the Drift Classic cartridge");
@@ -352,6 +352,15 @@ export function validateManifest(obj, { trusted = false } = {}) {
     const r = validateChapters(obj.chapters, byId);
     if (!r.ok) return r;
     out.chapters = r.chapters;
+  }
+  // console: "code" = the cartridge ships console.js, a hook that draws the Driftman 2000's body in full colour (DRIFT-7).
+  // Code, so install folder only, and format 2 or later.
+  if (obj.console !== undefined) {
+    if (obj.console !== 'code') return fail(`'console' must be "code" (the cartridge ships console.js), not ${JSON.stringify(obj.console)}`);
+    if (!trusted) return fail(`'console': ${CODE_REASON}`);
+    const gate = formatGate('console', obj.format);
+    if (gate) return fail(`'console': ${gate}`);
+    out.console = 'code';
   }
   return { ok: true, manifest: out };
 }
