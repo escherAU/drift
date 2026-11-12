@@ -269,11 +269,10 @@ test('flash (d) bright solid coverage: no frame of any scene has more than 25% o
 
 // ---- (e) the shell steps
 
-// 41x11 is here too, with one difference: the insert KEY FRAME (Enter on the card) changes 50.11% of the cells there, over the 40% ceiling, and that is
-// the console's own frame at any window under 78x24 (Delza's library-to-insert Enter frame: 49.4% at 41x11, 47.7% at 44x11, 47.3% at 40x12), not the
-// cartridge's. So at 41x11 the insert key frame is left out of the normal test and asserted on its own, below, as a todo that shows until the shell is fixed.
+// 41x11 is here too. Its insert KEY FRAME (Enter on the card) used to be the console's hard cut from the library picture to the insert picture:
+// 50.11% of the cells at 41x11 (Delza 49.4%, 44x11 47.7%, 40x12 47.3%), over the 40% ceiling at any window under 78x24. DRIFT-7 C8: at the list and tiny
+// tiers the shell now dissolves into the insert picture over 0.3 s, so the key frame is held to the same ceiling as every other step, at every size.
 const SHELL_SIZES = [[89, 40], [79, 25], [120, 40], [80, 24], [41, 11]];
-const SMALL_SHELL = (cols, rowsN) => cols < 78 && rowsN < 24;
 const HARD_CEILING = 0.4;
 const grab = (c) => { const f = c.app.screenshot(); return { g: f.glyphs.slice(), s: f.shades.slice(), p: f.palette }; };
 const bgCache = new Map();
@@ -344,8 +343,7 @@ for (const [cols, rowsN] of SHELL_SIZES) {
       const st = steps[name];
       assert.ok(st, `${cols}x${rowsN}: no frames for step ${name}`);
       rows.push(`${cols}x${rowsN} ${name}: worst ${pct(st.worst)} (frame ${st.at} of ${st.frames}), key frame ${pct(st.keyStep)}`);
-      // the insert key frame at a small window is the console's (see SHELL_SIZES): asserted by its own todo test below
-      const keyOver = st.keyStep > HARD_CEILING && !(SMALL_SHELL(cols, rowsN) && name === 'insert');
+      const keyOver = st.keyStep > HARD_CEILING;
       if (!(st.worst <= FLASH_FRACTION) || st.worst > HARD_CEILING || keyOver) bad.push(rows[rows.length - 1]);
     }
     // the background: every frame from boot to the running track carries the one background #0D0820. The insert animation is still drawn in the
@@ -361,9 +359,8 @@ for (const [cols, rowsN] of SHELL_SIZES) {
   });
 }
 
-// The insert key frame at 41x11 (the frame that carries Enter on the card). It is over the 40% ceiling and belongs to the shell, so it is a todo:
-// reported as TODO in the run, never a failure, and never silently gone. Remove the todo when the shell's insert key frame is calmed.
-test('flash (e) shell insert key frame 41x11: the frame that carries Enter on the card changes 40% or less of the cells', { todo: 'console-wide: the insert key frame is over 40% below 78x24 (Delza 49.4% at 41x11); belongs to the shell, not the cartridge' }, async () => {
+// The insert key frame at 41x11 (the frame that carries Enter on the card), on its own: the shell's list-tier dissolve (DRIFT-7 C8) keeps it at 40% or less.
+test('flash (e) shell insert key frame 41x11: the frame that carries Enter on the card changes 40% or less of the cells', async () => {
   const steps = await shellSteps(41, 11);
   console.log(`TABLE flash (e) key frame
   41x11 insert key frame ${pct(steps.insert.keyStep)}`);

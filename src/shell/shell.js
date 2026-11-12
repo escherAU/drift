@@ -32,6 +32,7 @@ export const SLIDE_SECONDS = 0.36; // the carousel slide (34 columns, ease-out)
 export const TYPE_SECONDS = 0.3; // the console screen retypes left to right
 export { DIP_SECONDS };
 export const LIBRARY_FADE_SECONDS = 0.3; // the library dissolves in when opened from Classic (a hard cut would flash)
+export const INSERT_DISSOLVE_SECONDS = 0.3; // Enter on the card at the list and tiny tiers dissolves from the library frame into the insert picture (a cut changed half of a 41 x 11 screen)
 export const MESSAGE_SECONDS = 2.5; // the locked-cartridge message (it also clears on the next key)
 const TINT_LEVELS = [4, 8, 12, 15];
 const DEFAULT_HUE = '#9DB8A8';
@@ -87,6 +88,11 @@ export function createShell(o) {
   // screens and the library a different picture, and a cut between them changed up to 55% of a 40 x 10 screen. The
   // last frame the eject/error drew is kept, and the library's first LIBRARY_FADE_SECONDS dissolve from it.
   let handT = LIBRARY_FADE_SECONDS, handFrom = null;
+  // The same hand-over for Enter on the card: at the list and tiny tiers the library and the insert picture are different text screens, so
+  // the library frame as last drawn is kept and the insert's first INSERT_DISSOLVE_SECONDS dissolve from it (st is the insert's own clock, so the
+  // timeline does not move). Both pictures use the library palette, so there is no palette change in the dissolve; the switch to the cartridge's
+  // palette comes with the boot, long after. The compact and full tiers keep the cut.
+  let insFrom = null, libShown = false;
   let from = o.from === undefined ? null : o.from;
   let forced = true;
 
@@ -222,6 +228,7 @@ export function createShell(o) {
     libInsert() {
       if (!carts.length) return;
       if (carts[index].locked) { dipT = 0; message = LOCKED_MESSAGE; msgT = 0; return; }
+      keepForInsert();
       enterInsert(index);
     },
     libBack() {
@@ -344,8 +351,16 @@ export function createShell(o) {
     handFrom.glyphs.set(f.glyphs); handFrom.shades.set(f.shades); handFrom.fg.set(f.fg); handFrom.bg.set(f.bg);
   }
 
+  function keepForInsert() {
+    insFrom = null;
+    const t = sizeTier(cols, rows);
+    if (screen !== 'library' || !libShown || (t !== 'list' && t !== 'tiny')) return;
+    insFrom = { glyphs: fb.glyphs.slice(), shades: fb.shades.slice(), fg: fb.fg.slice(), bg: fb.bg.slice(), cols, rows };
+  }
+
   function frame() {
     const f = fb;
+    libShown = screen === 'library';
     switch (screen) {
       case 'library':
         drawLibrary(f, { ...view(), memo }, driftmanSkin);
@@ -362,6 +377,9 @@ export function createShell(o) {
         break;
       case 'insert':
         drawInsertFn(f, { item: insertItem(), t: st }, driftmanSkin);
+        if (insFrom && st < INSERT_DISSOLVE_SECONDS && insFrom.cols === cols && insFrom.rows === rows) {
+          dissolveFrames(insFrom, f, ramp(st, 0, INSERT_DISSOLVE_SECONDS), dissolveThresholds(cols * rows), f);
+        }
         break;
       case 'eject':
         drawInsertFn(f, { item: insertItem(), t: INSERT_END * (1 - ramp(st, 0, EJECT_SECONDS)) }, driftmanSkin);
