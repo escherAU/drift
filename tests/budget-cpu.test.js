@@ -5,7 +5,7 @@
 // measurement is the best of three means, and the over-budget control is a scene that costs more than the ceiling by design.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CPU_MEAN_CEILING_MS, CPU_RUN, measureCpu, checkCpu } from './helpers-budget.js';
+import { CPU_MEAN_CEILING_MS, CPU_RUN, measureCpu, checkCpu, measureRelativeCost, calibrationLoop } from './helpers-budget.js';
 import { makeOrb, makeSlowScene, makeSlowStart } from './helpers-budget-fixtures.js';
 
 test('CPU constants: 240x67, 18 warm-up frames, 180 measured, best of three', () => {
@@ -35,4 +35,13 @@ test('a scene that burns 30 ms a frame FAILS checkCpu (the control), and one at 
   assert.throws(() => checkCpu(slow), /ms per frame/);
   const fast = measureCpu(makeSlowScene(5), { warmup: 2, frames: 12, runs: 1 });
   checkCpu(fast);
+});
+
+// DRIFT-7 stage E: measureRelativeCost (the load-proof timing of cheap calls) tracks the work in proportion, whatever the machine is doing.
+test('measureRelativeCost: the calibration loop itself reads 1.0 and doing it three times reads clearly higher (a batch of well under a millisecond: longer batches are preempted in every repeat and read high)', () => {
+  const one = measureRelativeCost(() => { calibrationLoop(); });
+  const three = measureRelativeCost(() => { calibrationLoop(); calibrationLoop(); calibrationLoop(); });
+  console.log(`relative cost: 1x ${one.ratio.toFixed(3)}, 3x ${three.ratio.toFixed(3)}`);
+  assert.ok(one.ratio > 0.8 && one.ratio < 1.25, `1x read ${one.ratio}`);
+  assert.ok(three.ratio > 1.8 && three.ratio < 4.5, `3x read ${three.ratio}`);
 });

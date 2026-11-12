@@ -119,3 +119,42 @@ export function measureCpu(source, { cols = CPU_RUN.cols, rows = CPU_RUN.rows, w
 export function checkCpu(measured) {
   assert.ok(measured.meanMs <= CPU_MEAN_CEILING_MS, `mean ${measured.meanMs.toFixed(2)} ms per frame is over the ceiling ${CPU_MEAN_CEILING_MS} ms`);
 }
+
+// Load-proof timing for CHEAP calls (DRIFT-7 stage E). A mean over one long run includes every moment another process had the core
+// or a busy sibling thread slowed it, so under `npm test` (every test file at once) a fixed millisecond bound on it is a coin flip
+// (the console hook read 0.064 ms against a 0.05 bound under load and 0.016 alone). process.cpuUsage cannot help: it ticks every
+// 15 ms on Windows and a batch of these calls is well under one tick. So:
+//   1. the SAME batch of work is timed many times and the quietest one is kept (preemption only ever adds time), and
+//   2. a fixed calibration loop (typed-array writes of the kind a draw does) is timed in the same moment, interleaved batch by
+//      batch, and the answer is the RATIO work / calibration. A machine that is slower for one is slower for both, so the ratio
+//      stays put under load, while code that really gets slower moves it in proportion (3x the work = 3x the ratio).
+// -> { workMs (quietest batch), calibMs (quietest calibration), ratio, msPerCall (workMs / calls) }
+const CAL_N = 1512;
+const calG = new Uint16Array(CAL_N), calS = new Uint8Array(CAL_N), calA = new Uint32Array(CAL_N), calB = new Uint32Array(CAL_N);
+let calSink = 0;
+export function calibrationLoop() {
+  for (let n = 0; n < 40; n++) {
+    for (let i = 0; i < CAL_N; i++) {
+      const v = (i * 2654435761 + n) >>> 0;
+      calG[i] = 32 + (v & 63); calS[i] = (v >>> 8) & 7; calA[i] = (v ^ (calA[i] >>> 1)) & 0xFFFFFF; calB[i] = (calA[i] * 3) & 0xFFFFFF;
+    }
+  }
+  calSink += calB[5];
+  return calSink;
+}
+
+export function measureRelativeCost(batch, { calls = 1, batches = 1500, warmup = 60 } = {}) {
+  for (let i = 0; i < warmup; i++) { batch(); calibrationLoop(); }
+  let work = Infinity, calib = Infinity;
+  for (let i = 0; i < batches; i++) {
+    let t0 = process.hrtime.bigint();
+    batch();
+    const w = Number(process.hrtime.bigint() - t0) / 1e6;
+    t0 = process.hrtime.bigint();
+    calibrationLoop();
+    const c = Number(process.hrtime.bigint() - t0) / 1e6;
+    if (w < work) work = w;
+    if (c < calib) calib = c;
+  }
+  return { workMs: work, calibMs: calib, ratio: work / calib, msPerCall: work / calls };
+}
