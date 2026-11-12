@@ -269,10 +269,10 @@ test('no module under src/ (or bin/) imports node:https, node:net, node:http or 
   for (const f of files) assert.deepEqual(networkImports(fs.readFileSync(f, 'utf8')), [], rel(f));
 });
 
-test('every installed cartridge has a unique shelf code of the form DM-nn', () => {
+test('every installed cartridge has a unique shelf code of the form DM-nn (the Driftman 9000 is the one deliberate outlier, DM-9K)', () => {
   const found = discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] }).cartridges;
   assert.ok(found.length >= 4);
   const codes = found.map((c) => c.manifest.code);
-  for (const [i, code] of codes.entries()) assert.match(String(code), /^DM-\d\d$/, found[i].id);
+  for (const [i, code] of codes.entries()) assert.match(String(code), found[i].id === 'driftman-9000' ? /^DM-9K$/ : /^DM-\d\d$/, found[i].id);
   assert.equal(new Set(codes).size, codes.length, `codes are unique: ${codes.join(' ')}`);
 });

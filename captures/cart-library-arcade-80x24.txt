@@ -1,13 +1,13 @@
 === library 80x24 cursor on arcade (locked)
                                                                                 
-    ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮      CARTRIDGES                       2 / 5  
+    ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮      CARTRIDGES                       2 / 6  
     ┆  ════                  ○   ┆      ──────────────────────────────────────  
     ┆ ┌┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┐ ┆                                              
     ┆ ┆ 1P 004200     HI 090000┆ ┆        Drift Classic                  DM-00  
     ┆ ┆▐█▌▐█▌▐█▌▐█▌▐█▌▐█▌▐█▌▐█▌┆ ┆      ▶ Arcade                          soon  
     ┆ ┆▐█▌▐█▌▐█▌   ▐█▌▐█▌▐█▌▐█▌┆ ┆        Delza                          DM-01  
-    ┆ ┆▐█▌▐█▌         ▐█▌▐█▌▐█▌┆ ┆        Last Fantasy                    soon  
-    ┆ ┆────── COMING SOON ─────┆ ┆        Night Drive                    DM-02  
+    ┆ ┆▐█▌▐█▌         ▐█▌▐█▌▐█▌┆ ┆        Driftman 9000                  DM-9K  
+    ┆ ┆────── COMING SOON ─────┆ ┆        ↓ 2 more                              
     ┆ ┆           ·            ┆ ┆                                              
     ┆ ┆             ●          ┆ ┆      ┌────────────────────────────────────┐  
     ┆ ┆    ◇                   ┆ ┆      │ Coins, bright lights and high      │  

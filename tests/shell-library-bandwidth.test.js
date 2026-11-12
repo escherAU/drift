@@ -56,10 +56,15 @@ function slideBytes(cols, rows, presses = 4) {
 // measurement; it was 190-200 KB before the stepped slide); the others are the measurement + 25%. 120x40 was NOT within the 40 KB/s budget (142756 a slide, the 30% per-frame rule capped the shelf at 7 columns a frame
 // so it could not take the stepped slide); the two-halves slide of the photosensitivity fix (bandProgress) writes about
 // 83400, 40.7 KB/s as a 2 s cycle, and the bound is that + 25%.
+// DRIFT-7 C6 (the Driftman 9000 on the shelf, nine cartridges in this run). Worst of 4 slides, before -> after:
+// 240x67 62797 -> 66295 (bound unchanged, 80000), 120x40 84610 -> 84610 (unchanged, 104000), 80x24 8321 -> 38527 (4 slides:
+// 5118 903 8190 38527 after; the slide that seats the 9000 writes its full-colour label and holo foil, 18.8 KB/s as a 2 s
+// cycle, under the 40 KB/s budget). The 80x24 bound is that + 25%. `measure --library --cycle 2 --seconds 35 --cols 240 --rows 67`:
+// 1212818 bytes, 33.8 KB/s before -> 878048 bytes, 24.5 KB/s after (a different mix of slides in the 35 s).
 const BOUNDS = [
   [240, 67, 80000],
   [120, 40, 104000],
-  [80, 24, 10400],
+  [80, 24, 48200],
 ];
 
 for (const [cols, rows, bound] of BOUNDS) {

@@ -27,7 +27,7 @@
                   ┃ ┃┃ DRIFTMAN 2000 · CORE 2.0                   ┃┃      ╭───╮      ═════════════   ┃                  
                   ┃ ┃┃ MEMORY 64K ..... OK                        ┃┃     ╱     ╲     ═════════════   ┃                  
                   ┃ ┃┃ CARTRIDGE ...... NIGHT DRIVE               ┃┃    │   ●   │    ═════════════   ┃                  
-                  ┃ ┃┃ TAPE ........... SIDE A, REWOUND           ┃┃     ╲  │  ╱     ═════════════   ┃                  
+                  ┃ ┃┃ TAPE ........... SIDE A, REWOUND           ┃┃     ╲ ╱   ╱     ═════════════   ┃                  
                   ┃ ┃┃ HEADLIGHTS ..... ON                        ┃┃      ╰───╯      ═════════════   ┃                  
                   ┃ ┃┃ The night is young. It always              ┃┃      TUNE                       ┃                  
                   ┃ ┃┃                                            ┃┃                                 ┃                  

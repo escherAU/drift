@@ -1,0 +1,61 @@
+{
+  "palette": {
+    "hue": "#3FE8FF",
+    "bg": "#05060C",
+    "colours": ["#EAF2FF", "#8A9BC4", "#2A3A66", "#4A6AB0", "#A77BFF", "#FF4FD8", "#FFD36B", "#5CFFB8"],
+    "ui": { "text": 16, "dim": 17, "head": 15, "accent": 15 }
+  },
+  "frame": {
+    "show": "menu",
+    "glyphs": "╭─╮│╯─╰│",
+    "title": "DRIFTMAN 9000",
+    "colour": 19,
+    "ornament": "◇ ─── ◆ ─── ◇"
+  },
+  "console": {
+    "frame": "╭─╮│╯─╰│",
+    "grille": "█",
+    "stripe": "────◇────◆",
+    "ink": { "frame": 1, "grille": 2, "stripe": 2, "led": 3, "bar": 3 },
+    "title": { "style": "spaced", "ornament": "◇ ─── ◆ ─── ◇", "colour": 15, "ornamentColour": 17 }
+  },
+  "menu": {
+    "layout": "grid",
+    "anchor": "center",
+    "cursor": "◆",
+    "title": "THE THREE VISIONS",
+    "box": "╭─╮│╯─╰│",
+    "prompt": "Choose a vision, or let the machine dream.",
+    "autostartSeconds": 15
+  },
+  "help": {
+    "title": "LUMEN CORE · keys",
+    "box": "╭─╮│╯─╰│",
+    "groups": { "Cartridge": "Visions", "Other": "Machine" },
+    "modeLabel": "machine",
+    "sceneLabel": "vision"
+  },
+  "boot": {
+    "lines": ["CORE 2.0 ....... SUPERSEDED", "LUMEN CORE ..... 9.0", "MEMORY ......... ALL OF IT", "Good morning. It has been a while."],
+    "art": false,
+    "valueColour": 23
+  },
+  "insert": { "text": "SIGNAL FROM THE FAR FUTURE · HOLD STILL" },
+  "wording": {
+    "keys": {
+      "menu": "open index, or choose",
+      "menu-prev": "index: previous vision",
+      "menu-next": "index: next vision",
+      "close": "close the index or keys",
+      "eject": "fold away and eject",
+      "scene-next": "next vision",
+      "pause": "hold the moment, go on",
+      "faster": "dream faster",
+      "slower": "dream slower",
+      "seasons": "colours: all, always",
+      "help": "show or hide these keys",
+      "quit": "quit Drift"
+    },
+    "menuHint": "arrows choose · Enter wakes it · e folds away · h keys"
+  }
+}

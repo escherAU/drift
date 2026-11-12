@@ -36,10 +36,10 @@ function expectSkip(files, re, opts = {}) {
 
 // ---- the install folder
 
-test('install cartridges/ folder: zero errors, Classic first, then Delza and Night Drive (both playable) and the two locked ones', () => {
+test('install cartridges/ folder: zero errors, Classic first, then Delza, the Driftman 9000 and Night Drive (all playable) and the two locked ones', () => {
   const r = discover(INSTALL_DIR, true);
   assert.deepEqual(r.errors, []);
-  assert.deepEqual(r.cartridges.map((c) => c.id), ['classic', 'arcade', 'delza', 'last-fantasy', 'night-drive']);
+  assert.deepEqual(r.cartridges.map((c) => c.id), ['classic', 'arcade', 'delza', 'driftman-9000', 'last-fantasy', 'night-drive']);
   const classic = r.cartridges[0];
   assert.equal(classic.runtime, 'classic');
   assert.equal(classic.locked, false);
@@ -51,7 +51,7 @@ test('install cartridges/ folder: zero errors, Classic first, then Delza and Nig
   const nd = r.cartridges.find((c) => c.id === 'night-drive');
   assert.equal(nd.locked, false);
   assert.equal(nd.runtime, 'cartridge');
-  const locked = r.cartridges.filter((c) => c.id !== 'classic' && c.id !== 'delza' && c.id !== 'night-drive');
+  const locked = r.cartridges.filter((c) => c.id !== 'classic' && c.id !== 'delza' && c.id !== 'night-drive' && c.id !== 'driftman-9000');
   assert.equal(locked.length, 2);
   assert.deepEqual(locked.map((c) => c.id), ['arcade', 'last-fantasy']);
   assert.ok(locked.every((c) => c.locked === true && c.manifest.scenes === undefined));

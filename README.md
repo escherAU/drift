@@ -223,7 +223,7 @@ snap to their place instead of sliding. This is a deliberate cost choice: moving
 the distance, and a continuous slide there wrote about twice the bytes of the full tier.
 
 Each unlocked card shows its manifest `code` on its name plate and on the console screen (a locked card shows SOON there instead). The scheme is DM-00 Classic, DM-01 Delza, DM-02 Night Drive,
-DM-03 Arcade and DM-04 Last Fantasy; a card only appears when its folder exists. Delza (DM-01) and Night Drive (DM-02) are installed and playable, so the shelf is Classic, Arcade, Delza, Last Fantasy and Night Drive (the loader sorts the folders by name, Classic first); Arcade and Last Fantasy are still coming-soon cards. Any
+DM-03 Arcade and DM-04 Last Fantasy, plus the one deliberate outlier DM-9K, the Driftman 9000; a card only appears when its folder exists. Delza (DM-01), the Driftman 9000 (DM-9K) and Night Drive (DM-02) are installed and playable, so the shelf is Classic, Arcade, Delza, Driftman 9000, Last Fantasy and Night Drive (the loader sorts the folders by name, Classic first); Arcade and Last Fantasy are still coming-soon cards. Any
 manifest (including a data-only user cartridge) may set `code` and `facts`.
 
 ### What a cartridge is: the folder format
@@ -431,6 +431,14 @@ rings, 6 trails and the 20x4 car; under 60x18, 2 rings and 3 trails. Its skyline
 tape deck open and after a track picked from it (exit 0); `Ctrl+C` from the playing tape exits 130, as everywhere else; all are checked against the real
 process in `tests/real-process.test.js`, and the terminal is restored each time.
 
+### Driftman 9000, the full-colour cartridge (in progress)
+
+The Driftman 9000 (DM-9K, `cartridges/driftman-9000/`, format 2) is the first cartridge whose scenes are full colour (`rgb`) and whose shelf card has a
+holo `foil`. This stage is the shell: manifest, skin, a symmetric 24x10 label, the Lumen Core wording for the keys and the menu, and one placeholder
+vision, Rosette (a kaleidoscope whose hue goes round the wheel through `safeHue` at one lightness; below 60 x 20 it draws a centred dim line instead). Its
+code sorts it between Delza and Last Fantasy on the shelf. On a 256-colour terminal the renderer's lookup is red-safe: a colour with a linear red share under
+0.8 never lands on a saturated red of the 256 palette.
+
 ### Where cartridges are read from, and the trust rule
 
 | folder | trusted | may hold |
@@ -550,7 +558,7 @@ bin/drift.js      entry   bin/drift.cmd  shim  tools/          capture.mjs measu
 src/cartridge/    schema.js (ids, limits, validators)  loader.js (discover + load)  textscene.js  palette.js
 src/shell/        the console: shell.js (screen machine)  runtime.js (a running cartridge)  library.js insert.js
                   boot.js menu.js chrome.js ui.js (pure draw functions)  driftman.js (the console's own skin)
-cartridges/       the install cartridges: classic, delza and night-drive (manifest, skin, label, scenes/, lib/; night-drive also boot.txt) and the locked ones (label.txt + manifest.json each)
+cartridges/       the install cartridges: classic, delza, driftman-9000 and night-drive (manifest, skin, label, scenes/, lib/; night-drive also boot.txt) and the locked ones (label.txt + manifest.json each)
 ```
 
 Non-calm scene contract (`src/cells.js`): `kind: 'cells'` scenes are `scene(t, w, h, params)`
@@ -579,14 +587,14 @@ not a TTY, drift prints a message and exits 0 without emitting any escape sequen
 npm test            # node --test, no dependencies
 ```
 
-The suite is 1606 tests in `tests/*.test.js` and takes 45 to 80 seconds depending on the machine (test files run in parallel; the real-process arms start the real program and wait in real time, about 28 s of that). The cartridge work is
+The suite is 2037 tests in `tests/*.test.js` and takes 45 to 80 seconds depending on the machine (test files run in parallel; the real-process arms start the real program and wait in real time, about 28 s of that). The cartridge work is
 covered by `cartridge-schema` (validators, text scene, skin palette), `cartridge-loader`
 (every way a cartridge can be wrong, and both arms of the trust rule), `cartridge-scenes` (every
 install cartridge's scenes through the size, glyph, colour, determinism and flash checks, with controls
 that must fail), `cartridges` (glyph and import scans over `cartridges/`), `config-extras`, `shell-app`
 (the console at app level on a fake clock), `shell-draw` and `shell-flash` (every screen at every size,
 and the photosensitivity checks), `tools-cartridges` (the cartridge captures and `measure.mjs` options),
-`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge`, `night-drive-onramp`, `night-drive-skyline`, `night-drive-sundown`, `night-drive-coast`, `night-drive-redlight`, `night-drive-diner`, `night-drive-caller`, `night-drive-overdrive`, `night-drive-menu`, `night-drive-phase`, `night-drive-flash`, `night-drive-matrix-cells`, `night-drive-matrix-dissolve`, `night-drive-matrix-sims`, `night-drive-phase-sizes`, `night-drive-redlight-sizes`, `night-drive-shell-edges`, `night-drive-shell-edges-b`, `night-drive-shell-eject`, `night-drive-shell-keyframes`, `night-drive-skin-contrast` and `night-drive-banned-glyphs`, with the helpers `helpers-night-drive`, `helpers-night-drive-matrix` and `helpers-night-drive-shell` (Night Drive's skin, palette, label, boot art, manifest, help panel, the road, sprites and calm bounds of its first track, the sun, grid, loop and calm bounds of Sundown Grid, the purity, light change, wiper, rain, buildings and calm bounds of Red Light, Rain, and the ring schedule, light trails, phases, exit dissolve and changed-cell bounds of Overdrive), and the cartridge arms of `real-process` (below).
+`readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge`, `night-drive-onramp`, `night-drive-skyline`, `night-drive-sundown`, `night-drive-coast`, `night-drive-redlight`, `night-drive-diner`, `night-drive-caller`, `night-drive-overdrive`, `night-drive-menu`, `night-drive-phase`, `night-drive-flash`, `night-drive-matrix-cells`, `night-drive-matrix-dissolve`, `night-drive-matrix-sims`, `night-drive-phase-sizes`, `night-drive-redlight-sizes`, `night-drive-shell-edges`, `night-drive-shell-edges-b`, `night-drive-shell-eject`, `night-drive-shell-keyframes`, `night-drive-skin-contrast` and `night-drive-banned-glyphs`, `driftman-9000-cartridge` (the Driftman 9000: loader, manifest, skin, label, trust arms, the Rosette placeholder), `install-key-labels` (every install cartridge words its keys in 23 characters or fewer) and `renderer-256-redsafe` (the 256-colour lookup never turns a red-safe colour into a saturated red), with the helpers `helpers-night-drive`, `helpers-night-drive-matrix` and `helpers-night-drive-shell` (Night Drive's skin, palette, label, boot art, manifest, help panel, the road, sprites and calm bounds of its first track, the sun, grid, loop and calm bounds of Sundown Grid, the purity, light change, wiper, rain, buildings and calm bounds of Red Light, Rain, and the ring schedule, light trails, phases, exit dissolve and changed-cell bounds of Overdrive), and the cartridge arms of `real-process` (below).
 The console hook (DRIFT-7) is covered by `console-hook-loader` (the manifest field, the export check, both arms of the trust rule, the smoke render), `console-hook-shell` (the body and overlay split, writes only inside the rect, the insert, boot and eject wiring, the single decision, the morph's seam and the palette remap), `console-hook-flash` (the flash meter over the whole insert, boot and eject at six sizes, with a strobing control) and `console-hook-nohook` (every frame of a whole run of Classic, Night Drive and Delza, hashed against the tree before the hook), with the helper `helpers-console-hook`.
 
 Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by

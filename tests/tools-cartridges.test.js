@@ -400,8 +400,10 @@ test('measure --cartridge all: one target per unlocked scene (each with a progra
   assert.deepEqual(t.find((x) => x.scene === 'tide'), { cartridge: 'fixture', program: 'mix', scene: 'tide' });
   const delza = discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] }).cartridges.find((c) => c.id === 'delza');
   const nd = discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] }).cartridges.find((c) => c.id === 'night-drive');
+  const dm = discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] }).cartridges.find((c) => c.id === 'driftman-9000');
   assert.deepEqual(cartridgeTargets(), [
     ...delza.manifest.scenes.map((s) => ({ cartridge: 'delza', program: 'tale', scene: s.id })),
+    ...dm.manifest.scenes.map((s) => ({ cartridge: 'driftman-9000', program: 'transmission', scene: s.id })),
     ...nd.manifest.scenes.map((s) => ({ cartridge: 'night-drive', program: 'tape', scene: s.id })),
-  ], 'the install holds two real cartridges: Delza (her tale) and Night Drive (its tape), one target per scene');
+  ], 'the install holds three real cartridges: Delza (her tale), the Driftman 9000 (its transmission) and Night Drive (its tape), one target per scene');
 });

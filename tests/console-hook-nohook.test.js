@@ -17,8 +17,11 @@ const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) =>
 
 async function runHash(cartId, cols, rows) {
   const d = discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] });
+  // DRIFT-7 C6: the Driftman 9000 joined the shelf, which the insert and library frames show. These pins are about the cartridges
+  // that existed when they were recorded, so the shelf is held to those (the 9000 has its own shell captures).
+  const cartridges = d.cartridges.filter((c) => c.id !== 'driftman-9000');
   const sh = createShell({
-    cols, rows, cartridges: d.cartridges, seed: 1, cmode: 'truecolor', host: HOST,
+    cols, rows, cartridges, seed: 1, cmode: 'truecolor', host: HOST,
     consts: { SPEEDS, DISSOLVE_SECONDS: 2, DEFAULT_FADE_SECONDS: 15 },
     start: { cartridge: cartId },
   });
