@@ -3,3 +3,4 @@
 captures/*.txt -text
 bin/drift.js text eol=lf
 captures/*.ansi -text
+captures-ansi/*.ansi -text
