@@ -252,11 +252,11 @@ that is a cartridge folder or one of its files is not followed (the cartridge is
 errors ("unknown field 'titel'"). A cartridge that cannot be loaded is skipped with a reason
 and never stops the others; at most 50 cartridges are read.
 
-**Manifest** (`manifest.json`; `format` greater than 1 gives "needs a newer Drift"):
+**Manifest** (`manifest.json`; `format` greater than 2 gives "needs a newer Drift"):
 
 | field | required | meaning |
 |---|---|---|
-| `format` | yes | `1` |
+| `format` | yes | `1`, or `2` for a cartridge with a full-colour (`rgb`) scene (a field that needs format 2 in a format 1 manifest gives "needs a newer Drift") |
 | `id` | yes | 2 to 32 characters: lowercase letters, digits, hyphens, starting with a letter, not ending in a hyphen. Must equal the folder name. Reserved: `last`, `con`, `prn`, `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9`; `classic` only in the install folder |
 | `title` | yes | up to 30 characters |
 | `version` | yes | `1.0.0` form (three whole numbers) |
@@ -267,7 +267,7 @@ and never stops the others; at most 50 cartridges are read.
 | `code` | any | exactly 5 characters, capitals, digits or hyphen (like `DM-01`): the shelf code shown beside the title |
 | `facts` | any | up to 6 lines of up to 40 characters, listed under the blurb on the console screen of an unlocked card (full tier) |
 | `labelHue` | no | `#RRGGBB`: the tint of the library card |
-| `scenes` | yes (1 to 16) | list of `{ id, kind, title?, ref? }`. `id` follows the id rule; `kind` is `cells`, `sim`, `field` (code, install only), `text` (a `scenes/<id>.txt` file) or `builtin`; `title` up to 30 characters; `ref` (builtin only) names a Classic **calm** or **experimental** scene, such as `sand` or `plasma` |
+| `scenes` | yes (1 to 16) | list of `{ id, kind, title?, ref?, rgb? }`. `id` follows the id rule; `kind` is `cells`, `sim`, `field` (code, install only), `text` (a `scenes/<id>.txt` file) or `builtin`; `title` up to 30 characters; `ref` (builtin only) names a Classic **calm** or **experimental** scene, such as `sand` or `plasma`; `rgb` (`true`, on `cells` and `sim` scenes only, install folder only, needs `format` 2 and a `skin.json` with `palette.bg`) marks a full-colour scene: the scene fills `params.fg` and `params.bg` (0xRRGGBB per cell) and the composer pre-fills its colours with 255, which means "this cell's colours are in fg and bg"; the scene module declares `rgb = true` too |
 | `programs` | yes (1 to 8) | list of `{ id, title?, transition, scenes, sceneSeconds?, seconds?, fadeSeconds? }`: `transition` is `dissolve` or `crossfade`; `scenes` lists scene ids (1 to 16); `sceneSeconds` 20 to 3600 (default 180); `seconds` (optional) is an object keyed by scene id that gives single scenes their own time, 20 to 3600 each (a key must be a scene in this program; scenes not named use `sceneSeconds`); `fadeSeconds` 5 to 60 (default 15, crossfade only, and shorter than the shortest scene time: `sceneSeconds` or any `seconds` entry). A `crossfade` program holds only `field` scenes and calm builtins; a `dissolve` program holds `cells`, `sim`, `text` and experimental builtins |
 | `start` | yes | the id of the program that plays first |
 | `menu` | no (1 to 10) | list of entries: `{ label, program, scene?, note?, desc? }` or `{ label, action: "eject", note? }`. `label` up to 24 characters. `scene` (only with `program`) is a scene id in that program: choosing the entry starts the program at that scene, and a scene entry is marked as playing only while that scene plays (choosing the scene that is already playing, or the playing program with no `scene`, changes nothing). `note` up to 16 characters is a short tag at the right of the entry (in the list the box widens to hold it; in the slots layout it sits on the label row; in the grid it is a row under the label; it is left out when there is no room for it as well as the whole label). `desc` up to 76 characters is shown, wrapped to two lines above the hint, for the highlighted entry in the `list` layout (left out when the window is too short, before the title); in the `slots` layout it is the second row of the entry's card, and an entry that names a chapter falls back to the chapter's `line` when it has no `desc`. Without a `menu` the menu is one entry per program plus Eject |

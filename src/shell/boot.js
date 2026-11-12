@@ -242,13 +242,13 @@ function drawRect(f, r, glyphs, edge) {
 // its edges rewrites the border rows and columns, which is 36% of a 40 x 10 screen for a two row step and 38% for the
 // one column zoom to the full frame. There the rectangle changes by dissolve instead (the frame from A to B, cell by
 // cell in the shell's dissolve order, p 0..1): the border cells swap over several frames.
-function dissolveRects(f, drawA, drawB, p) {
+export function dissolveRects(f, drawA, drawB, p) {
   const A = newFrame(f.cols, f.rows), B = newFrame(f.cols, f.rows);
   drawA(A); drawB(B);
   const thr = dissolveThresholds(f.cols * f.rows);
   for (let i = 0; i < f.glyphs.length; i++) {
     const src = p >= thr[i] ? B : A;
-    f.glyphs[i] = src.glyphs[i]; f.shades[i] = src.shades[i];
+    f.glyphs[i] = src.glyphs[i]; f.shades[i] = src.shades[i]; f.fg[i] = src.fg[i]; f.bg[i] = src.bg[i];
   }
 }
 

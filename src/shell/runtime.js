@@ -29,13 +29,15 @@ export const SEASON_SECONDS = 0.6;
 export const SEASON_STEPS = 6;
 
 // out = A where p < thr, B where p >= thr (p = 0 is exactly A, p = 1 exactly B). out may be A.
+// A cell moves whole: glyph, shade and, when out carries fg/bg (full-colour cells, DRIFT-7), its colours with it.
+// A frame without fg/bg (a plain palette frame) is fine as out only when it is fine as A and B too.
 export function dissolveFrames(A, B, p, thr, out) {
-  const g = out.glyphs, s = out.shades;
+  const g = out.glyphs, s = out.shades, f = out.fg, b = out.bg;
   const n = g.length;
-  if (p <= 0) { if (out !== A) { g.set(A.glyphs); s.set(A.shades); } return out; }
-  if (p >= 1) { g.set(B.glyphs); s.set(B.shades); return out; }
+  if (p <= 0) { if (out !== A) { g.set(A.glyphs); s.set(A.shades); if (f) { f.set(A.fg); b.set(A.bg); } } return out; }
+  if (p >= 1) { g.set(B.glyphs); s.set(B.shades); if (f) { f.set(B.fg); b.set(B.bg); } return out; }
   for (let i = 0; i < n; i++) {
-    if (p >= thr[i]) { g[i] = B.glyphs[i]; s[i] = B.shades[i]; } else if (out !== A) { g[i] = A.glyphs[i]; s[i] = A.shades[i]; }
+    if (p >= thr[i]) { g[i] = B.glyphs[i]; s[i] = B.shades[i]; if (f) { f[i] = B.fg[i]; b[i] = B.bg[i]; } } else if (out !== A) { g[i] = A.glyphs[i]; s[i] = A.shades[i]; if (f) { f[i] = A.fg[i]; b[i] = A.bg[i]; } }
   }
   return out;
 }
@@ -73,7 +75,7 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
   const menu = { open: false, index: 0, idle: 0, p: 0 };
   let auto = null; // seconds left on the menu's start-by-itself countdown (skin.menu.autostartSeconds), or null
   let autoShown = null; // the whole second last drawn, so a redraw is asked for once a second
-  let xfade = null; // { glyphs, shades, t } the frame we dissolve away from after a program switch
+  let xfade = null; // { glyphs, shades, fg, bg, t } the frame we dissolve away from after a program switch
   let last = null; // copy of the last scene frame (before overlays)
   let forced = true;
 
@@ -121,7 +123,7 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
       const st = prog.sched.state();
       if (st.a === start) return;
     }
-    if (last) xfade = { glyphs: last.glyphs.slice(), shades: last.shades.slice(), t: 0 };
+    if (last) xfade = { glyphs: last.glyphs.slice(), shades: last.shades.slice(), fg: last.fg.slice(), bg: last.bg.slice(), t: 0 };
     cur = id;
     prog.sched = mkSched(prog.def, start);
     forced = true;
@@ -195,17 +197,18 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
     return prog.family === 'field' ? fieldComp.frame(mapped, t) : cellComp.frame(mapped, t);
   }
 
-  // Fill out ({ glyphs, shades, cols, rows }) with the scene, the dissolve after a program switch, and
+  // Fill out ({ glyphs, shades, fg, bg, cols, rows }) with the scene, the dissolve after a program switch, and
   // the chrome and menu overlays (which ramp in and out as a dissolve, never a pop).
   function frame(out) {
     const f = sceneFrame();
     out.glyphs.set(f.glyphs);
     out.shades.set(f.shades);
-    if (!last || last.glyphs.length !== out.glyphs.length) last = { glyphs: new Uint16Array(out.glyphs.length), shades: new Uint8Array(out.glyphs.length) };
-    last.glyphs.set(out.glyphs); last.shades.set(out.shades);
+    if (f.fg) { out.fg.set(f.fg); out.bg.set(f.bg); } // only the cell composer has colours; a field frame has none (and no 255 cells)
+    if (!last || last.glyphs.length !== out.glyphs.length) last = { glyphs: new Uint16Array(out.glyphs.length), shades: new Uint8Array(out.glyphs.length), fg: new Uint32Array(out.glyphs.length), bg: new Uint32Array(out.glyphs.length) };
+    last.glyphs.set(out.glyphs); last.shades.set(out.shades); last.fg.set(out.fg); last.bg.set(out.bg);
     if (xfade) {
       const thr = dissolveThresholds(out.glyphs.length);
-      dissolveFrames(xfade, { glyphs: last.glyphs, shades: last.shades }, smoothstep(xfade.t / DISSOLVE_SECONDS), thr, out);
+      dissolveFrames(xfade, last, smoothstep(xfade.t / DISSOLVE_SECONDS), thr, out);
     }
     const show = skin.frame && skin.frame.show;
     if (show === 'always') drawChrome(out, skin);
@@ -216,7 +219,7 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
     };
     if (menu.p >= 1) overlay(out);
     else if (menu.p > 0) {
-      const tmp = { glyphs: out.glyphs.slice(), shades: out.shades.slice(), cols: out.cols, rows: out.rows };
+      const tmp = { glyphs: out.glyphs.slice(), shades: out.shades.slice(), fg: out.fg.slice(), bg: out.bg.slice(), cols: out.cols, rows: out.rows };
       overlay(tmp);
       dissolveFrames(out, tmp, menu.p, dissolveThresholds(out.glyphs.length), out);
     }

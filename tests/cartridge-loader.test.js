@@ -113,9 +113,10 @@ test("an unknown field is rejected by name: unknown field 'titel'", () => {
   expectSkip({ 'manifest.json': dataManifest('c1', { titel: 'x' }), 'label.txt': LABEL }, /unknown field 'titel'/);
 });
 
-test('format 2 needs a newer Drift; format 1 is fine', () => {
-  expectSkip({ 'manifest.json': dataManifest('c1', { format: 2 }), 'label.txt': LABEL }, /needs a newer Drift/);
+test('format 3 needs a newer Drift; formats 1 and 2 are fine', () => {
+  expectSkip({ 'manifest.json': dataManifest('c1', { format: 3 }), 'label.txt': LABEL }, /needs a newer Drift/);
   assert.equal(one(base('c1')).r.cartridges.length, 1);
+  assert.equal(one({ 'manifest.json': dataManifest('c1', { format: 2 }), 'label.txt': LABEL }).r.cartridges.length, 1);
 });
 
 test('the folder name must equal the manifest id', () => {

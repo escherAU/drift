@@ -18,6 +18,7 @@ import { paletteLength } from './palette.js';
 import { PLAYLISTS } from '../scenes/index.js';
 import { renderScene, sceneKind } from '../cells.js';
 import { isAllowedGlyph } from '../glyphs.js';
+import { RGB_CELL, PALETTE_BG } from '../renderer.js';
 
 // <repo>/cartridges, found from this file's own location.
 export const INSTALL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'cartridges');
@@ -132,6 +133,10 @@ function loadOne(dir, name, trusted) {
     if (!sr.ok) skip(`skin.json: ${sr.reason}`);
     cart.skin = sr.skin;
   }
+  // a full-colour scene paints its own background in every cell, so the skin must say what the screen's background is
+  if (manifest.scenes.some((sc) => sc.rgb === true) && !(cart.skin && cart.skin.palette && cart.skin.palette.bg)) {
+    skip('a cartridge with a full-colour (rgb) scene needs skin.json with palette.bg');
+  }
   // boot.txt (optional)
   const bootFile = path.join(cartDir, 'boot.txt');
   if (fs.existsSync(bootFile)) {
@@ -221,6 +226,9 @@ function checkExport(mod, sc, file) {
   if (kind !== sc.kind) return `${name}: the manifest says '${sc.kind}' but the scene has kind ${JSON.stringify(kind)}`;
   if (sc.kind === 'cells' && typeof s !== 'function') return `${name}: a cells scene must be a function`;
   if (sc.kind === 'sim') for (const f of ['init', 'step', 'draw']) if (typeof s[f] !== 'function') return `${name}: a sim scene needs a '${f}' function`;
+  // full colour is declared twice, in the manifest and on the scene, and the two must agree
+  if (sc.rgb === true && s.rgb !== true) return `${name}: the manifest says rgb but the scene does not declare rgb = true`;
+  if (sc.rgb !== true && s.rgb === true) return `${name}: the scene declares rgb = true but the manifest does not say rgb`;
   return null;
 }
 
@@ -239,6 +247,12 @@ function smoke(scene, sc, palLen) {
       const f = renderScene(scene, t, 20, 8, 1);
       for (let i = 0; i < f.glyphs.length; i++) {
         if (!isAllowedGlyph(f.glyphs[i])) return `${name}: smoke render drew U+${f.glyphs[i].toString(16).toUpperCase().padStart(4, '0')}, which is not an allowed glyph`;
+        // a full-colour scene's cell may be RGB_CELL: then its fg is a colour and its bg a colour or PALETTE_BG
+        if (sc.rgb === true && f.colours[i] === RGB_CELL) {
+          if (f.fg[i] > 0xFFFFFF) return `${name}: smoke render drew a full-colour cell with fg 0x${f.fg[i].toString(16).toUpperCase()}, which is past 0xFFFFFF`;
+          if (f.bg[i] > 0xFFFFFF && f.bg[i] !== PALETTE_BG) return `${name}: smoke render drew a full-colour cell with bg 0x${f.bg[i].toString(16).toUpperCase()}, which is past 0xFFFFFF (PALETTE_BG is the only larger value)`;
+          continue;
+        }
         if (f.colours[i] >= palLen) return `${name}: smoke render used colour ${f.colours[i]} but the palette has ${palLen} entries`;
       }
     }
@@ -281,7 +295,7 @@ export async function loadScenes(cart) {
       }
     }
     if (reason) errors.push({ where, reason });
-    else scenes.push({ id: sc.id, kind: sc.kind, title: sc.title, ...(sc.ref ? { ref: sc.ref } : {}), family: sceneFamily(sc), scene });
+    else scenes.push({ id: sc.id, kind: sc.kind, title: sc.title, ...(sc.ref ? { ref: sc.ref } : {}), ...(sc.rgb === true ? { rgb: true } : {}), family: sceneFamily(sc), scene });
   }
   return errors.length ? { scenes: [], errors } : { scenes, errors };
 }

@@ -8,7 +8,7 @@
 import { SCENES, PLAYLISTS, findScene, allSceneIds } from './scenes/index.js';
 import { Scheduler, createComposer } from './compose.js';
 import { createCellComposer } from './cells.js';
-import { createRenderer, SYNC_BEGIN, SYNC_END } from './renderer.js';
+import { createRenderer, SYNC_BEGIN, SYNC_END, RGB_CELL } from './renderer.js';
 import { createTerminal, installGuards } from './term.js';
 import { loadConfig, updateConfig, defaultConfigPath, loadExtras } from './config.js';
 import {
@@ -151,7 +151,7 @@ export function createApp(o) {
   const seed = o.seed ?? DEFAULTS.seed;
 
   const term = createTerminal({ stdin, stdout });
-  const renderer = createRenderer();
+  const renderer = o.renderer || createRenderer(); // tests may pass a spy
   let { cols, rows } = term.size();
   const composer = createComposer({ scenes, cols, rows, seed });
   const cellComps = {};
@@ -218,6 +218,15 @@ export function createApp(o) {
     return list[sched(shown.mode).cur].id;
   }
 
+  // What the renderer is handed for frame f. fg/bg (and the colour mode, which the renderer needs to pick 24-bit or 256-colour
+  // output) are attached ONLY when a full-colour cell (shade RGB_CELL) is on screen, so a palette-only frame is exactly the
+  // four-field object it always was and the renderer never takes its full-colour branch for it.
+  function renderArgs(f, pal) {
+    const a = { cols, rows, glyphs: f.glyphs, shades: f.shades, palette: pal };
+    if (f.fg && f.shades.indexOf(RGB_CELL) !== -1) { a.fg = f.fg; a.bg = f.bg; a.mode = cmode; }
+    return a;
+  }
+
   function renderFrame() {
     if (shown.shell && shell) return renderShellFrame();
     const sc = sched(shown.mode);
@@ -229,7 +238,7 @@ export function createApp(o) {
       });
     }
     lastFrame = f;
-    const out = renderer.render({ cols, rows, glyphs: f.glyphs, shades: f.shades, palette: pal });
+    const out = renderer.render(renderArgs(f, pal));
     // one write per frame; synchronized output (DEC 2026) so the terminal paints it atomically
     if (out) stdout.write(SYNC_BEGIN + out + SYNC_END);
     dirty = false;
@@ -243,7 +252,7 @@ export function createApp(o) {
     if (shellPal && shellPal.key !== f.palette.key && (!!shellPal.bg !== !!f.palette.bg || shellPal.base !== f.palette.base)) renderer.invalidate();
     shellPal = f.palette;
     lastFrame = f;
-    const out = renderer.render({ cols, rows, glyphs: f.glyphs, shades: f.shades, palette: f.palette });
+    const out = renderer.render(renderArgs(f, f.palette));
     if (out) stdout.write(SYNC_BEGIN + out + SYNC_END);
     dirty = false;
   }
@@ -470,7 +479,12 @@ export function createApp(o) {
     handleKey,
     actions: ACTIONS,
     // a copy of the last frame drawn (help panel included), for tests and captures
-    screenshot: () => (lastFrame ? { cols, rows, glyphs: lastFrame.glyphs.slice(), shades: lastFrame.shades.slice(), palette: lastFrame.palette } : null),
+    screenshot: () => {
+      if (!lastFrame) return null;
+      const s = { cols, rows, glyphs: lastFrame.glyphs.slice(), shades: lastFrame.shades.slice(), palette: lastFrame.palette };
+      if (lastFrame.fg && lastFrame.shades.indexOf(RGB_CELL) !== -1) { s.fg = lastFrame.fg.slice(); s.bg = lastFrame.bg.slice(); s.mode = cmode; }
+      return s;
+    },
     getState: () => ({
       t, speed: SPEEDS[speedIdx], paused, colour: cfg.colour, cols, rows,
       sceneIndex: sched(shown.mode).cur, fading: sched(shown.mode).fading, running,

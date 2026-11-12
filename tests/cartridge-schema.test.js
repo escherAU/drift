@@ -8,8 +8,8 @@ import { renderScene } from '../src/cells.js';
 import { sgrFor, parseHex } from '../src/color.js';
 import { dataManifest, lockedManifest } from './helpers-cartridge.js';
 
-test('schema constants: FORMAT 1, the id pattern, the reserved list', () => {
-  assert.equal(FORMAT, 1);
+test('schema constants: FORMAT 2, the id pattern, the reserved list', () => {
+  assert.equal(FORMAT, 2);
   assert.equal(ID_RE.source, '^[a-z][a-z0-9-]{0,30}[a-z0-9]$');
   assert.deepEqual([...RESERVED].sort(), ['aux', 'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9', 'con', 'last', 'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9', 'nul', 'prn']);
   for (const ok of ['ab', 'delza', 'night-drive', 'a1', 'x'.repeat(32)]) assert.ok(ID_RE.test(ok), ok);

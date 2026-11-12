@@ -1,5 +1,6 @@
 // Small drawing helpers shared by the console screens (DRIFT-4). Pure: they write into a frame
-// { glyphs: Uint16Array, shades: Uint8Array, cols, rows } and never throw, whatever the size.
+// { glyphs: Uint16Array, shades: Uint8Array, fg: Uint32Array, bg: Uint32Array, cols, rows } and never throw, whatever the
+// size. fg/bg (0xRRGGBB) are read only for a cell whose shade is RGB_CELL (255); every copy of a frame copies them too.
 import { fadeOffsets } from '../compose.js';
 import { DEFAULT_UI } from '../cartridge/palette.js';
 
@@ -13,7 +14,7 @@ export function uiOf(skin) {
 
 export function newFrame(cols, rows) {
   const c = Math.max(0, cols | 0), r = Math.max(0, rows | 0);
-  return { glyphs: new Uint16Array(c * r).fill(32), shades: new Uint8Array(c * r), cols: c, rows: r };
+  return { glyphs: new Uint16Array(c * r).fill(32), shades: new Uint8Array(c * r), fg: new Uint32Array(c * r), bg: new Uint32Array(c * r), cols: c, rows: r };
 }
 
 // Every cell blank, shade 0 (a blank cell always has shade 0, so frame diffs stay honest).

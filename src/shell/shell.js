@@ -23,6 +23,7 @@ import { drawInsert, INSERT_END } from './insert.js';
 import { drawBoot, bootPhases, mergeBootPalette, FIRST_INSERT_HINT } from './boot.js';
 import { createCartridgeRuntime, dissolveFrames } from './runtime.js';
 import { newFrame, clearFrame, ramp, sizeTier, dissolveThresholds } from './ui.js';
+import { RGB_CELL } from '../renderer.js';
 
 export const ERROR_SECONDS = 4;
 export const EJECT_SECONDS = 1.6;
@@ -60,6 +61,7 @@ export function libraryPalette(carts, cmode) {
 export function createShell(o) {
   const { cmode = 'truecolor', seed = 1, host, consts } = o;
   const loadScenes = o.loadScenes || defaultLoadScenes;
+  const drawInsertFn = o.drawInsert || drawInsert; // tests may swap the insert/eject picture (to put full-colour cells in a hand-over frame)
   const carts = o.cartridges || [];
   let { cols, rows } = o;
   let tier = sizeTier(cols, rows);
@@ -338,8 +340,8 @@ export function createShell(o) {
   }
 
   function keepForHandover(f) {
-    if (!handFrom || handFrom.cols !== cols || handFrom.rows !== rows) handFrom = { glyphs: new Uint16Array(cols * rows), shades: new Uint8Array(cols * rows), cols, rows };
-    handFrom.glyphs.set(f.glyphs); handFrom.shades.set(f.shades);
+    if (!handFrom || handFrom.cols !== cols || handFrom.rows !== rows) handFrom = { glyphs: new Uint16Array(cols * rows), shades: new Uint8Array(cols * rows), fg: new Uint32Array(cols * rows), bg: new Uint32Array(cols * rows), cols, rows };
+    handFrom.glyphs.set(f.glyphs); handFrom.shades.set(f.shades); handFrom.fg.set(f.fg); handFrom.bg.set(f.bg);
   }
 
   function frame() {
@@ -354,15 +356,15 @@ export function createShell(o) {
         }
         if (handT < LIBRARY_FADE_SECONDS && handFrom && handFrom.cols === cols && handFrom.rows === rows) {
           const p = ramp(handT, 0, LIBRARY_FADE_SECONDS), thr = dissolveThresholds(cols * rows);
-          for (let i = 0; i < f.glyphs.length; i++) if (p < thr[i]) { f.glyphs[i] = handFrom.glyphs[i]; f.shades[i] = handFrom.shades[i]; }
+          for (let i = 0; i < f.glyphs.length; i++) if (p < thr[i]) { f.glyphs[i] = handFrom.glyphs[i]; f.shades[i] = handFrom.shades[i]; f.fg[i] = handFrom.fg[i]; f.bg[i] = handFrom.bg[i]; }
         }
         if (helpOpen) drawHelp(f.glyphs, f.shades, cols, rows, helpInfo('library'));
         break;
       case 'insert':
-        drawInsert(f, { item: insertItem(), t: st }, driftmanSkin);
+        drawInsertFn(f, { item: insertItem(), t: st }, driftmanSkin);
         break;
       case 'eject':
-        drawInsert(f, { item: insertItem(), t: INSERT_END * (1 - ramp(st, 0, EJECT_SECONDS)) }, driftmanSkin);
+        drawInsertFn(f, { item: insertItem(), t: INSERT_END * (1 - ramp(st, 0, EJECT_SECONDS)) }, driftmanSkin);
         keepForHandover(f);
         break;
       case 'error':
@@ -398,7 +400,11 @@ export function createShell(o) {
       default: clearFrame(f);
     }
     forced = false;
-    return { glyphs: f.glyphs, shades: f.shades, cols, rows, palette: screen === 'running' && runtime ? runtime.palette() : palette() };
+    const out = { glyphs: f.glyphs, shades: f.shades, cols, rows, palette: screen === 'running' && runtime ? runtime.palette() : palette() };
+    // fg/bg ride along only when a full-colour cell is on screen, so every palette-only frame is exactly what it was before
+    // and the renderer never takes its full-colour branch for it
+    if (f.shades.indexOf(RGB_CELL) !== -1) { out.fg = f.fg; out.bg = f.bg; }
+    return out;
   }
 
   function resize(c, r) {

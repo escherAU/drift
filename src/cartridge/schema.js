@@ -8,7 +8,17 @@ import { relLuminance } from './palette.js';
 import { parseHex } from '../color.js';
 import { knownKeyIds, shellGroupIds } from '../keymap.js';
 
-export const FORMAT = 1;
+export const FORMAT = 2;
+
+// Fields that need a newer cartridge format than 1 (DRIFT-7). A cartridge that uses one while declaring an older format is
+// refused with "needs a newer Drift", so an older build says that instead of "unknown field". Add a field here to gate it
+// (the console hook and the foil label are meant to join: console: 2, foil: 2); formatGate(name, format) is the one check.
+export const FORMAT_GATES = Object.freeze({ rgb: 2 });
+export function formatGate(name, format) {
+  const need = FORMAT_GATES[name];
+  if (need === undefined || format >= need) return null;
+  return `needs a newer Drift ('${name}' is a format ${need} field; this cartridge says format ${format})`;
+}
 
 // Cartridge and scene ids. Lowercase, digits, hyphen; two to 32 characters; no path separators,
 // no drive colons, no dots, so an id can never name a path.
@@ -104,14 +114,22 @@ export function sceneFamily(entry) {
   return 'cells';
 }
 
-function validateScene(s, i, trusted) {
+function validateScene(s, i, trusted, format) {
   const where = `scenes[${i}]`;
   if (!isObj(s)) return fail(`${where} must be an object`);
-  const uk = unknownKey(s, ['id', 'kind', 'title', 'ref'], where);
+  const uk = unknownKey(s, ['id', 'kind', 'title', 'ref', 'rgb'], where);
   if (uk) return fail(uk);
   const ir = idReason(s.id, 'scene');
   if (ir) return fail(`${where}: ${ir}`);
   if (!SCENE_KINDS.includes(s.kind)) return fail(`${where} ('${s.id}'): kind must be one of ${SCENE_KINDS.join(', ')}`);
+  // rgb: true = a full-colour scene (fg/bg per cell). Cells and sim scenes only, install folder only, format 2 or later.
+  if (s.rgb !== undefined && typeof s.rgb !== 'boolean') return fail(`${where} ('${s.id}'): rgb must be true or false`);
+  if (s.rgb === true) {
+    if (s.kind !== 'cells' && s.kind !== 'sim') return fail(`${where} ('${s.id}'): rgb is only for cells and sim scenes, not ${s.kind}`);
+    if (!trusted) return fail(`${where} ('${s.id}'): rgb (full-colour) scenes are code, and code runs only from the install folder`);
+    const gate = formatGate('rgb', format);
+    if (gate) return fail(`${where} ('${s.id}'): ${gate}`);
+  }
   if (CODE_KINDS.includes(s.kind) && !trusted) return fail(`${where} ('${s.id}'): ${CODE_REASON}`);
   if (s.title !== undefined) { const e = strErr(s.title, `${where}.title`, LIMITS.sceneTitle); if (e) return fail(e); }
   if (s.kind === 'builtin') {
@@ -124,6 +142,7 @@ function validateScene(s, i, trusted) {
   }
   const out = { id: s.id, kind: s.kind, title: s.title === undefined ? s.id : s.title };
   if (s.kind === 'builtin') out.ref = s.ref;
+  if (s.rgb === true) out.rgb = true;
   return { ok: true, scene: out };
 }
 
@@ -302,7 +321,7 @@ export function validateManifest(obj, { trusted = false } = {}) {
   const scenes = [];
   const byId = new Map();
   for (let i = 0; i < obj.scenes.length; i++) {
-    const r = validateScene(obj.scenes[i], i, trusted);
+    const r = validateScene(obj.scenes[i], i, trusted, obj.format);
     if (!r.ok) return r;
     if (byId.has(r.scene.id)) return fail(`scenes[${i}]: duplicate scene id '${r.scene.id}'`);
     byId.set(r.scene.id, r.scene);
