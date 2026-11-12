@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { runCaptureCartridges, cartridgeCaptureNames, nightDriveCaptureNames, CART_MOMENTS, EJECT_MOMENTS, MODE_CAPTURE_NAMES, CAPTURE_NAMES, FIGHT_MOMENTS, CUTSCENE_MOMENTS, HINT_MOMENT } from '../tools/capture.mjs';
+import { runCaptureCartridges, cartridgeCaptureNames, nightDriveCaptureNames, driftman9000CaptureNames, CART_MOMENTS, EJECT_MOMENTS, MODE_CAPTURE_NAMES, CAPTURE_NAMES, FIGHT_MOMENTS, CUTSCENE_MOMENTS, HINT_MOMENT } from '../tools/capture.mjs';
 import { discoverCartridges, INSTALL_DIR } from '../src/cartridge/loader.js';
 import { isAllowedGlyph } from '../src/glyphs.js';
 import { INSERT_END } from '../src/shell/insert.js';
@@ -28,6 +28,11 @@ for (const tag of ND_TAGS) {
   for (const id of ND_IDS) for (const sec of ndSecs(id)) ND_WANT.push(`cart-night-drive-scene-${id}${tag}-t${sec}.txt`);
   for (const what of ['menu', 'help', 'console']) ND_WANT.push(`cart-night-drive-${what}-${tag ? '80x24' : '120x40'}.txt`);
 }
+// The Driftman 9000's own set (cart-driftman-9000-*), written out by hand (DRIFT-7 stage F): the menu and the help box over the running Rosette at both sizes, and six
+// moments of the 2000 turning into the 9000 (1.0 to 1.5 s after Enter, 120x40).
+const DM_WANT = [];
+for (const sz of ['120x40', '80x24']) DM_WANT.push(`cart-driftman-9000-menu-${sz}.txt`, `cart-driftman-9000-help-${sz}.txt`);
+for (const m of [1000, 1100, 1200, 1300, 1400, 1500]) DM_WANT.push(`cart-driftman-9000-morph-t${m}.txt`);
 const CAPTURE_TOOL = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'tools', 'capture.mjs');
 // the size a capture file is drawn at, from its name
 const sizeOf = (name) => { const m = /(\d+)x(\d+)(?:-t\d+)?\.txt$/.exec(name); return m ? [+m[1], +m[2]] : [120, 40]; };
@@ -58,6 +63,7 @@ test('cartridge captures: the names list is the files written - library at 120x4
     for (const m of FIGHT_MOMENTS) want.push(`cart-delza-fight-t${ms(m)}.txt`);
     for (const m of CUTSCENE_MOMENTS) want.push(`cart-delza-cutscene-t${ms(m)}.txt`);
     want.push(...ND_WANT);
+    want.push(...DM_WANT);
     assert.equal(FIGHT_MOMENTS.length, 5);
     assert.equal(CUTSCENE_MOMENTS.length, 4);
     assert.deepEqual(cartridgeCaptureNames().sort(), want.slice().sort());
@@ -211,6 +217,46 @@ test('nightDriveCaptureNames: the hand-written list, exported like Delza\'s; in 
   try {
     assert.ok(!cartridgeCaptureNames({ dirs: [{ dir: root, trusted: true }] }).some((n) => n.startsWith('cart-night-drive')), 'no Night Drive files without the cartridge');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('driftman9000CaptureNames: the hand-written list, exported like the others; in cartridgeCaptureNames only when the 9000 is installed, unlocked and runs in the shell', () => {
+  assert.deepEqual(driftman9000CaptureNames().sort(), DM_WANT.slice().sort());
+  assert.equal(DM_WANT.length, 2 * 2 + 6);
+  const all = cartridgeCaptureNames();
+  for (const n of DM_WANT) assert.ok(all.includes(n), n);
+  const root = makeRoot();
+  try {
+    assert.ok(!cartridgeCaptureNames({ dirs: [{ dir: root, trusted: true }] }).some((n) => n.startsWith('cart-driftman-9000')), 'no 9000 files without the cartridge');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('cartridge captures: the 9000\'s set shows what it says - the tiles and the countdown, the list, the reskinned help box, six different morph frames', async () => {
+  const dir = tmp();
+  try {
+    const dm = (n) => fs.readFileSync(path.join(dir, n), 'utf8');
+    await runCaptureCartridges({ outDir: dir });
+    const grid = dm('cart-driftman-9000-menu-120x40.txt'), list = dm('cart-driftman-9000-menu-80x24.txt');
+    // the menu is up over the running Rosette (half-block picture behind it) with its countdown running; the grid is three tiles and draws the prompt row,
+    // the list (80x24) is the titled box with the description and the hint (its prompt is dropped to make room for the countdown, by menu.js's own rule)
+    for (const [name, t] of [['grid', grid], ['list', list]]) {
+      assert.match(t, /starts by itself in \d+ s/, `${name}: the countdown is running`);
+      for (const v of ['ROSETTE', 'CORTEX']) assert.ok(t.includes(v), `${name}: ${v}`);
+      assert.ok(t.includes('▀▀▀▀▀▀'), `${name}: the Rosette's half blocks are behind the menu`);
+    }
+    assert.ok(grid.includes('BLOOMFALL'), 'the third tile');
+    assert.ok(grid.includes('Choose a vision, or let the machine dream.'), 'the grid draws the prompt row');
+    assert.ok(grid.includes('╔════') && grid.includes('kaleidoscope'), 'the selected tile is the double box with its note');
+    assert.ok(list.includes('THE THREE VISIONS') && list.includes('BLOOMFALL') && list.includes('Twelve mirrors turning'), 'the list: title, three entries, the description');
+    assert.ok(list.includes('arrows · Enter wakes') && list.includes('h keys'), 'the list carries the skin\'s hint');
+    for (const sz of ['120x40', '80x24']) {
+      const h = dm(`cart-driftman-9000-help-${sz}.txt`);
+      assert.ok(h.includes('LUMEN CORE · keys'), `${sz}: the skin's help title`);
+      assert.ok(h.includes('Visions') && h.includes('Machine'), `${sz}: the skin's group names`);
+      assert.ok(h.includes('machine: Driftman 9000') && h.includes('vision: Rosette'), `${sz}: the mode line`);
+    }
+    const morph = DM_WANT.filter((n) => n.includes('-morph-')).map(dm);
+    assert.equal(new Set(morph).size, 6, 'six distinct morph frames');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('cartridge captures: Night Drive\'s set shows what it says - every track moving, the later story moments, the tape-deck menu, the reskinned help, the console takeover', async () => {

@@ -185,8 +185,8 @@ export function runCaptureGallery({ outDir, seed = 1 }) {
 //                          are EJECT_FADE_SECONDS + the same fractions of EJECT_ANIM_SECONDS as the insert moments are of INSERT_END
 //   cart-help-classic-120x40.txt   the help panel (h) while Classic runs, after the console has handed back to it
 // Unlocked cartridges only get insert/boot/eject. Driven through the real app on a fake terminal, with a fake clock.
-const CART_DT = 1 / 18;
-const CART_SIZES = [[120, 40], [80, 24]];
+export const CART_DT = 1 / 18;
+export const CART_SIZES = [[120, 40], [80, 24]];
 // seconds after Enter: the insert is over at INSERT_END (1.5 s), the boot runs on to about 5.8 s. The 3.4 s moment sits
 // where Classic's progress bar is whole (the old 3.6 s moment caught it with a one-cell gap).
 export const CART_MOMENTS = [0.4, 0.9, 1.25, 1.6, 2.5, 3.4, 4.2, 5.0, 5.6];
@@ -195,7 +195,7 @@ const CART_DIRS = () => [{ dir: INSTALL_DIR, trusted: true }];
 const sizeTag = (cols, rows) => (cols === 120 && rows === 40 ? '' : `-${cols}x${rows}`);
 const ms = (sec) => Math.round(sec * 1000);
 
-const installed = (dirs) => discoverCartridges({ dirs: dirs || CART_DIRS() }).cartridges;
+export const installed = (dirs) => discoverCartridges({ dirs: dirs || CART_DIRS() }).cartridges;
 const isShellRun = (c) => c.manifest && c.manifest.runtime !== 'classic';
 const hasDelza = (c) => c.id === 'delza' && !c.locked && isShellRun(c);
 const hasNightDrive = (c) => c.id === 'night-drive' && !c.locked && isShellRun(c);
@@ -213,6 +213,22 @@ export function cartridgeCaptureNames({ dirs } = {}) {
   }
   if (installed(dirs).some(hasDelza)) names.push(...delzaCaptureNames());
   if (installed(dirs).some(hasNightDrive)) names.push(...nightDriveCaptureNames());
+  if (installed(dirs).some(hasDriftman9000)) names.push(...driftman9000CaptureNames());
+  return names;
+}
+
+// ---- the Driftman 9000's own text captures (cart-driftman-9000-*.txt), through the real app on the fake terminal at the shipped defaults (DRIFT-7 stage F):
+//   cart-driftman-9000-menu-<size>.txt    the menu over the running Rosette 1.5 s after the boot ends (the countdown is running): the tiles at 120x40, the list at 80x24
+//   cart-driftman-9000-help-<size>.txt    the reskinned help box (h) over the running Rosette
+//   cart-driftman-9000-morph-t<ms>.txt    the 2000 turning into the 9000, 1.0 to 1.5 s after Enter (the last third of the insert, 120x40)
+// The same drivers (driftman9000PanelShots, driftman9000MorphShots) give tools/capture-ansi.mjs its frames, so a text file and its .ansi twin are one screenshot.
+export const DRIFTMAN_ID = 'driftman-9000';
+export const DM_MORPH_MOMENTS = [1.0, 1.1, 1.2, 1.3, 1.4, 1.5];
+const hasDriftman9000 = (c) => c.id === DRIFTMAN_ID && !c.locked && isShellRun(c);
+export function driftman9000CaptureNames() {
+  const names = [];
+  for (const [cols, rows] of CART_SIZES) names.push(`cart-driftman-9000-menu-${cols}x${rows}.txt`, `cart-driftman-9000-help-${cols}x${rows}.txt`);
+  for (const m of DM_MORPH_MOMENTS) names.push(`cart-driftman-9000-morph-t${ms(m)}.txt`);
   return names;
 }
 
@@ -292,7 +308,7 @@ export function nightDriveCaptureNames() {
   return names;
 }
 
-function cartApp(seed, cols, rows, dirs, startScreen = { screen: 'library' }) {
+export function cartApp(seed, cols, rows, dirs, startScreen = { screen: 'library' }) {
   const stdin = new EventEmitter();
   Object.assign(stdin, { isTTY: true, setRawMode() { return stdin; }, resume() { return stdin; }, pause() { return stdin; }, unref() {}, ref() {}, setEncoding() { return stdin; } });
   const stdout = new EventEmitter();
@@ -310,10 +326,13 @@ function cartApp(seed, cols, rows, dirs, startScreen = { screen: 'library' }) {
 
 const shotText = (app) => frameToText(app.screenshot());
 const settle = () => new Promise((r) => setTimeout(r, 20));
+// after Enter the cartridge's scenes load in the background (about 60 ms); the shell decides whether to use the cartridge's console hook at 1.0 s and starts
+// its boot clock only once they are in, so a driver that steps the clock in one go waits for the load first (real time; the simulated clock is untouched)
+export const settleLoad = () => new Promise((r) => setTimeout(r, 250));
 
 // a fresh app at cols x rows with the library cursor on `id` (at most one lap of the arrow key); fn(app, step)
 // gets a clock that advances in 1/18 s ticks to an absolute time and then lets pending scene imports settle
-async function withCartApp({ seed, cols, rows, dirs, id }, fn) {
+export async function withCartApp({ seed, cols, rows, dirs, id }, fn) {
   const { app, dir } = cartApp(seed, cols, rows, dirs);
   try {
     app.tick(0.05);
@@ -333,7 +352,8 @@ async function withCartApp({ seed, cols, rows, dirs, id }, fn) {
 // A cartridge's scenes (Delza's by default) at scene-local times: a fresh app with the boot skipped, the scene chosen from its menu with the
 // keys a person uses (Enter, Down to the entry, Enter), then a clock that counts from the first frame of that scene (the
 // scene's own params.t0), so `sec` is exactly the scene time. Returns [{ sec, text }] for each of `times`.
-async function sceneShots({ seed, cols, rows, dirs, sceneId, times, cartId = DELZA_ID, has = hasDelza }) {
+// shot: what is taken of the app at each moment (the plain text by default; tools/capture-ansi.mjs takes the screenshot itself)
+export async function sceneShots({ seed, cols, rows, dirs, sceneId, times, cartId = DELZA_ID, has = hasDelza, shot = shotText }) {
   const cart = installed(dirs).find(has);
   const { app, dir } = cartApp(seed, cols, rows, dirs, { screen: 'cartridge', cartridge: cartId, skipBoot: true });
   const out = [];
@@ -353,7 +373,7 @@ async function sceneShots({ seed, cols, rows, dirs, sceneId, times, cartId = DEL
     for (const sec of times) {
       while (t < sec - 1e-9) { const d = Math.min(CART_DT, sec - t); app.tick(d); t += d; }
       await settle();
-      out.push({ sec, text: shotText(app) });
+      out.push({ sec, text: shot(app) });
     }
   } finally {
     app.quit(0);
@@ -385,6 +405,36 @@ async function ndPanelShots({ seed, cols, rows, dirs }) {
     app.quit(0);
     fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+// The 9000 running, the menu up and then the help box: [{ cols, rows, menu, help }] as shot(app) of the real app (a fresh app per size).
+export async function driftman9000PanelShots({ seed = 1, dirs = CART_DIRS(), shot = shotText } = {}) {
+  const out = [];
+  for (const [cols, rows] of CART_SIZES) {
+    await withCartApp({ seed, cols, rows, dirs, id: DRIFTMAN_ID }, async (app, step) => {
+      app.handleKey('\r');
+      await settleLoad();
+      await step(BOOT_END + 1.5); // running, the menu open over the Rosette with its countdown running
+      const menu = shot(app);
+      app.handleKey('\x1b'); // close the menu
+      await step(BOOT_END + 2);
+      app.handleKey('h');
+      app.tick(0.3); // the help box ramps in over 0.25 s
+      out.push({ cols, rows, menu, help: shot(app) });
+    });
+  }
+  return out;
+}
+
+// The 9000 at moments after Enter (120x40), one run stepping through them in order: [{ sec, shot }].
+export async function driftman9000MorphShots({ seed = 1, dirs = CART_DIRS(), moments = DM_MORPH_MOMENTS, shot = shotText } = {}) {
+  const out = [];
+  await withCartApp({ seed, cols: 120, rows: 40, dirs, id: DRIFTMAN_ID }, async (app, step) => {
+    app.handleKey('\r');
+    await settleLoad();
+    for (const m of moments) { await step(m); out.push({ sec: m, shot: shot(app) }); }
+  });
+  return out;
 }
 
 export async function runCaptureCartridges({ outDir, seed = 1, dirs = CART_DIRS() }) {
@@ -498,6 +548,16 @@ export async function runCaptureCartridges({ outDir, seed = 1, dirs = CART_DIRS(
         await step(ND_CONSOLE_MOMENT);
         put(`cart-night-drive-console-${cols}x${rows}.txt`, `=== console takeover ${cols}x${rows} ${ND_CONSOLE_MOMENT}s after Enter (the skin's frame, grille, stripe and title; the console is only on screen while the tape goes in) night-drive\n${shotText(app)}\n`);
       });
+    }
+  }
+  // the Driftman 9000's own set: the menu and the help box at both sizes, then the morph moments of the insert
+  if (found.some(hasDriftman9000)) {
+    for (const p of await driftman9000PanelShots({ seed, dirs })) {
+      put(`cart-driftman-9000-menu-${p.cols}x${p.rows}.txt`, `=== menu ${p.cols}x${p.rows} over the running Rosette, the countdown running driftman-9000\n${p.menu}\n`);
+      put(`cart-driftman-9000-help-${p.cols}x${p.rows}.txt`, `=== help ${p.cols}x${p.rows} over the running Rosette driftman-9000\n${p.help}\n`);
+    }
+    for (const m of await driftman9000MorphShots({ seed, dirs })) {
+      put(`cart-driftman-9000-morph-t${ms(m.sec)}.txt`, `=== morph t=${m.sec}s after Enter 120x40 driftman-9000 (the 2000 becomes the 9000)\n${m.shot}\n`);
     }
   }
   return written;
