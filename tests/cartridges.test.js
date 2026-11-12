@@ -1,7 +1,7 @@
 // DRIFT-4: scans over the committed cartridges/ folder and over src/.
 //  - cartridges/** holds no removed glyph, and every character of every .txt and .json file (and every
 //    string a .json file decodes to) is on the glyph allow-list;
-//  - cartridge scene code imports only the four allowed modules and never touches node:, process, fetch or
+//  - cartridge scene code imports only the allowed modules and never touches node:, process, fetch or
 //    globalThis;
 //  - no module under src/ imports a network module.
 // Each scanner is proven on in-memory samples first, so a scan that finds nothing cannot pass vacuously.
@@ -128,8 +128,8 @@ export function importsOf(src) {
   return { specs, dynamic: /\bimport\s*\(/.test(masked), hasRequire: /\brequire\s*\(/.test(masked) };
 }
 
-// What a cartridge scene module may import: these four files in src/, by relative path.
-export const ALLOWED_IMPORTS = ['src/scenes/util.js', 'src/scenes/simrng.js', 'src/glyphs.js', 'src/cells.js'];
+// What a cartridge scene module may import: these five files in src/, by relative path.
+export const ALLOWED_IMPORTS = ['src/scenes/util.js', 'src/scenes/simrng.js', 'src/glyphs.js', 'src/cells.js', 'src/pixels.js'];
 const BANNED_WORDS = [[/\bprocess\b/, 'process'], [/\bfetch\b/, 'fetch'], [/\bglobalThis\b/, 'globalThis'], [/node:/, 'node:'], [/\beval\b/, 'eval'], [/\bFunction\b/, 'Function'], [/\bWebSocket\b/, 'WebSocket'], [/\bXMLHttpRequest\b/, 'XMLHttpRequest']];
 
 // Problems in one cartridge scene module (empty = clean). `file` is its repo-relative path.
@@ -141,7 +141,7 @@ export function cartridgeCodeProblems(src, file) {
   if (dynamic) problems.push('dynamic import()');
   if (hasRequire) problems.push('require()');
   for (const spec of specs) {
-    if (!spec.startsWith('./') && !spec.startsWith('../')) { problems.push(`imports '${spec}' (only relative paths to the four allowed modules)`); continue; }
+    if (!spec.startsWith('./') && !spec.startsWith('../')) { problems.push(`imports '${spec}' (only relative paths to the allowed modules)`); continue; }
     const target = path.posix.normalize(path.posix.join(path.posix.dirname(file), spec));
     // a flat lib file of the SAME cartridge (cartridges/<id>/lib/<name>.js) is allowed from its scenes and from its other lib files
     const lib = /^cartridges\/([a-z0-9-]+)\/lib\/[a-z0-9-]+\.js$/.exec(target);
@@ -194,6 +194,31 @@ test('import scanner: proven on in-memory samples (clean passes; each ban is cau
   bad("export * from '../../../src/app.js';\n", /resolves to src\/app\.js/);
   bad("export { x } from '../../../src/term.js';\n", /resolves to src\/term\.js/);
   assert.deepEqual(importsOf("const s = 'import x from \"y\"';").specs, [], 'an import inside a string is not an import');
+});
+
+test('import scanner: src/pixels.js is allowed (scene and lib file); user-folder cartridges still cannot hold code', async () => {
+  const imp = "import { safeHue, pixelsToCells } from '../../../src/pixels.js';\nexport default function s() { return safeHue(0, 0.5); }\n";
+  assert.ok(ALLOWED_IMPORTS.includes('src/pixels.js'));
+  assert.deepEqual(cartridgeCodeProblems(imp, SCENE), []);
+  assert.deepEqual(cartridgeCodeProblems("import { relY } from '../../../src/pixels.js';\n", 'cartridges/delza/lib/a.js'), []);
+  // neighbours are still refused: the allow-list is exact, not a prefix
+  const bad = (src) => assert.ok(cartridgeCodeProblems(src, SCENE).length > 0, src);
+  bad("import { x } from '../../../src/pixels2.js';\n");
+  bad("import { x } from '../../../src/Pixels.js';\n");
+  bad("import { x } from '../../../src/renderer.js';\n");
+  // negative arm: the same scene in a USER-folder cartridge is refused before anything is imported
+  const { tmpRoot, writeCart, dataManifest, LABEL } = await import('./helpers-cartridge.js');
+  const files = { 'manifest.json': dataManifest('pix'), 'label.txt': LABEL, 'scenes/s.js': imp };
+  const user = tmpRoot(); writeCart(user, 'pix', files);
+  const ru = discoverCartridges({ dirs: [{ dir: user, trusted: false }] });
+  assert.equal(ru.cartridges.length, 0);
+  assert.equal(ru.errors.length, 1);
+  assert.match(ru.errors[0].reason, /user cartridges cannot contain code/);
+  // and the install folder accepts that cartridge folder (code files allowed there)
+  const inst = tmpRoot(); writeCart(inst, 'pix', files);
+  const ri = discoverCartridges({ dirs: [{ dir: inst, trusted: true }] });
+  assert.deepEqual(ri.errors, []);
+  assert.equal(ri.cartridges.length, 1);
 });
 
 test('import scanner: the trusted fixture scenes (self-contained code) are clean', async () => {
