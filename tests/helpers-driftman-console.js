@@ -110,3 +110,6 @@ export async function recordCalls(cols, rows) {
   const tier = log.length ? log[0].tier : 'full';
   return { up: log.slice(0, mark), down: log.slice(mark), tier };
 }
+
+// The sizes the console is drawn at, and the sizes just above each layout breakpoint (full 88x39, extra-large 176x58, compact 78x24).
+export const SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [176, 58], [78, 24]];
