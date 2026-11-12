@@ -139,7 +139,7 @@ async function mkLibrary({ bare = false } = {}) {
   assert.equal(c.sh().screen, 'library');
   const d = {
     app: c.app, stdout: c.stdout, stdin: c.stdin, proc: c.proc, rec, screen, kind: 'library',
-    step: () => { c.key('\x1b[C'); c.app.tick(DT); }, key: (k) => c.key(k), done: () => c.done(),
+    step: () => { c.key('\x1b[C'); c.app.tick(1.2); }, key: (k) => c.key(k), done: () => c.done(),
   };
   for (let i = 0; i < 4; i++) d.step();
   return d;

@@ -33,6 +33,7 @@ export const EJECT_ANIM_SECONDS = 1.6; // eject phase 2: the insert animation ba
 export const EJECT_SECONDS = 1.9; // EJECT_FADE_SECONDS + EJECT_ANIM_SECONDS (written out: 0.3 + 1.6 is 1.9000000000000001)
 export const LOCKED_MESSAGE = 'This cartridge isn\'t ready yet. Pick another with ◀ ▶.';
 export const SLIDE_SECONDS = 0.36; // the carousel slide (34 columns, ease-out)
+export const SHELF_MOVE_SECONDS = 1.2; // the shelf takes one step per this long (the slide itself is SLIDE_SECONDS); holding an arrow browses at this pace
 export const TYPE_SECONDS = 0.3; // the console screen retypes left to right
 export { DIP_SECONDS };
 export const LIBRARY_FADE_SECONDS = 0.3; // the library dissolves in when opened from Classic (a hard cut would flash)
@@ -86,6 +87,7 @@ export function createShell(o) {
   let screen = 'library';
   let st = 0; // seconds in the current screen
   let index = Math.max(0, carts.findIndex((c) => c.id === o.lastCartridge));
+  let moveT = SHELF_MOVE_SECONDS; // time since the last step started; the next step may start at SHELF_MOVE_SECONDS
   let prev = index, slideT = SLIDE_SECONDS, message = '', msgT = 0, dipT = DIP_SECONDS;
   let idleT = 0, drawnSig = ''; // the library's idle clock (runs while it is settled and in view) and the idle picture last drawn
   let lastDir = 1, dial = index, queued = 0; // the way the last move went, the TUNE dial's step count, one waiting key press (+1 / -1)
@@ -138,7 +140,7 @@ export function createShell(o) {
   });
 
   function resetLibrary(newFrom) {
-    screen = 'library'; st = 0; helpOpen = false; message = ''; slideT = SLIDE_SECONDS; dipT = DIP_SECONDS; prev = index; queued = 0; idleT = 0; drawnSig = '';
+    screen = 'library'; st = 0; helpOpen = false; message = ''; slideT = SLIDE_SECONDS; moveT = SHELF_MOVE_SECONDS; dipT = DIP_SECONDS; prev = index; queued = 0; idleT = 0; drawnSig = '';
     runtime = null; load = { status: 'none', scenes: null, error: null }; cart = null; entry = null; skipped = false; hookUse = null;
     if (newFrom !== undefined) from = newFrom;
     forced = true;
@@ -233,16 +235,16 @@ export function createShell(o) {
 
   // ---- key handlers (names match SHELL_KEYMAP actions)
 
-  // One step of the cursor. While the shelf is still sliding one more press waits (and runs when the slide
-  // ends); a third is dropped.
+  // One step of the cursor. Until SHELF_MOVE_SECONDS has passed since the last step started, one more press waits (and
+  // runs when the time is up); a third is dropped.
   function moveCursor(dir) {
     if (carts.length < 2) return;
-    if (slideT < SLIDE_SECONDS) { if (!queued) queued = dir; return; }
+    if (moveT < SHELF_MOVE_SECONDS) { if (!queued) queued = dir; return; }
     startMove(dir, 0);
   }
   function startMove(dir, carry) {
     prev = index; index = (index + carts.length + dir) % carts.length;
-    lastDir = dir; dial += dir; slideT = carry; message = '';
+    lastDir = dir; dial += dir; slideT = carry; moveT = 0; message = '';
   }
 
   const actions = {
@@ -303,9 +305,12 @@ export function createShell(o) {
         if (helpOpen) break;
         if (slideT < SLIDE_SECONDS) {
           slideT += d; forced = true;
+        }
+        if (moveT < SHELF_MOVE_SECONDS) {
+          moveT += d;
           // the queued step starts from the top of its ease, not part-way in: it is a key press that was waiting, and
           // starting part-way put a big move in its very first frame
-          if (slideT >= SLIDE_SECONDS && queued) { const q = queued; queued = 0; startMove(q, 0); }
+          if (moveT >= SHELF_MOVE_SECONDS && queued) { const q = queued; queued = 0; startMove(q, 0); forced = true; }
         }
         if (dipT < DIP_SECONDS) { dipT += d; forced = true; }
         if (slideT >= SLIDE_SECONDS && dipT >= DIP_SECONDS) {

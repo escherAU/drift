@@ -371,7 +371,7 @@ const fixtureDirs = () => { const root = tmpRoot('drift-measure-fx-'); makeFixtu
 
 test('measure --library: a resting library draws only its small idle movements; arrow presses every cycle redraw it; the start-up load is reported', async () => {
   const idle = await runMeasure({ seconds: 2.2, cols: 80, rows: 24, library: true, quiet: true });
-  const cyc = await runMeasure({ seconds: 2.2, cols: 80, rows: 24, library: true, cycle: 0.5, quiet: true });
+  const cyc = await runMeasure({ seconds: 4.2, cols: 80, rows: 24, library: true, cycle: 1.3, quiet: true }); // a shelf step takes 1.2 s now, so one press per 1.3 s (three of them) rather than every 0.5 s
   assert.ok(idle.frames >= 1 && idle.frames <= 14, `idle library frames ${idle.frames} (of about 40 ticks)`);
   assert.ok(cyc.frames > idle.frames + 5, `cycling library redraws: ${cyc.frames} vs ${idle.frames}`);
   assert.ok(Number.isFinite(idle.loadMs) && idle.loadMs >= 0);

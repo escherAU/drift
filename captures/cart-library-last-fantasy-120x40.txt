@@ -25,7 +25,7 @@ OON   ┆    │  DELZA              DM-01  │    ┆  LAST FANTASY       SOON 
                   │ ╔══════════════════════════════════════════════╗   ● PWR    ○ CART    ○ LINK     │                  
                   │ ║ LAST FANTASY                           SOON  ║                                 │                  
                   │ ║ ──────────────────────────────────────────── ║      ╭───╮      ▒▒▒▒▒▒▒▒▒▒▒▒▒   │                  
-                  │ ║ A long tale told in tiny pixels.             ║     ╱     ╲     ▒▒▒▒▒▒▒▒▒▒▒▒▒   │                  
+                  │ ║ A░long░tale░told░in░tiny░pixels.░░░░░░░░░░░░ ║     ╱     ╲     ▒▒▒▒▒▒▒▒▒▒▒▒▒   │                  
                   │ ║                                              ║    │   ●   │    ▒▒▒▒▒▒▒▒▒▒▒▒▒   │                  
                   │ ║                                              ║     ╲   ╲ ╱     ▒▒▒▒▒▒▒▒▒▒▒▒▒   │                  
                   │ ║ Not on the shelf yet.                        ║      ╰───╯      ▒▒▒▒▒▒▒▒▒▒▒▒▒   │                  

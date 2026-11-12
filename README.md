@@ -195,6 +195,8 @@ never rebind a key.
 | running | `c` | next season, if the skin has `seasons`: the palette hue eases to the next one |
 | every screen | `q`, Ctrl+C | quit (Ctrl+C exits 130); the terminal is restored exactly |
 
+On the shelf the cartridges move one step every 1.2 seconds, so holding an arrow key browses about one cartridge per 1.2 seconds. A press during the wait is kept and runs when the time is up (one at most; further presses are dropped), and a press after the wait moves at once.
+
 Insert, boot and the error card take any key except `q` as "skip". The timeline is: insert
 animation 1.5 s (the cartridge lifts, the neighbours slide away, it drops into the slot, the
 console takes on the cartridge's skin behind a 6-column band, or is redrawn by the cartridge's console hook), then the boot, drawn on the

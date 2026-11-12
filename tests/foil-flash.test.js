@@ -3,14 +3,13 @@
 //   rest   30 s of the selected foil card at rest (the holo shimmer, 6 steps a second), absolute limits: L1, L2, L3, R must all pass.
 //   moves  a 30 s walk over the shelf: rest, a slide right onto the second foil card, back, a slide onto the plain card, a slide back,
 //          then two quick presses (one queued), with the foil neighbours dimming and brightening as they move. The library slide
-//          is not the foil's doing, so this flow is held to the SAME shelf with the foil switched off (same labels, same ink,
-//          palette colours), with the dense fixture label AND the real art of Delza. Where that baseline passes a rule, the foil flow passes
-//          it at the rule's own limit. Where the baseline is over already (the library slide itself: nothing to do with the foil), the foil
-//          flow may not be worse than it by more than SLACK. The only difference between the two flows is the brightness of a foil cell: safeHue's
+//          is not the foil's doing, so the same shelf is also run with the foil switched off (same labels, same ink, palette colours), with the
+//          dense fixture label AND the real art of Delza. Both flows are held to ABSOLUTE limits (DRIFT-7 item 2: a step takes SHELF_MOVE_SECONDS,
+//          so the slide is no longer over a rule): every 1x rule at its own limit and a per-size L2 ceiling (WALK_L2). The only difference between the two flows is the brightness of a foil cell: safeHue's
 //          colour is within 0.011 of the luminance of the palette colour it stands for (6-bit grid), which moves a cell whose swing sits right
 //          at the meter's 0.10 across the line. With a foil of exactly the palette luminance the two flows are identical (measured).
 //   insert  insert + boot (1x and 4x) and eject (1x) of a foil cartridge, foil frozen at t = 0: ABSOLUTE limits (DRIFT-7 item 1), every rule at its limit and a
-//          per-size L2 ceiling (CEIL_L2). SLACK no longer applies to them; it still applies to the walk (the library slide, item 2).
+//          per-size L2 ceiling (CEIL_L2).
 //   control  the rest flow with the brightness of every foil cell also modulated (on alternate steps the fg of every foil cell is scaled up to full lightness, so a label at level 1-3 flashes to the brightest the hue allows,
 //          a test-only post-filter on the frames the shell drew): the meter must flag it.
 // Sizes: the three usual ones and the size just above each layout breakpoint (full 88x39, extra-large 176x58, compact 78x24).
@@ -24,7 +23,6 @@ import { flush } from './helpers-console-hook.js';
 
 const SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [176, 58], [78, 24]];
 const RULES = [['l1.x1', (r) => r.l1.x1], ['l1.x4', (r) => r.l1.x4], ['l2.x1', (r) => r.l2.x1], ['l2.x4', (r) => r.l2.x4], ['l3', (r) => r.l3], ['r.x1', (r) => r.r.x1], ['r.x4', (r) => r.r.x4]];
-const SLACK = 0.015; // 1.5 points, only where the shelf without the foil is already over the rule (the SHELF WALK only: the library slide itself, item 2)
 const pc = (x) => (x * 100).toFixed(2);
 // Insert + boot and eject of a foil cartridge are held to ABSOLUTE limits (DRIFT-7 item 1: insert step 3 is a dissolve now, so these flows no longer
 // sit over a rule): every rule at its own limit, and a ceiling on L2 per size, the measured value (Delza's art) plus a hair, to the next tenth of a
@@ -32,6 +30,10 @@ const pc = (x) => (x * 100).toFixed(2);
 const CEIL_L2 = { // fractions
   '120x40': [0.046, 0.162, 0.010], '80x24': [0.094, 0.177, 0.024], '240x67': [0.020, 0.055, 0.004], '88x39': [0.083, 0.216, 0.029], '176x58': [0.037, 0.095, 0.004], '78x24': [0.083, 0.169, 0.035],
 };
+// The shelf walk is held to ABSOLUTE limits at 1x only (shell flows are held at 1x for the L2 rule): every 1x rule at its limit, and a ceiling on L2 per
+// size, the worst measured over both arts, foil on and off, plus a hair, rounded up to the next tenth of a point (fractions).
+const WALK_RULES = RULES.filter(([name]) => !name.endsWith('.x4'));
+const WALK_L2 = { '120x40': 0.063, '80x24': 0.001, '240x67': 0.011, '88x39': 0.085, '176x58': 0.017, '78x24': 0.001 };
 const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
 
 // the 30 s at rest: wait for nothing, the library is the start screen
@@ -105,7 +107,7 @@ async function insertFlow(cols, rows, withFoil) {
 
 const TABLE = [];
 for (const [cols, rows] of SIZES) {
-  test(`foil flash ${cols}x${rows}: 30 s of the shimmer at rest passes L1, L2, L3 and R at 1x and 4x; the walk over the shelf is no worse than the same shelf without the foil (dense label and Delza's art); a brightness-modulating foil is flagged`, () => {
+  test(`foil flash ${cols}x${rows}: 30 s of the shimmer at rest passes L1, L2, L3 and R at 1x and 4x; the walk over the shelf passes every 1x rule and sits under its absolute L2 ceiling (dense label and Delza's art, foil on and off); a brightness-modulating foil is flagged`, () => {
     const at = `${cols}x${rows}`.padEnd(8);
     const r = rest(cols, rows);
     TABLE.push(at + 'rest   foil     ' + show(r));
@@ -120,9 +122,10 @@ for (const [cols, rows] of SIZES) {
       assert.deepEqual(w.path, b.path);
       assert.ok(new Set(w.path).size >= 3, 'the walk visits foil and plain cards: ' + w.path.join(' > '));
       const bad = [];
-      for (const [name, get] of RULES) {
-        const a = get(w.rep), base = get(b.rep);
-        if (base.pass) { if (!a.pass) bad.push(`${name}: ${pc(a.worstFraction)}% is over ${pc(a.limit)}% (the same shelf without the foil passes at ${pc(base.worstFraction)}%)`); } else if (a.worstFraction > base.worstFraction + SLACK) bad.push(`${name}: ${pc(a.worstFraction)}% is worse than the shelf without the foil, ${pc(base.worstFraction)}%`);
+      for (const [flow, x] of [['foil', w.rep], ['none', b.rep]]) {
+        for (const [name, get] of WALK_RULES) { const r = get(x); if (!r.pass) bad.push(`${flow} ${name}: ${pc(r.worstFraction)}% is over ${pc(r.limit)}%`); }
+        const ceil = WALK_L2[`${cols}x${rows}`];
+        if (x.l2.x1.worstFraction > ceil) bad.push(`${flow} walk l2.x1: ${pc(x.l2.x1.worstFraction)}% is over its ceiling ${pc(ceil)}%`);
       }
       assert.deepEqual(bad, [], `${cols}x${rows} ${art}`);
     }

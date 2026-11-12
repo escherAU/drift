@@ -318,7 +318,7 @@ async function withCartApp({ seed, cols, rows, dirs, id }, fn) {
   try {
     app.tick(0.05);
     const n = installed(dirs).length;
-    for (let i = 0; i < n + 1 && app.getState().shell.cartridge !== id; i++) { app.handleKey('\x1b[C'); app.tick(0.5); }
+    for (let i = 0; i < n + 1 && app.getState().shell.cartridge !== id; i++) { app.handleKey('\x1b[C'); app.tick(1.2); } // a shelf step takes 1.2 s (DRIFT-7 item 2)
     app.tick(0.5);
     let t = 0;
     const step = async (to) => { while (t < to - 1e-9) { const d = Math.min(CART_DT, to - t); app.tick(d); t += d; } await settle(); };

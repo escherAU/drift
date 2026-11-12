@@ -83,7 +83,9 @@ test('slide: one key press is queued while sliding and runs after the first; a t
   c.tick(0.2);
   assert.equal(c.sh().cartridge, 'fixture', 'still sliding');
   c.tick(0.2);
-  assert.equal(c.sh().cartridge, 'locker', 'the queued press ran when the first finished');
+  assert.equal(c.sh().cartridge, 'fixture', 'the slide is over but 1.2 s have not passed: the queued press still waits');
+  c.tick(0.7);
+  assert.equal(c.sh().cartridge, 'locker', 'the queued press ran when 1.2 s had passed since the first');
   c.tick(2);
   assert.equal(c.sh().cartridge, 'locker', 'and the third was dropped (three cartridges: it would be classic)');
   // the other arm: a press after the slide has settled runs at once
@@ -99,7 +101,7 @@ test('slide: a queued press of the other direction also waits its turn, then goe
   c.key('\x1b[C');
   c.tick(0.1);
   c.key('\x1b[D');
-  c.tick(0.5);
+  c.tick(1.2);
   assert.equal(c.sh().cartridge, 'classic', 'right then left ends where it began');
   c.done();
 });
@@ -129,10 +131,10 @@ test('dial: through the app the pointer moves one notch per step, also across th
   const L = shelfLayout(120, 40, 'full');
   const dialNow = () => frameLines(c.app.screenshot()).slice(L.consoleTop + 5, L.consoleTop + 10).map((r) => [...r].slice(L.consoleX + 54, L.consoleX + 63).join('')).join('|');
   const a = [dialNow()];
-  for (let i = 0; i < 4; i++) { c.key('\x1b[C'); c.tick(0.5); a.push(dialNow()); }
+  for (let i = 0; i < 4; i++) { c.key('\x1b[C'); c.tick(1.2); a.push(dialNow()); }
   for (let i = 0; i + 1 < a.length; i++) assert.notEqual(a[i], a[i + 1], `step ${i + 1} turned the dial`);
   assert.equal(new Set(a).size, 5, 'four steps right on a three cartridge shelf: four different notches (it does not follow the list index)');
-  c.key('\x1b[D'); c.tick(0.5);
+  c.key('\x1b[D'); c.tick(1.2);
   assert.equal(dialNow(), a[3], 'one step back turns it back');
   c.done();
 });

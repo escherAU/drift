@@ -142,9 +142,9 @@ function realRun(cols, rows) {
   r.run(30);
   assert.equal(c.sh().cartridge, 'classic');
   const shelf = discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] }).cartridges.length;
-  for (let i = 0; i < shelf; i++) { r.press('\x1b[C'); r.run(0.9); } // a full lap of the installed cartridges, back to Classic
+  for (let i = 0; i < shelf; i++) { r.press('\x1b[C'); r.run(1.3); } // a full lap of the installed cartridges, back to Classic; a step takes 1.2 s now
   assert.equal(c.sh().cartridge, 'classic');
-  r.press('\x1b[C'); r.run(0.9);
+  r.press('\x1b[C'); r.run(1.3);
   r.press('\r'); r.run(1.2); // the locked dip on a real locked cartridge
   assert.equal(c.sh().screen, 'library');
   r.press('\x1b[D'); r.press('\x1b[D'); r.run(1.4); // one slide with a queued second

@@ -55,22 +55,22 @@ test('library: the cursor wraps both ways, and getState().shell has exactly the 
   c.tick(0.2);
   assert.deepEqual(Object.keys(c.sh()), ['screen', 'cartridge', 'program', 'sceneId', 'menu', 'help']);
   assert.deepEqual(c.sh(), { screen: 'library', cartridge: 'classic', program: null, sceneId: null, menu: false, help: false });
-  // (a second press while the shelf is still sliding is queued, so each step waits for the slide to settle)
+  // (a second press before 1.2 s have passed since the last step is queued, so each step waits for the shelf's next step)
   c.key('\x1b[D'); // left from the first wraps to the last
   assert.equal(c.sh().cartridge, 'locker');
-  c.tick(0.4);
+  c.tick(1.2);
   c.key('\x1b[C'); // right from the last wraps to the first
   assert.equal(c.sh().cartridge, 'classic');
-  c.tick(0.4);
-  c.key('.'); c.tick(0.4); c.key('.');
+  c.tick(1.2);
+  c.key('.'); c.tick(1.2); c.key('.');
   assert.equal(c.sh().cartridge, 'locker');
-  c.tick(0.4);
+  c.tick(1.2);
   c.key(','); // the second pair of keys
   assert.equal(c.sh().cartridge, 'fixture');
-  c.tick(0.4);
+  c.tick(1.2);
   c.key('\x1bOB'); // the SS3 form of down
   assert.equal(c.sh().cartridge, 'locker');
-  c.tick(0.4);
+  c.tick(1.2);
   c.key('\x1bOA'); // up
   assert.equal(c.sh().cartridge, 'fixture');
   c.done();

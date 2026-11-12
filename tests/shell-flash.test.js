@@ -161,12 +161,12 @@ for (const [cols, rows] of [...SIZES, [240, 67]]) {
     c.app.start();
     const r = recorder(c);
     r.run(30); // idle: LED, ripple, scanline, cursor
-    r.press('\x1b[C'); r.press('\x1b[C'); r.press('\x1b[C'); r.run(1.6); // one slide, a queued one, a dropped one
-    r.press('\x1b[D'); r.run(1);
-    r.press('\x1b[C'); r.run(0.9);
+    r.press('\x1b[C'); r.press('\x1b[C'); r.press('\x1b[C'); r.run(2.5); // one slide, a queued one (starts at 1.2 s), a dropped one
+    r.press('\x1b[D'); r.run(1.3);
+    r.press('\x1b[C'); r.run(1.3);
     assert.equal(c.sh().cartridge, 'locker');
     r.press('\r'); r.run(1.2); // locked: dip, spring back, message
-    r.press('\x1b[D'); r.run(0.9);
+    r.press('\x1b[D'); r.run(1.3);
     r.press('\x1b[D'); r.run(30); // and idle again, on another cartridge
     assert.equal(c.sh().screen, 'library');
     const { worst, worstAt } = assertSafe(r, `motion ${cols}x${rows}`);

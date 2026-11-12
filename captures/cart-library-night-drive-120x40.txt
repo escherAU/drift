@@ -27,7 +27,7 @@ M-01  │    ┆  LAST FANTASY       SOON   ┆    │  NIGHT DRIVE        DM-02
                   │ ║ ──────────────────────────────────────────── ║      ╭───╮      ▒▒▒▒▒▒▒▒▒▒▒▒▒   │                  
                   │ ║ Neon highway, late radio, and a night that   ║     ╱     ╲     ▒▒▒▒▒▒▒▒▒▒▒▒▒   │                  
                   │ ║ never ends.                                  ║    │   ●   │    ▒▒▒▒▒▒▒▒▒▒▒▒▒   │                  
-                  │ ║                                              ║     ╲  │  ╱     ▒▒▒▒▒▒▒▒▒▒▒▒▒   │                  
+                  │ ║ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ║     ╲  │  ╱     ▒▒▒▒▒▒▒▒▒▒▒▒▒   │                  
                   │ ║ 80s neon highway · about 12 min · 8 tracks o ║      ╰───╯      ▒▒▒▒▒▒▒▒▒▒▒▒▒   │                  
                   │ ║                                              ║      TUNE                       │                  
                   │ ║ ▶ Enter to insert▌                           ║                                 │                  
