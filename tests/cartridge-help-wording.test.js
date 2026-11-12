@@ -73,7 +73,7 @@ async function runWith(help) {
   c.key('\x1b'); // close the menu
   c.tick(0.6);
   c.key('h');
-  c.tick(0);
+  c.tick(0.6); // the panel ramps in over 0.25 s (DRIFT-7 C10)
   return c;
 }
 

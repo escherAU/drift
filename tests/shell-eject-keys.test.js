@@ -17,7 +17,7 @@ async function runningWithHelpChecked(c) {
   c.tick(0.6);
   c.key('h');
   assert.equal(c.sh().help, true);
-  c.tick(0);
+  c.tick(0.6); // the panel ramps in over 0.25 s (DRIFT-7 C10)
   assert.match(c.text(), /e or l\s+eject the cartridge/, 'the help panel lists e and l as eject');
   c.key('h');
   assert.equal(c.sh().help, false);

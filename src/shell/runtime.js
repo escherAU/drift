@@ -73,6 +73,7 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
   let cur = m.start;
   let t = 0, speedIdx = 3, paused = false, helpOpen = false;
   const menu = { open: false, index: 0, idle: 0, p: 0 };
+  let helpP = 0; // how far the help panel has ramped in (0 = not drawn, 1 = fully drawn); the shell draws the panel while it is above 0
   let auto = null; // seconds left on the menu's start-by-itself countdown (skin.menu.autostartSeconds), or null
   let autoShown = null; // the whole second last drawn, so a redraw is asked for once a second
   let xfade = null; // { glyphs, shades, fg, bg, t } the frame we dissolve away from after a program switch
@@ -158,7 +159,16 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
   };
 
   function advance(dt) {
-    if (!(dt > 0) || helpOpen) return;
+    if (!(dt > 0)) return;
+    // The help panel ramps in and out on its own clock (real seconds, not scaled by the speed, like the menu's). It runs
+    // before the freeze below, so the panel keeps ramping while the scene is held; the scene stays frozen while help is open.
+    const helpTarget = helpOpen ? 1 : 0;
+    if (helpP !== helpTarget) {
+      forced = true;
+      const hs = dt / MENU_RAMP_SECONDS;
+      helpP = helpTarget > helpP ? Math.min(1, helpP + hs) : Math.max(0, helpP - hs);
+    }
+    if (helpOpen) return;
     const target = menu.open ? 1 : 0;
     // anything that is mid-ramp changes this frame, so the frame that finishes the ramp is drawn too
     if (menu.p !== target || xfade || seasonRamp) forced = true;
@@ -245,7 +255,7 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
     cancelAuto() { if (auto !== null) { auto = null; forced = true; } },
     get autoLeft() { return auto; },
     // true when the next frame can differ from the last one
-    needsFrame: () => forced || (!paused && !helpOpen) || (!helpOpen && (menu.p !== (menu.open ? 1 : 0) || !!xfade || !!seasonRamp)),
+    needsFrame: () => forced || (!paused && !helpOpen) || helpP !== (helpOpen ? 1 : 0) || (!helpOpen && (menu.p !== (menu.open ? 1 : 0) || !!xfade || !!seasonRamp)),
     state() {
       const prog = programs.get(cur);
       const st = prog.sched.state();
@@ -253,6 +263,7 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
       return { program: cur, sceneId: sc ? sc.id : null, menu: menu.open, help: helpOpen, paused, speed: SPEEDS[speedIdx], season, t };
     },
     get helpOpen() { return helpOpen; },
+    get helpP() { return helpP; },
     get menuOpen() { return menu.open; },
   };
 }

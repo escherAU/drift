@@ -118,7 +118,7 @@ export function createShell(o) {
   };
   const settleRunning = (v) => { if (resolveRunning) { resolveRunning(v); resolveRunning = () => {}; } };
 
-  let fb = newFrame(cols, rows), fb2 = newFrame(cols, rows), blank = newFrame(cols, rows);
+  let fb = newFrame(cols, rows), fb2 = newFrame(cols, rows), fbh = newFrame(cols, rows), blank = newFrame(cols, rows);
   const palette = () => (screen === 'boot' || screen === 'error' || (screen === 'running') ? bootPal : libPal);
 
   const view = () => ({
@@ -434,7 +434,16 @@ export function createShell(o) {
         clearFrame(f);
         if (runtime) {
           runtime.frame(f);
-          if (runtime.helpOpen) drawHelp(f.glyphs, f.shades, cols, rows, helpInfo('running'));
+          // the help panel ramps in and out over MENU_RAMP_SECONDS as a dissolve, as the menu does: the panel is drawn into a copy
+          // of the frame and the copy's cells flip in by the same per-cell thresholds. A flipped cell is a whole panel cell
+          // (a palette shade, never RGB_CELL), so the renderer takes no fg/bg for it.
+          const hp = runtime.helpP;
+          if (hp >= 1) drawHelp(f.glyphs, f.shades, cols, rows, helpInfo('running'));
+          else if (hp > 0) {
+            fbh.glyphs.set(f.glyphs); fbh.shades.set(f.shades); fbh.fg.set(f.fg); fbh.bg.set(f.bg);
+            drawHelp(fbh.glyphs, fbh.shades, cols, rows, helpInfo('running'));
+            dissolveFrames(f, fbh, hp, dissolveThresholds(cols * rows), f);
+          }
         }
         break;
       default: clearFrame(f);
@@ -449,7 +458,7 @@ export function createShell(o) {
 
   function resize(c, r) {
     cols = c; rows = r; tier = sizeTier(c, r);
-    fb = newFrame(c, r); fb2 = newFrame(c, r); blank = newFrame(c, r); runShown = false;
+    fb = newFrame(c, r); fb2 = newFrame(c, r); fbh = newFrame(c, r); blank = newFrame(c, r); runShown = false;
     if (runtime) runtime.resize(c, r);
     forced = true;
   }

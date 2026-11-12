@@ -379,7 +379,7 @@ async function ndPanelShots({ seed, cols, rows, dirs }) {
     app.handleKey('\x1b');
     await step(13);
     app.handleKey('h');
-    app.tick(0);
+    app.tick(0.3); // the help panel ramps in over 0.25 s
     return { menu, help: shotText(app) };
   } finally {
     app.quit(0);
@@ -430,7 +430,7 @@ export async function runCaptureCartridges({ outDir, seed = 1, dirs = CART_DIRS(
         if (hasDelza(c)) {
           await step(BOOT_END + 2);
           app.handleKey('h');
-          app.tick(0);
+          app.tick(0.3); // the help panel ramps in over 0.25 s
           put(`cart-delza-help-${cols}x${rows}.txt`, `=== help ${cols}x${rows} while the tale plays delza\n${shotText(app)}\n`);
           app.handleKey('h');
         }

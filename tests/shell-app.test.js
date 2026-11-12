@@ -479,7 +479,7 @@ test('running: h opens the cartridge help and freezes the screen (no writes), Es
   const before = c.app.getState().shell;
   c.key('h');
   assert.equal(c.sh().help, true);
-  c.tick(0);
+  c.tick(0.6); // the panel ramps in over 0.25 s (DRIFT-7 C10)
   const n = c.writes();
   assert.match(c.text(), /keys/);
   assert.match(c.text(), /eject the cartridge/);
