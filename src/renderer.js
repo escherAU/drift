@@ -42,24 +42,36 @@ function oklab(r, g, b) {
 // Nearest of xterm colours 16..255 by OKLab distance, L difference weighted 4x so brightness survives.
 // One shared 15-bit (5 bits per channel) table, filled lazily; each key is judged at its cell centre
 // (the 5-bit value expanded back to 8 bits as (v << 3) | (v >> 2)). Colour indexes are never 0, so 0 = unset.
-let lut256 = null, labs256 = null;
-function nearest256(c) {
+// Red-safe: a source whose linear red share r/(r+g+b) is under RED_SAFE_SHARE (0.8, the WCAG saturated-red line;
+// safeHue keeps 0.75 or less) never maps to a candidate at or over it, so quantising cannot make a safe hue a red.
+const RED_SAFE_SHARE = 0.8;
+const redShare = (r, g, b) => {
+  const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const R = lin(r), s = R + lin(g) + lin(b);
+  return s === 0 ? 0 : R / s;
+};
+let lut256 = null, labs256 = null, red256 = null;
+export function nearest256(c) {
   const key = (((c >> 19) & 31) << 10) | (((c >> 11) & 31) << 5) | ((c >> 3) & 31);
   if (!lut256) lut256 = new Uint8Array(32768);
   let v = lut256[key];
   if (v) return v;
   if (!labs256) {
-    labs256 = [];
+    labs256 = []; red256 = [];
     for (let i = 16; i < 256; i++) {
       let rgb;
       if (i < 232) { const k = i - 16; rgb = [XTERM_CUBE[Math.floor(k / 36)], XTERM_CUBE[Math.floor(k / 6) % 6], XTERM_CUBE[k % 6]]; } else { const g = 8 + (i - 232) * 10; rgb = [g, g, g]; }
       labs256.push(oklab(rgb[0], rgb[1], rgb[2]));
+      red256.push(redShare(rgb[0], rgb[1], rgb[2]) >= RED_SAFE_SHARE);
     }
   }
   const e = (q) => (q << 3) | (q >> 2);
-  const [L, A, B] = oklab(e((key >> 10) & 31), e((key >> 5) & 31), e(key & 31));
+  const sr = e((key >> 10) & 31), sg = e((key >> 5) & 31), sb = e(key & 31);
+  const [L, A, B] = oklab(sr, sg, sb);
+  const skipRed = redShare(sr, sg, sb) < RED_SAFE_SHARE;
   let best = 16, bd = Infinity;
   for (let i = 0; i < labs256.length; i++) {
+    if (skipRed && red256[i]) continue;
     const p = labs256[i];
     const d = (4 * (L - p[0])) ** 2 + (A - p[1]) ** 2 + (B - p[2]) ** 2;
     if (d < bd) { bd = d; best = i + 16; }

@@ -5,10 +5,11 @@
 // fg: Uint32Array, bg: Uint32Array } (0xRRGGBB). The buffers are reused from call to call, as the engine reuses
 // its pooled frames; the meter copies what it needs. `runControl` feeds 30 s at 18 fps into a meter.
 //
-// Only this fixture imports src/pixels.js (for safeHue, the colour function the safe kaleidoscope is made of) and
-// src/color.js (rgbTo256, for the 256-colour reduction). The meter itself imports nothing from src.
+// Only this fixture imports src/pixels.js (for safeHue, the colour function the safe kaleidoscope is made of),
+// src/color.js (rgbTo256) and src/renderer.js (nearest256), for the 256-colour reduction. The meter imports nothing from src.
 import { safeHue } from '../src/pixels.js';
 import { rgbTo256 } from '../src/color.js';
+import { nearest256 } from '../src/renderer.js';
 import { createFlashMeter } from './helpers-flash.js';
 
 export const CONTROL_COLS = 120;
@@ -188,17 +189,18 @@ export function hueStep(cols, rows, { at = 1 } = {}) {
 
 // ---- running a control ---------------------------------------------------------------------------------
 
-// Reduce a frame to the 256-colour cube/greys the way the 256 mode does: every fg/bg through the real rgbTo256
-// (src/color.js), then back to the RGB that index shows. The renderer's own 256 path (nearest256, OKLab distance)
-// is not exported, so this is the exported equivalent; it quantises more coarsely in lightness, so passing here
-// is the stricter test. PALETTE_BG passes through. Palette tables are reduced the same way.
+// Reduce a frame to the 256-colour cube/greys the way renderRgb does in mode '256': full-colour cells go through the
+// renderer's own nearest256 (OKLab distance), palette tables use the palette's own fg256/bg256 indexes, both mapped
+// back to the RGB that index shows. PALETTE_BG passes through (the meter resolves it to bgRgb[0], as the renderer
+// resolves it to bg256[0]). Hand-made palettes with no 256 tables fall back to rgbTo256.
 export function rgbOf256(i) {
   if (i >= 232) { const g = 8 + (i - 232) * 10; return (g << 16) | (g << 8) | g; }
   if (i < 16) throw new Error('rgbTo256 never returns the 16 system colours');
   const CUBE = [0, 95, 135, 175, 215, 255], k = i - 16;
   return (CUBE[Math.floor(k / 36)] << 16) | (CUBE[Math.floor(k / 6) % 6] << 8) | CUBE[k % 6];
 }
-const to256 = (c) => rgbOf256(rgbTo256([(c >> 16) & 255, (c >> 8) & 255, c & 255]));
+const to256 = (c) => rgbOf256(nearest256(c));
+const toTable = (p, rgb, idx) => (p[idx] ? Array.from(p[idx], rgbOf256) : Array.from(p[rgb], (c) => rgbOf256(rgbTo256([(c >> 16) & 255, (c >> 8) & 255, c & 255])))); // fallback: hand-made palettes without 256 tables
 export function makeReducer256(cols, rows) {
   const out = newFrame(cols, rows), cache = new Map(), palettes = new WeakMap();
   const near = (c) => { let v = cache.get(c); if (v === undefined) { v = to256(c); cache.set(c, v); } return v; };
@@ -212,7 +214,7 @@ export function makeReducer256(cols, rows) {
     let pal = palette;
     if (palette) {
       pal = palettes.get(palette);
-      if (!pal) { pal = { fgRgb: palette.fgRgb.map(near), bgRgb: palette.bgRgb.map(near) }; palettes.set(palette, pal); }
+      if (!pal) { pal = { fgRgb: toTable(palette, 'fgRgb', 'fg256'), bgRgb: toTable(palette, 'bgRgb', 'bg256') }; palettes.set(palette, pal); }
     }
     return { frame: out, palette: pal };
   };

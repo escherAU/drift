@@ -245,12 +245,20 @@ function lab(rgb) {
 }
 const LABS = [];
 for (let i = 16; i < 256; i++) LABS[i] = lab(xterm(i));
-// The documented rule: judge the colour at the centre of its 5-bit-per-channel cell.
+// The documented rule: judge the colour at the centre of its 5-bit-per-channel cell. DRIFT-7 step 0 adds the red-safe
+// exclusion: a source with linear red share under 0.8 never takes a candidate at 0.8 or more (written out again here).
+function redShareOf(rgb) {
+  const lin = (v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const [r, g, b] = rgb.map(lin);
+  return r + g + b === 0 ? 0 : r / (r + g + b);
+}
 function expectedIndex(c) {
   const ch = [(c >> 16) & 255, (c >> 8) & 255, c & 255].map((v) => { const q = v >> 3; return (q << 3) | (q >> 2); });
   const L = lab(ch);
+  const safe = redShareOf(ch) < 0.8;
   let best = -1, bd = Infinity;
   for (let i = 16; i < 256; i++) {
+    if (safe && redShareOf(xterm(i)) >= 0.8) continue;
     const d = (4 * (L[0] - LABS[i][0])) ** 2 + (L[1] - LABS[i][1]) ** 2 + (L[2] - LABS[i][2]) ** 2;
     if (d < bd) { bd = d; best = i; }
   }
