@@ -20,6 +20,7 @@ import { loadScenes as defaultLoadScenes } from '../cartridge/loader.js';
 import { parseHex, sgrFor, shadeRGB, colourTables, unpackRgb } from '../color.js';
 import { driftmanSkin, classicBootSkin, plainBootSkin } from './driftman.js';
 import { drawLibrary, idleSignature, dipAt, DIP_SECONDS, makeLibraryMemo } from './library.js';
+import { makeFoil } from './foil.js';
 import { drawInsert, INSERT_END, INSERT_CLICK_END } from './insert.js';
 import { drawBoot, bootPhases, mergeBootPalette, FIRST_INSERT_HINT } from './boot.js';
 import { createCartridgeRuntime, dissolveFrames } from './runtime.js';
@@ -39,6 +40,7 @@ export const INSERT_DISSOLVE_SECONDS = 0.3; // Enter on the card at the list and
 export const MESSAGE_SECONDS = 2.5; // the locked-cartridge message (it also clears on the next key)
 const TINT_LEVELS = [4, 8, 12, 15];
 const DEFAULT_HUE = '#9DB8A8';
+const labelHueOf = (c) => parseHex((c.manifest && c.manifest.labelHue) || DEFAULT_HUE) || parseHex(DEFAULT_HUE);
 
 // The first insert of the process shows the eject/help hint on the boot's bar row (per process, not saved anywhere).
 let firstInsertPending = true;
@@ -50,7 +52,7 @@ export function libraryPalette(carts, cmode) {
   const fgs = []; // the tint colours, in step with the sgr entries added after the skin's own
   const tints = [];
   for (const c of carts) {
-    const hue = parseHex((c.manifest && c.manifest.labelHue) || DEFAULT_HUE) || parseHex(DEFAULT_HUE);
+    const hue = labelHueOf(c);
     tints.push(sgr.length);
     for (const lv of TINT_LEVELS) { sgr.push(sgrFor(hue, lv, cmode) + base.base); fgs.push(shadeRGB(hue, lv)); }
   }
@@ -77,6 +79,8 @@ export function createShell(o) {
   const libCarts = carts.map((c, i) => ({
     id: c.id, title: c.title, code: (c.manifest && c.manifest.code) || '', blurb: c.manifest.blurb, facts: c.manifest.facts || [],
     locked: c.locked, label: c.label, ink: c.labelInk || null, tint: lib.tints[i],
+    // the foil label (manifest "foil", DRIFT-7 C12): hues as angles and the lightness of each ink level, read from the tint colours the palette holds
+    foil: !c.locked && c.manifest.foil ? makeFoil(c.manifest.foil, TINT_LEVELS.map((lv) => shadeRGB(labelHueOf(c), lv))) : undefined,
   }));
 
   let screen = 'library';

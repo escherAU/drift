@@ -37,6 +37,7 @@
 //   tiny                  one line asking for a bigger window
 import { put, putText, putCentered, centerX, lenOf, drawBox, wrapWords, clearFrame, sizeTier, drawTooSmall, dissolveThresholds } from './ui.js';
 import { DRIFTMAN_COLOURS } from './driftman.js';
+import { applyFoil, foilStep, foilTime } from './foil.js';
 
 export const LABEL_W = 24;
 export const LABEL_H = 10;
@@ -616,6 +617,8 @@ export function idleSignature(idle, sel, tier, memo) {
     const water = memo ? waterInfo(memo, sel.label) : null;
     if (water ? water.has : hasWater(sel.label)) { const col = rippleColAt(idle); parts.push('rip:' + ((water ? water.cols[col] : waterIn(sel.label, col)) ? col : -1)); }
     if (tier === 'full') parts.push('cur:' + cursorShadeAt(idle));
+    // the foil label shimmers in 6 steps a second; a library whose selected card has no foil adds nothing here (DRIFT-7 C12)
+    if (sel.foil) parts.push('foil:' + foilStep(idle));
   }
   if (tier === 'full') { const s = scanAt(idle); parts.push('scan:' + (s ? `${s.row},${s.from},${s.p}` : '-')); }
   return parts.join('|');
@@ -929,6 +932,18 @@ export function drawShelf(f, view, skin, o = {}) {
   };
   const cartAt = cartAtFor(look);
 
+  // The foil label (DRIFT-7 C12, foil.js): a pass over a card's label window after the card was copied onto the frame, so the
+  // cached card grids are untouched. Only the selected card at rest shimmers (idle running, no slide, no dip, no insert step);
+  // every other card, and the selected one while anything moves, shows the foil still, at t = 0. The card's own brightness
+  // level (its shade) sets the foil's brightness, so a neighbour's foil is as dim as its plain label.
+  const restNow = idle > 0 && !(view.slide < 1 && view.prev !== view.index) && !view.dip && !fadeP && !o.lift && !o.drop && !o.spread && !o.hook && !o.sweep && !o.body;
+  const foilT = restNow ? foilTime(idle) : 0;
+  const putCard = (idx, G, x, y, opts) => {
+    blit(f, G, x, y, opts);
+    const c = view.cartridges[idx];
+    if (c.foil && !c.locked) applyFoil(f, c, x, y, idx === view.index ? foilT : 0, opts);
+  };
+
   // the console, then the takeover band over it
   const makeConsole = (style) => {
     if (!L.full) return memo && style === plain ? memoMini(memo, skin, ui) : miniGrid({ st: style, ui });
@@ -961,7 +976,7 @@ export function drawShelf(f, view, skin, o = {}) {
     const drawNeighbour = (idx, x, shiftNow = shift, at = cartAt, rows = {}) => {
       const visible = Math.min(x + CART_W, f.cols, win1) - Math.max(x, 0, win0);
       if (visible < (shiftNow ? 1 : 3)) return;
-      blit(f, at(idx, false), x, L.cartTop, { fadeP, all: true, clipX0: win0, clipX1: win1, ...rows });
+      putCard(idx, at(idx, false), x, L.cartTop, { fadeP, all: true, clipX0: win0, clipX1: win1, ...rows });
     };
     if (n > 1 && L.xl && shift !== 0) {
       // Extra-large slide: only the centre three slide (the cartridge before, the new one and the one after, each
@@ -1004,10 +1019,10 @@ export function drawShelf(f, view, skin, o = {}) {
         }
         if (L.xl && n > 1) drawSpines(f, look, ui, L, fadeP, cartAt);
         const sy = rows.clipY === undefined ? L.consoleTop + 2 : Math.min(rows.clipY, L.consoleTop + 2);
-        blit(f, at(view.index, true), L.cartX + shiftNow, L.cartTop + offset, { clipY: sy, clipY0: rows.clipY0 });
+        putCard(view.index, at(view.index, true), L.cartX + shiftNow, L.cartTop + offset, { clipY: sy, clipY0: rows.clipY0 });
       }
     }
-    if (n > 1 && L.xl && shift !== 0) blit(f, cartAt(view.index, true), L.cartX + shift, L.cartTop + offset, { clipY: L.consoleTop + 2 });
+    if (n > 1 && L.xl && shift !== 0) putCard(view.index, cartAt(view.index, true), L.cartX + shift, L.cartTop + offset, { clipY: L.consoleTop + 2 });
     if (L.xl) {
       const dw = Math.min(f.cols, CONSOLE_W + 16), dx = centerX(f.cols, dw);
       for (let i = 0; i < dw; i++) put(f, dx + i, L.deskY, 0x2594, DRIFTMAN_COLOURS.housing);
@@ -1022,7 +1037,7 @@ export function drawShelf(f, view, skin, o = {}) {
   }
 
   // compact: the cartridge on the left, the list and the blurb box on the right
-  blit(f, cartAt(view.index, true, true), L.cartX, L.cartTop + offset, { clipY: L.miniTop + 2 });
+  putCard(view.index, cartAt(view.index, true, true), L.cartX, L.cartTop + offset, { clipY: L.miniTop + 2 });
   drawListPane(ctx, view, skin, L.listX, L.cartTop, L.listW, LIST_SLOTS, 1);
   const by = L.cartTop + 9;
   if (!fadeP) drawBox(f, L.listX, by, L.listW, 9, null, DRIFTMAN_COLOURS.housing);
