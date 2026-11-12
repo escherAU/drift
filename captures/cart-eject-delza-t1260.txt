@@ -1,4 +1,4 @@
-=== eject t=0.960s after e 120x40 delza
+=== eject t=1.260s after e 120x40 delza
                                                                                                                         
                                                                                                                         
                                              ╭────────────────────────────╮                                             

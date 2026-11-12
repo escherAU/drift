@@ -17,7 +17,7 @@ import {
 } from '../src/shell/insert.js';
 import { driftmanSkin, classicBootSkin, plainBootSkin, DRIFTMAN_COLOURS } from '../src/shell/driftman.js';
 import { INSTALL_DIR } from '../src/cartridge/loader.js';
-import { libraryPalette, createShell, EJECT_SECONDS } from '../src/shell/shell.js';
+import { libraryPalette, createShell, EJECT_ANIM_SECONDS } from '../src/shell/shell.js';
 import { SPEEDS, DISSOLVE_SECONDS, DEFAULT_FADE_SECONDS } from '../src/app.js';
 import { newFrame, ramp } from '../src/shell/ui.js';
 import { isWide, isInvisible } from './helpers-width.js';
@@ -238,12 +238,12 @@ test('insert t = 0 is the library at rest, and the timeline is not changed by th
 
 // ---- eject: the insert played backwards
 
-const ejectT = (st) => INSERT_END * (1 - ramp(st, 0, EJECT_SECONDS));
+const ejectT = (st) => INSERT_END * (1 - ramp(st, 0, EJECT_ANIM_SECONDS)); // st = the animation's own clock (it starts when the 0.3 s fade to blank ends)
 
 test('eject (insert backwards, 1.6 s): the console reverts, the cartridge pops up, the neighbours slide back - all monotone', () => {
-  assert.equal(EJECT_SECONDS, 1.6);
+  assert.equal(EJECT_ANIM_SECONDS, 1.6);
   const times = [];
-  for (let st = 0; st <= EJECT_SECONDS + 1e-9; st += 1 / FPS) times.push(Math.min(st, EJECT_SECONDS));
+  for (let st = 0; st <= EJECT_ANIM_SECONDS + 1e-9; st += 1 / FPS) times.push(Math.min(st, EJECT_ANIM_SECONDS));
   const tint = entries[1].tint;
   const frames = times.map((st) => at(120, 40, ejectT(st), skinnedItem));
   // the cartridge never goes down while ejecting

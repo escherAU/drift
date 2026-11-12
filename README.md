@@ -188,7 +188,7 @@ never rebind a key.
 | running | Enter | open the menu; with the menu open, choose the highlighted entry |
 | running | up or left / down or right | menu: previous / next |
 | running | Esc | close the help or the menu (the menu also closes after 20 s idle) |
-| running | `e`, `l` | eject: the insert animation plays backwards and you are back in the library (Classic has no `e`; it has only the `l` that opens the library) |
+| running | `e`, `l` | eject: the picture fades to blank (0.3 s), then the insert animation plays backwards (1.6 s) and you are back in the library (Classic has no `e`; it has only the `l` that opens the library) |
 | running | space | next scene in the current program |
 | running | `p` | pause or resume |
 | running | `+` (or `=`) / `-` (or `_`) | faster / slower |
@@ -591,7 +591,7 @@ The same capture command also writes the mode captures (`<mode>-<scene>-1/-2.txt
 `cart-library-<id>-120x40.txt` and `-80x24.txt` for every install cartridge (locked ones included),
 `cart-library-240x67.txt` and `cart-library-list-60x14.txt` (Classic selected), `cart-insert-<id>-t<ms>.txt` /
 `cart-boot-<id>-t<ms>.txt` at 0.4, 0.9, 1.25, 1.6, 2.5, 3.4, 4.2, 5.0 and 5.6 s after Enter (insert before 1.5 s,
-boot after; the 80x24 ones carry a `-80x24` before the time), `cart-eject-<id>-t<ms>.txt` for a cartridge that runs
+boot after; the 80x24 ones carry a `-80x24` before the time), `cart-eject-<id>-t<ms>.txt` (<ms> after `e`, counted from the start of the 0.3 s fade to blank) for a cartridge that runs
 in the shell, and `cart-help-classic-120x40.txt` (the help panel while Classic runs). Only the install folder is
 captured, so the files do not depend on what is in your user cartridge folder. `node tools/capture.mjs --cartridges`
 writes only these.

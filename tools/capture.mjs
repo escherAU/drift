@@ -26,7 +26,7 @@ import { buildPlan, pieceToText } from '../src/art/engine.js';
 import { discoverCartridges, INSTALL_DIR } from '../src/cartridge/loader.js';
 import { INSERT_END } from '../src/shell/insert.js';
 import { BOOT_END } from '../src/shell/boot.js';
-import { EJECT_SECONDS, resetFirstInsertHint } from '../src/shell/shell.js';
+import { EJECT_FADE_SECONDS, EJECT_ANIM_SECONDS, resetFirstInsertHint } from '../src/shell/shell.js';
 import { TURN, HIT_AT, CONTACT_AT } from '../cartridges/delza/scenes/cinderhorn.js';
 import { LINES, STARTS, TYPE_CPS, DISSOLVE, FLUTTER_STEP } from '../cartridges/delza/scenes/lampwarden.js';
 import { flickerShade } from '../cartridges/night-drive/scenes/diner.js';
@@ -181,7 +181,8 @@ export function runCaptureGallery({ outDir, seed = 1 }) {
 //   cart-boot-<id>-t<ms>.txt       the boot screen <ms> after Enter (120x40; from INSERT_END on)
 //   cart-insert-<id>-80x24-t<ms>.txt, cart-boot-<id>-80x24-t<ms>.txt   the same on the compact console
 //   cart-eject-<id>[-80x24]-t<ms>.txt   a cartridge that RUNS in the shell (not Classic, which has no eject) ejecting,
-//                          <ms> after `e`, at the same fractions of EJECT_SECONDS as the insert moments are of INSERT_END
+//                          <ms> after `e`: the animation (EJECT_ANIM_SECONDS) starts after the fade to blank (EJECT_FADE_SECONDS), so the moments
+//                          are EJECT_FADE_SECONDS + the same fractions of EJECT_ANIM_SECONDS as the insert moments are of INSERT_END
 //   cart-help-classic-120x40.txt   the help panel (h) while Classic runs, after the console has handed back to it
 // Unlocked cartridges only get insert/boot/eject. Driven through the real app on a fake terminal, with a fake clock.
 const CART_DT = 1 / 18;
@@ -189,7 +190,7 @@ const CART_SIZES = [[120, 40], [80, 24]];
 // seconds after Enter: the insert is over at INSERT_END (1.5 s), the boot runs on to about 5.8 s. The 3.4 s moment sits
 // where Classic's progress bar is whole (the old 3.6 s moment caught it with a one-cell gap).
 export const CART_MOMENTS = [0.4, 0.9, 1.25, 1.6, 2.5, 3.4, 4.2, 5.0, 5.6];
-export const EJECT_MOMENTS = CART_MOMENTS.filter((m) => m < INSERT_END).map((m) => (m / INSERT_END) * EJECT_SECONDS);
+export const EJECT_MOMENTS = CART_MOMENTS.filter((m) => m < INSERT_END).map((m) => EJECT_FADE_SECONDS + (m / INSERT_END) * EJECT_ANIM_SECONDS);
 const CART_DIRS = () => [{ dir: INSTALL_DIR, trusted: true }];
 const sizeTag = (cols, rows) => (cols === 120 && rows === 40 ? '' : `-${cols}x${rows}`);
 const ms = (sec) => Math.round(sec * 1000);

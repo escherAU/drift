@@ -246,7 +246,7 @@ for (const [cols, rows, phase] of [...SIZES, [240, 67]].flatMap(([w, h]) => [0, 
 }
 
 for (const [cols, rows] of SIZES) {
-  test(`flash ${cols}x${rows}: eject (the insert backwards, 1.6 s) under the limit with every brightness change a ramp, and the library after it`, async (t) => {
+  test(`flash ${cols}x${rows}: eject (fade to blank 0.3 s, then the insert backwards 1.6 s) under the limit with every brightness change a ramp, and the library after it`, async (t) => {
     const c = mkShell({ startScreen: { screen: 'library' }, cols, rows });
     c.app.start();
     c.goto('fixture');

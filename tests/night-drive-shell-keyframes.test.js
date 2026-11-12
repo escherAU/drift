@@ -5,7 +5,8 @@
 //   from sundown, coast, redlight and overdrive after 3 s of play, each followed by a fresh insert). The eject key frame depends on the picture it
 //   fades out of, so the ejects are taken from the tracks that measured worst.
 //   (1) a green ratchet: no key frame is worse than the maximum measured on HEAD plus 3 points, printed as a TABLE
-//   (2) a todo: every key frame is 40% or less at all six sizes (it is not: the eject frame is over 40% at all six sizes)
+//   (2) every key frame is 40% or less at all six sizes (the eject frame was over 40% at all six until DRIFT-7 C9 made it a 0.3 s dissolve of
+//       the frozen running frame to blank; its key frame is now the first 1/18 s of that dissolve, 8.5 to 10.8% at the worst track)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { boot, reinsert, recorder, pick, MENU, SIX, HARD_CEILING, pct } from './helpers-night-drive-shell.js';
@@ -41,13 +42,15 @@ async function measureKeyFrames(cols, rows) {
 }
 
 // The maxima measured on HEAD, plus 3 points. A key frame that gets worse than this fails; a better one passes (and the limit can come down).
+// The eject column came down at DRIFT-7 C9 (it was 0.720, 0.654, 0.699, 0.704, 0.657, 0.548): maximum measured 0.1079, 0.0871, 0.0942, 0.0943,
+// 0.1042, 0.0850, rounded up to a tenth of a point, plus 3 points.
 const RATCHET = {
-  '120x40': { pick: 0.079, eject: 0.720 },
-  '89x40': { pick: 0.091, eject: 0.654 },
-  '79x25': { pick: 0.126, eject: 0.699 },
-  '80x24': { pick: 0.129, eject: 0.704 },
-  '41x11': { pick: 0.225, eject: 0.657 },
-  '240x67': { pick: 0.050, eject: 0.548 },
+  '120x40': { pick: 0.079, eject: 0.138 },
+  '89x40': { pick: 0.091, eject: 0.118 },
+  '79x25': { pick: 0.126, eject: 0.125 },
+  '80x24': { pick: 0.129, eject: 0.125 },
+  '41x11': { pick: 0.225, eject: 0.135 },
+  '240x67': { pick: 0.050, eject: 0.115 },
 };
 
 test('shell edges (E6) key frames: the Enter that picks a track and the eject key change no more of the cells than the measured ratchet (maximum on HEAD + 3 points) at six sizes', async () => {
@@ -63,7 +66,7 @@ test('shell edges (E6) key frames: the Enter that picks a track and the eject ke
   assert.deepEqual(bad, []);
 });
 
-test('shell edges (E6) every key frame is under the 40% hard ceiling at all six sizes', { todo: 'the eject key frame is over the 40% ceiling flash (e) uses at every size measured: 120x40 69.0% (redlight), 89x40 62.4%, 79x25 66.9%, 80x24 67.4%, 41x11 62.7% (sundown), 240x67 51.8%; the 8 pick key frames are all 19.5% or less; the shell, not the cartridge, draws it' }, async () => {
+test('shell edges (E6) every key frame is under the 40% hard ceiling at all six sizes', async () => {
   const bad = [];
   for (const [cols, rows] of SIX) {
     const m = await keyFrames(cols, rows);

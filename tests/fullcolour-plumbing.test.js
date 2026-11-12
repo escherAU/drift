@@ -354,6 +354,7 @@ test('FC14 keepForHandover and the library hand-over loop keep fg/bg (eject fram
   const sh = await running([makeGlow()], { drawInsert: seam });
   sh.actions.eject();
   assert.equal(sh.state().screen, 'eject');
+  sh.tick(0.7); // past the 0.3 s fade to blank and the 0.3 s dissolve of the animation in: the eject now draws the whole (seam) insert picture
   const e = sh.frame(); // draws the (seam) eject frame and keeps it for the hand-over
   assert.ok(e.fg, 'eject frame carries fg');
   e.fg.fill(0); e.bg.fill(0); // the live buffers go stale (the library draws over the same frame); only the kept copy still has the colours

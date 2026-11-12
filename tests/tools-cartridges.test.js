@@ -11,7 +11,7 @@ import { runCaptureCartridges, cartridgeCaptureNames, nightDriveCaptureNames, CA
 import { discoverCartridges, INSTALL_DIR } from '../src/cartridge/loader.js';
 import { isAllowedGlyph } from '../src/glyphs.js';
 import { INSERT_END } from '../src/shell/insert.js';
-import { EJECT_SECONDS } from '../src/shell/shell.js';
+import { EJECT_FADE_SECONDS, EJECT_ANIM_SECONDS } from '../src/shell/shell.js';
 import { makeRoot } from './helpers-shell.js';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'drift-tools-cart-'));
@@ -320,7 +320,7 @@ test('cartridge captures: Night Drive\'s set shows what it says - every track mo
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('cartridge captures: a cartridge that runs in the shell also gets eject files at the matching fractions of the 1.6 s eject (fixture root)', async () => {
+test('cartridge captures: a cartridge that runs in the shell also gets eject files at the matching fractions of the 1.6 s eject animation, after its 0.3 s fade to blank (fixture root)', async () => {
   const dir = tmp();
   const root = makeRoot();
   try {
@@ -329,7 +329,7 @@ test('cartridge captures: a cartridge that runs in the shell also gets eject fil
     const names = new Set(fs.readdirSync(dir));
     assert.deepEqual([...names].sort(), cartridgeCaptureNames({ dirs }).sort());
     assert.equal(files.length, names.size);
-    assert.deepEqual(EJECT_MOMENTS.map((m) => Math.round((m / EJECT_SECONDS) * 1000)), CART_MOMENTS.filter((m) => m < INSERT_END).map((m) => Math.round((m / INSERT_END) * 1000)), 'the same fractions');
+    assert.deepEqual(EJECT_MOMENTS.map((m) => Math.round(((m - EJECT_FADE_SECONDS) / EJECT_ANIM_SECONDS) * 1000)), CART_MOMENTS.filter((m) => m < INSERT_END).map((m) => Math.round((m / INSERT_END) * 1000)), 'the same fractions');
     const eject = [...names].filter((n) => n.startsWith('cart-eject-'));
     assert.equal(eject.length, EJECT_MOMENTS.length * 2, 'three per size for the fixture; none for Classic');
     assert.ok(!eject.some((n) => n.includes('classic')), 'Classic has no eject');

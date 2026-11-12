@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createApp, main, planStartup, parseOptions, helpText } from '../src/app.js';
 import { SHELL_KEYMAP, SHELL_KEYS, buildShellKeyMaps, SHELL_SCREENS } from '../src/keymap.js';
-import { createShell, LOCKED_MESSAGE, ERROR_SECONDS, EJECT_SECONDS } from '../src/shell/shell.js';
+import { createShell, LOCKED_MESSAGE, ERROR_SECONDS, EJECT_SECONDS, EJECT_FADE_SECONDS, EJECT_ANIM_SECONDS } from '../src/shell/shell.js';
 import { discoverCartridges } from '../src/cartridge/loader.js';
 import { INSERT_END } from '../src/shell/insert.js';
 import { BOOT_END } from '../src/shell/boot.js';
@@ -497,15 +497,16 @@ test('running: h opens the cartridge help and freezes the screen (no writes), Es
   c.done();
 });
 
-test('running: e and l eject; the reverse animation takes 1.6 s, then the library, on the same cartridge; the next insert works', async () => {
+test('running: e and l eject; the picture fades to blank in EJECT_FADE_SECONDS and the reverse animation takes EJECT_ANIM_SECONDS (EJECT_SECONDS in all), then the library, on the same cartridge; the next insert works', async () => {
   for (const k of ['e', 'l', 'E']) {
     const c = mkShell({ startScreen: LIB });
     c.app.start();
     await runCartridge(c, 'fixture');
     c.key(k);
     assert.equal(c.sh().screen, 'eject');
+    assert.ok(Math.abs(EJECT_SECONDS - (EJECT_FADE_SECONDS + EJECT_ANIM_SECONDS)) < 1e-12);
     c.tick(EJECT_SECONDS - 0.2);
-    assert.equal(c.sh().screen, 'eject', 'still ejecting at 1.4 s');
+    assert.equal(c.sh().screen, 'eject', 'still ejecting 0.2 s before the end');
     c.tick(0.4);
     assert.equal(c.sh().screen, 'library');
     assert.equal(c.sh().cartridge, 'fixture');

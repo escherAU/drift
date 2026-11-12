@@ -8,7 +8,8 @@
 //   insert     INSERT_END seconds; the scenes start loading when it begins
 //   boot       waits at the end of the progress bar until the load finishes; any key but q skips
 //   error      a load failure: 4 s card, then the library
-//   eject      the insert animation played backwards in 1.6 s
+//   eject      the running picture dissolves to blank (EJECT_FADE_SECONDS, in the cartridge's palette), then blank dissolves into the insert
+//              animation played backwards (EJECT_ANIM_SECONDS, clock from the end of the fade, in the library palette); EJECT_SECONDS in all
 //   running    the cartridge runtime (menu, programs, help)
 //
 // A late or failed load never writes after dispose(): every promise checks `disposed` first and has a catch.
@@ -26,7 +27,9 @@ import { newFrame, clearFrame, ramp, sizeTier, dissolveThresholds } from './ui.j
 import { RGB_CELL } from '../renderer.js';
 
 export const ERROR_SECONDS = 4;
-export const EJECT_SECONDS = 1.6;
+export const EJECT_FADE_SECONDS = 0.3; // eject phase 1: the frozen running frame dissolves to blank (linear)
+export const EJECT_ANIM_SECONDS = 1.6; // eject phase 2: the insert animation backwards; its clock starts when phase 1 ends
+export const EJECT_SECONDS = 1.9; // EJECT_FADE_SECONDS + EJECT_ANIM_SECONDS (written out: 0.3 + 1.6 is 1.9000000000000001)
 export const LOCKED_MESSAGE = 'This cartridge isn\'t ready yet. Pick another with ◀ ▶.';
 export const SLIDE_SECONDS = 0.36; // the carousel slide (34 columns, ease-out)
 export const TYPE_SECONDS = 0.3; // the console screen retypes left to right
@@ -100,6 +103,7 @@ export function createShell(o) {
   let cart = null, entry = null, classic = false, skipped = false, menuOnArrive = true;
   let load = { status: 'none', scenes: null, error: null };
   let bootSkin = driftmanSkin, bootPal = libPal, errorText = '';
+  let ejectFrom = null, ejectPal = libPal, runShown = false; // the running frame as last drawn (kept at eject) and the palette it was drawn in
   let cartPal = libPal, bootMap = null; // the cartridge's own palette (the runtime's) and, for a skinned one, where the console's colours sit in bootPal
   let runtime = null;
   let bt = 0; // boot-local seconds
@@ -180,12 +184,19 @@ export function createShell(o) {
     if (classic) { const h = host; resetLibrary(); h.leaveToClassic(); return; }
     ensureRuntime();
     if (!runtime) return;
-    screen = 'running'; st = 0; forced = true;
+    screen = 'running'; st = 0; forced = true; runShown = false;
     if (menuOnArrive) runtime.startAuto();
     settleRunning(true);
   }
 
+  // The eject starts from the running picture the player was looking at, WITH its fg/bg, and its palette; it
+  // dissolves to blank before the palette changes to the library's, so no frame mixes the two.
   function startEject() {
+    if (!ejectFrom || ejectFrom.cols !== cols || ejectFrom.rows !== rows) ejectFrom = newFrame(cols, rows);
+    if (runShown) { ejectFrom.glyphs.set(fb.glyphs); ejectFrom.shades.set(fb.shades); ejectFrom.fg.set(fb.fg); ejectFrom.bg.set(fb.bg); }
+    else { clearFrame(ejectFrom); if (runtime) runtime.frame(ejectFrom); } // no running frame was drawn since the last resize
+    ejectFrom.cols = cols; ejectFrom.rows = rows;
+    ejectPal = runtime ? runtime.palette() : libPal;
     screen = 'eject'; st = 0; forced = true;
     runtime = null;
   }
@@ -381,10 +392,20 @@ export function createShell(o) {
           dissolveFrames(insFrom, f, ramp(st, 0, INSERT_DISSOLVE_SECONDS), dissolveThresholds(cols * rows), f);
         }
         break;
-      case 'eject':
-        drawInsertFn(f, { item: insertItem(), t: INSERT_END * (1 - ramp(st, 0, EJECT_SECONDS)) }, driftmanSkin);
+      case 'eject': {
+        const thr = dissolveThresholds(cols * rows);
+        clearFrame(blank);
+        if (st < EJECT_FADE_SECONDS) {
+          if (ejectFrom && ejectFrom.cols === cols && ejectFrom.rows === rows) dissolveFrames(ejectFrom, blank, ramp(st, 0, EJECT_FADE_SECONDS), thr, f);
+          else clearFrame(f);
+          break;
+        }
+        const a = st - EJECT_FADE_SECONDS; // the animation's own clock
+        drawInsertFn(f, { item: insertItem(), t: INSERT_END * (1 - ramp(a, 0, EJECT_ANIM_SECONDS)) }, driftmanSkin);
+        if (a < EJECT_FADE_SECONDS) dissolveFrames(blank, f, ramp(a, 0, EJECT_FADE_SECONDS), thr, f);
         keepForHandover(f);
         break;
+      }
       case 'error':
         drawBoot(f, { skin: bootSkin, t: 0, error: errorText, title: cart && cart.title }, driftmanSkin);
         keepForHandover(f);
@@ -409,6 +430,7 @@ export function createShell(o) {
         break;
       }
       case 'running':
+        runShown = !!runtime;
         clearFrame(f);
         if (runtime) {
           runtime.frame(f);
@@ -418,7 +440,7 @@ export function createShell(o) {
       default: clearFrame(f);
     }
     forced = false;
-    const out = { glyphs: f.glyphs, shades: f.shades, cols, rows, palette: screen === 'running' && runtime ? runtime.palette() : palette() };
+    const out = { glyphs: f.glyphs, shades: f.shades, cols, rows, palette: screen === 'running' && runtime ? runtime.palette() : screen === 'eject' && st < EJECT_FADE_SECONDS ? ejectPal : palette() };
     // fg/bg ride along only when a full-colour cell is on screen, so every palette-only frame is exactly what it was before
     // and the renderer never takes its full-colour branch for it
     if (f.shades.indexOf(RGB_CELL) !== -1) { out.fg = f.fg; out.bg = f.bg; }
@@ -427,7 +449,7 @@ export function createShell(o) {
 
   function resize(c, r) {
     cols = c; rows = r; tier = sizeTier(c, r);
-    fb = newFrame(c, r); fb2 = newFrame(c, r); blank = newFrame(c, r);
+    fb = newFrame(c, r); fb2 = newFrame(c, r); blank = newFrame(c, r); runShown = false;
     if (runtime) runtime.resize(c, r);
     forced = true;
   }
