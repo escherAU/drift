@@ -9,6 +9,7 @@
   "code": "DM-9K",
   "facts": ["3 visions · about 3 min · full colour", "1 of 1 · runs on light"],
   "labelHue": "#3FE8FF",
+  "console": "code",
   "foil": { "hues": ["#3FE8FF", "#A77BFF", "#FF4FD8", "#FFD36B", "#5CFFB8"], "style": "holo" },
   "scenes": [
     { "id": "rosette", "kind": "cells", "title": "Rosette", "rgb": true }

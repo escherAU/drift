@@ -49,7 +49,7 @@ test('driftman-9000 manifest: the designer\'s copy, foil and facts', () => {
   assert.equal(manifest.labelHue, '#3FE8FF');
   assert.deepEqual(manifest.foil, { hues: ['#3FE8FF', '#A77BFF', '#FF4FD8', '#FFD36B', '#5CFFB8'], style: 'holo' });
   assert.equal(manifest.locked, undefined, 'unlocked');
-  assert.equal(manifest.console, undefined, 'no console hook yet (a later stage)');
+  assert.equal(manifest.console, 'code', 'the console hook (DRIFT-7 C13, console.js)');
 });
 
 test('driftman-9000 program: one program, "transmission", a dissolve through the scenes in menu order, 60 s each; no Eject entry', () => {

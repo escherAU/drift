@@ -439,6 +439,11 @@ test('S8 the shipped cartridges (Night Drive, Delza, Classic, ...) have no conso
   assert.deepEqual(d.errors, []);
   assert.ok(d.cartridges.length >= 4);
   for (const c of d.cartridges) {
+    if (c.id === 'driftman-9000') { // the one shipped cartridge with a console hook (DRIFT-7 C13; its own tests are in driftman-9000-console.test.js)
+      assert.equal(c.manifest.console, 'code');
+      assert.ok(c.consoleFile);
+      continue;
+    }
     assert.equal(c.manifest.console, undefined, c.id);
     assert.equal(c.consoleFile, undefined, c.id);
     if (c.locked || c.runtime === 'classic') continue;
