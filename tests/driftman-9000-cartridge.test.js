@@ -1,4 +1,4 @@
-// DRIFT-7 C6: the Driftman 9000 cartridge (DM-9K), stage A: the shell (manifest, skin, label, foil) and a placeholder Rosette.
+// DRIFT-7 C6: the Driftman 9000 cartridge (DM-9K), stage A: the shell (manifest, skin, label, foil); the Rosette's message, size and buffer checks (the scene itself: driftman-9000-rosette*.test.js).
 // The shared suites (cartridge-scenes, cartridges, shell-*) already run its scene through every check once it is installed;
 // this file holds what is the 9000's own. Lists are read from the files, so it stays right as later stages add visions.
 import test from 'node:test';
@@ -112,6 +112,7 @@ test('driftman-9000 skin: validates, background #05060C, palette and every colou
   assert.deepEqual(s.help.groups, { Cartridge: 'Visions', Other: 'Machine' });
   assert.deepEqual(s.boot.lines, ['CORE 2.0 ....... SUPERSEDED', 'LUMEN CORE ..... 9.0', 'MEMORY ......... ALL OF IT', 'Good morning. It has been a while.']);
   assert.equal(s.boot.art, false);
+  assert.equal(s.boot.seconds, 1.75, 'the lines are held 0.25 s longer than the default 1.5, which puts the typed text clearing outside the flash meter 4 s window (DRIFT-7 C14a; see driftman-9000-console-flash.test.js)');
   assert.equal(s.insert.text, 'SIGNAL FROM THE FAR FUTURE · HOLD STILL');
   assert.equal(s.wording.menuHint, 'arrows choose · Enter wakes it · e folds away · h keys');
   const keys = Object.entries(s.wording.keys);
@@ -177,7 +178,7 @@ test('driftman-9000: no banned glyph anywhere in the cartridge folder, comments 
   for (const f of files) for (const g of BANNED) assert.ok(!fs.readFileSync(f, 'utf8').includes(g), `${f}: ${g}`);
 });
 
-// ---- the placeholder Rosette
+// ---- the Rosette (the placeholder checks of stage A; the real scene's own suites are driftman-9000-rosette*.test.js)
 
 const text = (f, w) => { const out = []; for (let y = 0; y < f.rows; y++) out.push(String.fromCodePoint(...f.glyphs.slice(y * w, (y + 1) * w))); return out; };
 
