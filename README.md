@@ -197,7 +197,7 @@ never rebind a key.
 
 Insert, boot and the error card take any key except `q` as "skip". The timeline is: insert
 animation 1.5 s (the cartridge lifts, the neighbours slide away, it drops into the slot, the
-console takes on the cartridge's skin behind a 6-column band), then the boot, drawn on the
+console takes on the cartridge's skin behind a 6-column band, or is redrawn by the cartridge's console hook), then the boot, drawn on the
 console's own screen (a line opens into the screen, boot lines type out, a progress bar that
 waits for the scenes to finish loading, the screen zooms to fill the terminal, the title card),
 then the menu opens over the first program. If loading fails the console shows the reason for
@@ -256,7 +256,7 @@ and never stops the others; at most 50 cartridges are read.
 
 | field | required | meaning |
 |---|---|---|
-| `format` | yes | `1`, or `2` for a cartridge with a full-colour (`rgb`) scene (a field that needs format 2 in a format 1 manifest gives "needs a newer Drift") |
+| `format` | yes | `1`, or `2` for a cartridge with a full-colour (`rgb`) scene or a console hook (a field that needs format 2 in a format 1 manifest gives "needs a newer Drift") |
 | `id` | yes | 2 to 32 characters: lowercase letters, digits, hyphens, starting with a letter, not ending in a hyphen. Must equal the folder name. Reserved: `last`, `con`, `prn`, `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9`; `classic` only in the install folder |
 | `title` | yes | up to 30 characters |
 | `version` | yes | `1.0.0` form (three whole numbers) |
@@ -267,6 +267,7 @@ and never stops the others; at most 50 cartridges are read.
 | `code` | any | exactly 5 characters, capitals, digits or hyphen (like `DM-01`): the shelf code shown beside the title |
 | `facts` | any | up to 6 lines of up to 40 characters, listed under the blurb on the console screen of an unlocked card (full tier) |
 | `labelHue` | no | `#RRGGBB`: the tint of the library card |
+| `console` | no | `"code"` (the only value; install folder only, needs `format` 2): the cartridge ships `console.js`, a hook that draws the Driftman 2000's body in full colour (see **Console hook** below) |
 | `scenes` | yes (1 to 16) | list of `{ id, kind, title?, ref?, rgb? }`. `id` follows the id rule; `kind` is `cells`, `sim`, `field` (code, install only), `text` (a `scenes/<id>.txt` file) or `builtin`; `title` up to 30 characters; `ref` (builtin only) names a Classic **calm** or **experimental** scene, such as `sand` or `plasma`; `rgb` (`true`, on `cells` and `sim` scenes only, install folder only, needs `format` 2 and a `skin.json` with `palette.bg`) marks a full-colour scene: the scene fills `params.fg` and `params.bg` (0xRRGGBB per cell) and the composer pre-fills its colours with 255, which means "this cell's colours are in fg and bg"; the scene module declares `rgb = true` too |
 | `programs` | yes (1 to 8) | list of `{ id, title?, transition, scenes, sceneSeconds?, seconds?, fadeSeconds? }`: `transition` is `dissolve` or `crossfade`; `scenes` lists scene ids (1 to 16); `sceneSeconds` 20 to 3600 (default 180); `seconds` (optional) is an object keyed by scene id that gives single scenes their own time, 20 to 3600 each (a key must be a scene in this program; scenes not named use `sceneSeconds`); `fadeSeconds` 5 to 60 (default 15, crossfade only, and shorter than the shortest scene time: `sceneSeconds` or any `seconds` entry). A `crossfade` program holds only `field` scenes and calm builtins; a `dissolve` program holds `cells`, `sim`, `text` and experimental builtins |
 | `start` | yes | the id of the program that plays first |
@@ -312,6 +313,22 @@ Every glyph must be on the allow-list and one cell wide. Unknown fields inside `
 The 8-character `glyphs` and `box` strings are the corners and edges in the order
 top-left, top, top-right, right, bottom-right, bottom, bottom-left, left (for example
 `┌─┐│┘─└│`).
+
+**Console hook** (`"console": "code"`; install folder only, `format` 2). The cartridge ships `console.js`, whose default export is
+`{ id, drawConsole(frame, { phase, p, t, rect, screen, tier }) }`, and the Driftman 2000's body is drawn by it in full colour instead of
+by the console block above. `drawConsole` is pure and writes only inside `rect`: cells with shade 255 take their colours from
+`frame.fg` and `frame.bg` (a bg of `PALETTE_BG` is the palette's background), and the console's own palette shades (below 20) are allowed
+too. The shell still draws the screen text and the LEDs on top, so the hook never draws them. `rect` is the console's `{ x, y, w, h }` in
+the frame (84 x 18 at tier `full`, 38 x 4 at tier `mini`, the compact layout's console); `screen` is the 46 x 9 screen inside it at `full`
+(at local 3, 4) and `null` at `mini`, which has no screen; `phase` is `insert`, `boot` or `eject` (the console is not on screen while a
+cartridge runs); `t` is the seconds on that phase's clock; `p` is the morph from the library's console to the cartridge's, 0 to 1. The
+loader imports `console.js` only for an install-folder cartridge, checks its export, and smoke-renders it at 84 x 18 and 38 x 4: a throw,
+a cell off the allow-list or past 0xFFFFFF, a write outside `rect`, a different picture for the same arguments, or a call over 250 ms
+makes the whole cartridge fail to load (the error card). Like scene code, `console.js` may import only what the scene-code scan allows.
+`p` is one ramp over the insert and the boot: 0 to 0.55 over the insert's step 5 (1.0 to 1.5 s, in place of the band sweep), then 0.55
+to 1 over the first 0.4 s of the boot, then 1; it never decreases. The hook is used for a whole insert or not at all: it takes over
+only if its module had finished loading at the first frame at or after 1.0 s. Eject plays the insert backwards, so it folds back from
+`p` 0.55 (after the 0.3 s fade) and never shows `p` 1: a known compromise. A cartridge without the field draws exactly as before.
 
 **Text scene** (`scenes/<id>.txt`): line 1 is `title: <name>`, line 2 is `---`, then cards
 separated by blank lines (up to 12 cards of 8 lines of 60 characters). A card types out at 24
@@ -565,6 +582,7 @@ that must fail), `cartridges` (glyph and import scans over `cartridges/`), `conf
 (the console at app level on a fake clock), `shell-draw` and `shell-flash` (every screen at every size,
 and the photosensitivity checks), `tools-cartridges` (the cartridge captures and `measure.mjs` options),
 `readme-cartridge` (the example in this README), `shell-journal` (the Journal menu's engine pieces: chapter cards, the prompt line, the start-by-itself countdown, the frame ornament), `delza-cartridge`, `delza-thornwell`, `delza-tallow`, `delza-cinderhorn`, `delza-reach`, `delza-highcandle` and `delza-lampwarden` (Delza's manifest, skin, Journal, help, boot, seasons and what each scene promises, read off rendered frames), `night-drive-cartridge`, `night-drive-onramp`, `night-drive-skyline`, `night-drive-sundown`, `night-drive-coast`, `night-drive-redlight`, `night-drive-diner`, `night-drive-caller`, `night-drive-overdrive`, `night-drive-menu`, `night-drive-phase`, `night-drive-flash`, `night-drive-matrix-cells`, `night-drive-matrix-dissolve`, `night-drive-matrix-sims`, `night-drive-phase-sizes`, `night-drive-redlight-sizes`, `night-drive-shell-edges`, `night-drive-shell-edges-b`, `night-drive-shell-eject`, `night-drive-shell-keyframes`, `night-drive-skin-contrast` and `night-drive-banned-glyphs`, with the helpers `helpers-night-drive`, `helpers-night-drive-matrix` and `helpers-night-drive-shell` (Night Drive's skin, palette, label, boot art, manifest, help panel, the road, sprites and calm bounds of its first track, the sun, grid, loop and calm bounds of Sundown Grid, the purity, light change, wiper, rain, buildings and calm bounds of Red Light, Rain, and the ring schedule, light trails, phases, exit dissolve and changed-cell bounds of Overdrive), and the cartridge arms of `real-process` (below).
+The console hook (DRIFT-7) is covered by `console-hook-loader` (the manifest field, the export check, both arms of the trust rule, the smoke render), `console-hook-shell` (the body and overlay split, writes only inside the rect, the insert, boot and eject wiring, the single decision, the morph's seam and the palette remap), `console-hook-flash` (the flash meter over the whole insert, boot and eject at six sizes, with a strobing control) and `console-hook-nohook` (every frame of a whole run of Classic, Night Drive and Delza, hashed against the tree before the hook), with the helper `helpers-console-hook`.
 
 Test hooks (inert unless `DRIFT_TEST_FORCE_TTY` is exactly `1`; used by
 `tests/real-process.test.js`, which spawns the real `bin/drift.js` with piped stdio):
