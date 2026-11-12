@@ -3,8 +3,9 @@
 // the console is what is measured (the Rosette's own lit dissolve is not the console's doing). Four clock phases (the first tick lands 0, 1/4, 1/2, 3/4
 // of a frame into the step) at the three usual sizes and the size just above each layout breakpoint (full 88x39, extra-large 176x58, compact 78x24).
 // Held to ABSOLUTE limits, as every shell flow is (DRIFT-7 item 1): every rule (L1, L2, L3, R) at its own limit for insert + boot at 1x AND 4x and for the
-// eject at 1x and 4x, EXCEPT a rule the same flow fails with the hook switched off (L2 at 4x at 80x24 and 78x24: the 9000's six boot lines, not its
-// console; the hooked flow equals the no-hook value there and may not exceed it), and a per-size ceiling on L2 (CEIL_L2: the largest value measured over the four phases, plus a hair, to the next
+// eject at 1x and 4x, at every size, with no exception (DRIFT-7 stage C: the compact screens' L2 at 4x was 27.8 to 29.8 % because the boot lines'
+// typed cells sat on the library's blurb cells and were cleared again within the meter's 4 s window; the 9000's skin.json holds the lines 0.25 s longer,
+// boot.seconds 1.75, which puts the clear outside it), and a per-size ceiling on L2 (CEIL_L2: the largest value measured over the four phases, plus a hair, to the next
 // tenth of a point). The eject at 4x gets no L2 ceiling: playback speed reaches only the scene clock, so the shell's eject is a 1x condition.
 // The control: the same flow with the brightness of every console cell flipped between black and white on alternate frames must fail the meter.
 // A CPU budget for the hook at 240x67 closes the file. TABLE lines print every measured value.
@@ -25,7 +26,7 @@ const HOST = { persist() {}, quit() {}, leaveToClassic() {} };
 
 // L2 ceilings (fractions) per size: [insert+boot 1x, insert+boot 4x, eject 1x]. See the TABLE of measured values.
 const CEIL_L2 = { // the largest measured over the four phases, rounded up to the next tenth of a point
-  '120x40': [0.001, 0.088, 0.015], '80x24': [0.001, 0.292, 0.033], '240x67': [0.001, 0.033, 0.004], '88x39': [0.003, 0.124, 0.018], '176x58': [0.001, 0.050, 0.004], '78x24': [0.001, 0.299, 0.034],
+  '120x40': [0.001, 0.040, 0.015], '80x24': [0.001, 0.200, 0.033], '240x67': [0.001, 0.016, 0.004], '88x39': [0.003, 0.098, 0.018], '176x58': [0.001, 0.023, 0.004], '78x24': [0.001, 0.193, 0.034],
 };
 
 // A dark running scene in place of the Rosette (blank cells, palette colour 0), keeping the cartridge's console hook.
@@ -73,7 +74,6 @@ async function measure(cols, rows, phase, { withHook = true, filter = null } = {
 
 const TABLE = [];
 const WORST = new Map(); // size -> [insert 1x, insert 4x, eject 1x] worst L2 fractions over the phases
-const KNOWN = []; // rules the 9000's flow fails with its hook OFF as well (not the console's doing)
 
 for (const [cols, rows] of SIZES) {
   test(`9000 console flash ${cols}x${rows}: insert + boot (1x and 4x) and eject, at four clock phases, pass every rule (L1, L2, L3, R) and sit under the L2 ceilings`, async () => {
@@ -82,19 +82,14 @@ for (const [cols, rows] of SIZES) {
     for (const phase of PHASES) {
       const m = await measure(cols, rows, phase);
       TABLE.push(key.padEnd(8) + `phase ${phase * 4}/4 insert+boot ` + show(m.ins) + ' | eject ' + show(m.eje));
-      // the same cartridge with its hook switched off: the shell's own insert, boot and eject at this phase (what the console is compared with)
-      const b = await measure(cols, rows, phase, { withHook: false });
-      TABLE.push(key.padEnd(8) + `phase ${phase * 4}/4 NO HOOK     ` + show(b.ins) + ' | eject ' + show(b.eje));
       const w = WORST.get(key) || [0, 0, 0];
       w[0] = Math.max(w[0], m.ins.l2.x1.worstFraction); w[1] = Math.max(w[1], m.ins.l2.x4.worstFraction); w[2] = Math.max(w[2], m.eje.l2.x1.worstFraction);
       WORST.set(key, w);
-      for (const [flow, rep, base] of [['insert+boot', m.ins, b.ins], ['eject', m.eje, b.eje]]) {
+      // every rule at its own, absolute limit (the shell's global one), at every size, for insert + boot and for the eject
+      for (const [flow, rep] of [['insert+boot', m.ins], ['eject', m.eje]]) {
         for (const [name, get] of RULES) {
-          const r = get(rep), r0 = get(base);
-          if (r.pass) continue;
-          // a rule the 9000's flow fails with its hook switched off (the boot screen's own text, see KNOWN) may not get worse with the hook on
-          if (!r0.pass && r.worstFraction <= r0.worstFraction + 0.001) { KNOWN.push(`${key} phase ${phase * 4}/4 ${flow} ${name}: ${pc(r.worstFraction)}% (no hook ${pc(r0.worstFraction)}%) over ${pc(r.limit)}%`); continue; }
-          bad.push(`phase ${phase * 4}/4 ${flow} ${name}: ${pc(r.worstFraction)}% is over ${pc(r.limit)}% (no hook ${pc(r0.worstFraction)}%)`);
+          const r = get(rep);
+          if (!r.pass) bad.push(`phase ${phase * 4}/4 ${flow} ${name}: ${pc(r.worstFraction)}% is over ${pc(r.limit)}%`);
         }
       }
       const [i1, i4, e1] = CEIL_L2[key];
@@ -109,8 +104,7 @@ for (const [cols, rows] of SIZES) {
 test('9000 console flash TABLE: every measured value, and the worst L2 per size over the four phases', () => {
   console.log(['TABLE 9000 console flash meter (x1/x4; limits L1 25, L2 25, L3 30, R 25)', ...TABLE.map((l) => '  ' + l)].join('\n'));
   console.log('WORST L2 over four phases [insert+boot 1x, insert+boot 4x, eject 1x] (%): ' + [...WORST].map(([k, w]) => `${k} ${w.map((x) => pc(x)).join('/')}`).join(', '));
-  console.log(['KNOWN (fail with the hook off too, the hook no worse):', ...KNOWN.map((l) => '  ' + l)].join('\n'));
-  assert.ok(TABLE.length === 0 || TABLE.length === SIZES.length * PHASES.length * 2);
+  assert.ok(TABLE.length === 0 || TABLE.length === SIZES.length * PHASES.length);
 });
 
 // ---- the control: the meter bites on this path
@@ -130,7 +124,7 @@ test('9000 console flash control: the same flow with every console cell flipped 
   for (const [cols, rows] of [[120, 40], [80, 24]]) {
     const ok = await measure(cols, rows, 0);
     const bad = await measure(cols, rows, 0, { filter: flip });
-    if (cols > 100) assert.equal(ok.ins.pass, true, `${cols}x${rows}: the real flow passes`); // (80x24 fails L2 at 4x with or without the hook, see KNOWN)
+    assert.equal(ok.ins.pass, true, `${cols}x${rows}: the real flow passes: ${show(ok.ins)}`);
     assert.equal(bad.ins.pass, false, `${cols}x${rows}: the flipped flow fails the meter: ${show(bad.ins)}`);
     assert.ok(bad.ins.l1.x1.worstFraction > ok.ins.l1.x1.worstFraction + 0.05 || bad.ins.l2.x1.worstFraction > ok.ins.l2.x1.worstFraction + 0.05, show(bad.ins));
   }

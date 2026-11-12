@@ -38,6 +38,7 @@
   "boot": {
     "lines": ["CORE 2.0 ....... SUPERSEDED", "LUMEN CORE ..... 9.0", "MEMORY ......... ALL OF IT", "Good morning. It has been a while."],
     "art": false,
+    "seconds": 1.75,
     "valueColour": 23
   },
   "insert": { "text": "SIGNAL FROM THE FAR FUTURE · HOLD STILL" },
