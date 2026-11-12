@@ -9,6 +9,9 @@
 //     cartSkin   the cartridge's validated skin, or null
 //     classic    true for the Classic cartridge (the takeover is a one-shade shimmer only)
 //   link   optional: true lights the LINK LED (cyan); the boot screen (boot.js) draws the console through here
+//   hook   optional (DRIFT-7 C11): the cartridge's console hook { id, drawConsole }; from step 5 on it draws the console body
+//          INSTEAD of the band sweep (see the morph below). phase 'insert' (default) or 'eject' labels the call; the boot
+//          passes phase 'boot' with hookP and hookT, which replace the p and t computed here. No hook = today's picture, to the byte
 //
 // Timeline (seconds; the whole insert + boot is 5.8 s, see boot.js):
 //   0    - 0.15  step 1  the cartridge lifts one row (at 0.075), its shell LED is solid
@@ -29,9 +32,18 @@ export const INSERT_DROP_END = 0.85;
 export const INSERT_CLICK_END = 1.0;
 export const INSERT_SWEEP_END = 1.5;
 export const INSERT_END = INSERT_SWEEP_END;
+// The console hook's morph p (0..1) is one ramp across the insert and the boot: 0 to INSERT_MORPH over step 5 (here), then
+// INSERT_MORPH to 1 over the boot's 'on' phase (boot.js, bootMorph). It never decreases and is continuous at the seam.
+// Eject plays only the insert backwards, so it folds back from p = INSERT_MORPH (a known compromise).
+export const INSERT_MORPH = 0.55;
 export const BAND_W = 6; // the takeover band is six columns wide
 export const NEIGHBOUR_SPREAD = 10; // columns the neighbours travel while they fade
 const PULSE_SECONDS = 0.075; // the housing stays one shade up for this long after the click, then eases back
+
+// The hook's morph at insert time t: 0 up to the click, then 0 to INSERT_MORPH over step 5.
+export function insertMorph(t) {
+  return INSERT_MORPH * ramp(t, INSERT_CLICK_END, INSERT_SWEEP_END);
+}
 
 // Rows the cartridge is displaced by at time t: -1 (lifted) ... +3 (dropped into the slot).
 export function cartridgeOffset(t) {
@@ -84,8 +96,12 @@ export function drawInsert(frame, args, skin) {
   if (clicked && T < INSERT_DROP_END + PULSE_SECONDS) body.housing = DRIFTMAN_COLOURS.dim; // the click
   const L = shelfLayout(frame.cols, frame.rows, tier);
   const sweepU = ramp(T, INSERT_CLICK_END, INSERT_SWEEP_END);
+  // the console hook takes over from the start of step 5 (the shell decides once whether it is loaded in time)
+  const hook = args.hook && T >= INSERT_CLICK_END
+    ? { hook: args.hook, phase: args.phase || 'insert', p: args.hookP !== undefined ? args.hookP : insertMorph(T), t: args.hookT !== undefined ? args.hookT : T }
+    : null;
   let sweep = null;
-  if (sweepU > 0) {
+  if (sweepU > 0 && !hook) {
     const take = sweepStyle(item, ui);
     const cx = L.full ? L.consoleX : L.miniX, cw = L.full ? CONSOLE_W : MINI_W;
     sweep = {
@@ -99,6 +115,6 @@ export function drawInsert(frame, args, skin) {
     drop: off > 0 ? off : 0,
     fadeP: ramp(T, INSERT_LIFT_END, INSERT_SLIDE_END),
     spread: spreadAt(T),
-    body, sweep, noArrows: T > 0,
+    body, sweep, hook, noArrows: T > 0,
   });
 }

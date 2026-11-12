@@ -160,3 +160,30 @@ export const copyOf = (f) => ({
 
 // The sizes the console is drawn at, and the sizes just above each layout breakpoint (full 88x39, extra-large 176x58, compact 78x24).
 export const SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [176, 58], [78, 24]];
+
+// A hook that logs every call to globalThis.__driftHookCalls (when a test has set it to an array) and draws the calm body.
+export function recorderHookSource(id = 'rec-console') {
+  return module(id, [], [
+    '    const log = globalThis.__driftHookCalls;',
+    '    if (log) log.push({ phase: c.phase, p: c.p, t: c.t, tier: c.tier, rect: { ...c.rect }, screen: c.screen ? { ...c.screen } : null });',
+    '    body(f, c, 0x808080, PALETTE_BG);',
+  ]);
+}
+
+// Run a shell frame by frame. Each step: log.length = 0, f = sh.frame() (copied), then sh.tick(dt). `dts` is a function of the step
+// number or a number. Stops when `done(sh, steps)` is true or after `max` steps. -> [{ k, clock, screen, f, calls }]
+export function runFlow(sh, { dt = DT, done = () => false, max = 4000, first = 0 } = {}) {
+  const calls = [];
+  globalThis.__driftHookCalls = calls;
+  const out = [];
+  let clock = 0;
+  if (first > 0) { sh.tick(first); clock += first; }
+  for (let k = 0; k < max && !done(sh, k); k++) {
+    calls.length = 0;
+    const f = sh.frame();
+    out.push({ k, clock, screen: sh.state().screen, f: copyOf(f), calls: calls.slice() });
+    sh.tick(dt); clock += dt;
+  }
+  globalThis.__driftHookCalls = null;
+  return out;
+}

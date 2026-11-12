@@ -16,6 +16,9 @@
 //   hint       optional text drawn on the progress bar's row instead of the bar, from when the screen is on
 //   consoleMap optional (shade) => shade: where the console's library colours live in the boot palette
 //              (mergeBootPalette); identity when absent
+//   hook       optional (DRIFT-7 C11): the cartridge's console hook; the console is then drawn with its body from the hook
+//              at morph bootMorph(t) (0.55 to 1 over the 'on' phase, then 1), phase 'boot'. Its full-colour cells (shade 255)
+//              pass the palette remap below untouched
 //
 // Timeline of the whole cartridge start, in seconds from Enter (INSERT_END = 1.5 is where this begins):
 //   1.5 - 1.7  step 6   a line grows from the centre of the screen to its full width
@@ -29,12 +32,13 @@
 //   5.2 - 5.8  step 12  the title dissolves cell by cell into the menu (the shell composes the dissolve)
 // skin.boot.seconds, when given, replaces the 1.5 s the typed lines take. Every brightness change is a one-shade
 // step or a dissolve; the background never changes.
-import { INSERT_END, drawInsert } from './insert.js';
+import { INSERT_END, INSERT_MORPH, drawInsert } from './insert.js';
 import { screenRect } from './library.js';
 import { cartridgeLines } from './driftman.js';
 import { drawChrome } from './chrome.js';
 import { FONT } from '../scenes/blockfont.js';
 import { rgbTo256, unpackRgb } from '../color.js';
+import { RGB_CELL } from '../renderer.js';
 import {
   newFrame, clearFrame, uiOf, put, putText, putCentered, centerX, fillRect, drawBox, ramp, dissolveThresholds, wrapWords, lenOf, sizeTier,
 } from './ui.js';
@@ -62,6 +66,12 @@ export function bootPhases(skin) {
   const zoomEnd = barEnd + (ZOOM_END - BAR_END);
   const titleEnd = zoomEnd + (TITLE_END - ZOOM_END);
   return { on, linesEnd, barEnd, zoomEnd, titleEnd, end: titleEnd + (BOOT_END - TITLE_END) };
+}
+
+// The console hook's morph at boot-local time t: INSERT_MORPH at t = 0 (where the insert's step 5 ended), 1 from the end of the
+// 'on' phase (steps 6 and 7) on. Together with insertMorph it makes p one continuous ramp, 0 to 1 over about 0.9 s.
+export function bootMorph(t, skin) {
+  return INSERT_MORPH + (1 - INSERT_MORPH) * ramp(t, 0, bootPhases(skin).on);
 }
 
 export function bootSeconds(skin) {
@@ -282,8 +292,9 @@ export function drawBoot(frame, args, consoleSkin) {
   if (onConsole) {
     // the console as the insert left it; its LINK LED lights as the last line lands
     const linked = shownLines.length > 0 && T >= P.on + shownLines.length * LINE_SECONDS;
-    drawInsert(f, { item, t: INSERT_END, link: linked }, consoleSkin);
-    for (let i = 0; i < f.glyphs.length; i++) if (f.glyphs[i] !== 32) f.shades[i] = map(f.shades[i]);
+    drawInsert(f, { item, t: INSERT_END, link: linked, hook: args.hook || null, phase: 'boot', hookP: bootMorph(T, sk), hookT: T }, consoleSkin);
+    // library shade -> boot palette shade; a full-colour cell (shade 255, colours in fg/bg) is not a palette entry and stays as it is
+    for (let i = 0; i < f.glyphs.length; i++) if (f.glyphs[i] !== 32 && f.shades[i] !== RGB_CELL) f.shades[i] = map(f.shades[i]);
   }
 
   // ---- steps 6 and 7: the line grows, then opens (before the zoom starts the rectangle is R0)

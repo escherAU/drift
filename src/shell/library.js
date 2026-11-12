@@ -342,12 +342,50 @@ export function consoleGrid(sel, o = {}) {
 }
 
 // The console without the scanline (the part that does not change from one idle step to the next).
+// Two layers (DRIFT-7 C11, the console hook): the BODY (housing, bezel, panel, dial, grille, chrome band: everything
+// that is not the screen's text or an LED) and the OVERLAY (the screen's text rows, and the LED row at row 3 from
+// column 53). A cartridge's console hook replaces the body; the shell still draws the overlay on top, unchanged.
+// The two layers share no cell, so drawing the body and then the overlay gives exactly the picture it always did.
 function consoleBase(sel, o) {
+  const G = newGrid(CONSOLE_W, CONSOLE_H);
+  consoleBody(G, o);
+  consoleOverlay(G, sel, o);
+  return G;
+}
+
+// The overlay alone on a blank grid: the screen text and the LEDs (a blank cell is transparent in blit).
+export function consoleOverlayGrid(sel, o = {}) {
+  const G = newGrid(CONSOLE_W, CONSOLE_H);
+  consoleOverlay(G, sel, o);
+  return G;
+}
+
+// The body alone: the console without its screen text and LEDs.
+export function consoleBodyGrid(o = {}) {
+  const G = newGrid(CONSOLE_W, CONSOLE_H);
+  consoleBody(G, o);
+  return G;
+}
+
+// The screen's text rows (typed or not) and the LED row.
+function consoleOverlay(G, sel, o) {
   const st = o.st || {};
   const ui = o.ui || { text: 15, dim: 19, head: 15, accent: 16 };
   const n = o.n || 1;
+  const rows = screenRows(sel, n, ui, o.cursor);
+  const reveal = o.type === undefined ? Infinity : Math.ceil(Math.max(0, Math.min(1, o.type)) * SCREEN_W);
+  for (let j = 0; j < 9; j++) {
+    for (const seg of rows[j] || []) {
+      if (reveal - seg.x > 0) gText(G, BEZEL_X + 2 + seg.x, 4 + j, seg.text, seg.shade, 1, reveal - seg.x);
+    }
+  }
+  ledRow(G, PANEL_X, 3, st, ui);
+}
+
+function consoleBody(G, o) {
+  const st = o.st || {};
+  const ui = o.ui || { text: 15, dim: 19, head: 15, accent: 16 };
   const FR = frameChars(st), BZ = bezelChars(st);
-  const G = newGrid(CONSOLE_W, CONSOLE_H);
   const sh = st.shade;
   const hs = st.housing === undefined ? sh : st.housing; // the slot housing's own shade (the insert click brightens it)
   // slot housing (rows 0-1) and its floor (row 2)
@@ -370,15 +408,7 @@ function consoleBase(sel, o) {
       gPut(G, BEZEL_X, y, BZ[7], sh); gPut(G, BEZEL_X + 47, y, BZ[3], sh);
     }
   }
-  const rows = screenRows(sel, n, ui, o.cursor);
-  const reveal = o.type === undefined ? Infinity : Math.ceil(Math.max(0, Math.min(1, o.type)) * SCREEN_W);
-  for (let j = 0; j < 9; j++) {
-    for (const seg of rows[j] || []) {
-      if (reveal - seg.x > 0) gText(G, BEZEL_X + 2 + seg.x, 4 + j, seg.text, seg.shade, 1, reveal - seg.x);
-    }
-  }
   // the panel
-  ledRow(G, PANEL_X, 3, st, ui);
   for (let r = 0; r < DIAL.length; r++) {
     for (let c = 0; c < 9; c++) {
       const ch = DIAL[r][c];
@@ -404,16 +434,35 @@ function consoleBase(sel, o) {
   gText(G, 68, 15, 'MODEL DM-2000', ui.dim);
   gPut(G, 0, 16, FR[6], sh); gRun(G, 1, 16, FR[5], 82, sh); gPut(G, 83, 16, FR[4], sh);
   gRun(G, 3, 17, 0x2580, 6, sh); gRun(G, 75, 17, 0x2580, 6, sh);
+}
+
+// The mini console, 38 x 4: the housing (mouth at columns 7-30), the LEDs and the name. Two layers like the full console:
+// the BODY (housing, frame, the name on row 2) and the OVERLAY (row 2: the PWR and CART LEDs and their labels, which the
+// shell draws over a console hook's body). The mini console has no screen of its own.
+export function miniGrid(o = {}) {
+  const G = newGrid(MINI_W, MINI_H);
+  miniBody(G, o);
+  miniOverlay(G, o);
   return G;
 }
 
-// The mini console, 38 x 4: the housing (mouth at columns 7-30), the LEDs and the name.
-export function miniGrid(o = {}) {
+export function miniBodyGrid(o = {}) {
+  const G = newGrid(MINI_W, MINI_H);
+  miniBody(G, o);
+  return G;
+}
+
+export function miniOverlayGrid(o = {}) {
+  const G = newGrid(MINI_W, MINI_H);
+  miniOverlay(G, o);
+  return G;
+}
+
+function miniBody(G, o) {
   const st = o.st || {};
   const ui = o.ui || { text: 15, dim: 19, head: 15, accent: 16 };
   const FR = frameChars(st);
   const sh = st.shade;
-  const G = newGrid(MINI_W, MINI_H);
   const hs = st.housing === undefined ? sh : st.housing;
   gRun(G, 5, 0, 0x2584, 28, hs);
   gPut(G, 0, 1, FR[0], sh); gRun(G, 1, 1, FR[1], 4, sh);
@@ -421,12 +470,16 @@ export function miniGrid(o = {}) {
   gPut(G, 31, 1, 0x2590, hs); gPut(G, 32, 1, 0x2588, hs);
   gRun(G, 33, 1, FR[1], 4, sh); gPut(G, 37, 1, FR[2], sh);
   gPut(G, 0, 2, FR[7], sh); gPut(G, 37, 2, FR[3], sh);
+  gText(G, 19, 2, 'DRIFTMAN 2000', st.bar === undefined ? ui.head : st.bar);
+  gPut(G, 0, 3, FR[6], sh); gRun(G, 1, 3, FR[5], 36, sh); gPut(G, 37, 3, FR[4], sh);
+}
+
+function miniOverlay(G, o) {
+  const st = o.st || {};
+  const ui = o.ui || { text: 15, dim: 19, head: 15, accent: 16 };
   gPut(G, 2, 2, 0x25cf, DRIFTMAN_COLOURS.amber); gText(G, 3, 2, ' PWR', ui.dim);
   gPut(G, 9, 2, LED_GLYPH[st.led] || 0x25cb, st.led === 'off' || !st.led ? DRIFTMAN_COLOURS.housing : st.ledShade);
   gText(G, 10, 2, ' CART', ui.dim);
-  gText(G, 19, 2, 'DRIFTMAN 2000', st.bar === undefined ? ui.head : st.bar);
-  gPut(G, 0, 3, FR[6], sh); gRun(G, 1, 3, FR[5], 36, sh); gPut(G, 37, 3, FR[4], sh);
-  return G;
 }
 
 // ---- the memo (F3): the library at rest redraws the same art every tick
@@ -809,6 +862,36 @@ function drawListPane(ctx, view, skin, x, y, w, slots, gap) {
   if (win.down > 0) ctx.text(x + 2, top + row, `↓ ${win.down} more`, ui.dim);
 }
 
+// ---- the console hook (DRIFT-7 C11)
+//
+// A cartridge with "console": "code" ships console.js, whose default export { id, drawConsole(frame, ctx) } draws the
+// console BODY in full colour (cells with shade 255 and fg/bg; PALETTE_BG as a bg is the palette's background). The
+// shell draws the screen text and the LEDs on top of it (consoleOverlayGrid / miniOverlayGrid), so a hook never draws
+// them. ctx = { phase, p, t, rect, screen, tier }:
+//   phase  'insert' (step 5, the console takes on the cartridge), 'boot' (steps 6 on: the console under the boot screen)
+//          or 'eject' (the insert played backwards); the console is not on screen while a cartridge runs
+//   p      the morph, 0..1, never decreasing during an insert + boot (0.55 at the end of step 5, 1 from 0.4 s into the boot)
+//   t      seconds on the phase's clock: the insert clock (0..1.5) in 'insert' and 'eject' (eject runs it backwards),
+//          the boot clock in 'boot'
+//   rect   { x, y, w, h } the console's cells in the frame (84 x 18 at 'full', 38 x 4 at 'mini'); the hook writes only here
+//   screen { x, y, w, h } the 46 x 9 screen inside it at 'full' (local 3, 4); null at 'mini', which has no screen
+//   tier   'full' (the full and extra-large layouts) or 'mini' (the compact layout's mini console)
+// Returns true when the hook drew the body, false when it threw (the rect is cleared and the standard body is drawn).
+function drawHookBody(f, h, L, cx, cy) {
+  const full = L.full;
+  const rect = { x: cx, y: cy, w: full ? CONSOLE_W : MINI_W, h: full ? CONSOLE_H : MINI_H };
+  const screen = full ? { x: cx + BEZEL_X + 1, y: cy + 4, w: 46, h: 9 } : null;
+  try {
+    h.hook.drawConsole(f, { phase: h.phase, p: h.p, t: h.t, rect, screen, tier: full ? 'full' : 'mini' });
+    return true;
+  } catch {
+    for (let y = Math.max(0, rect.y); y < Math.min(f.rows, rect.y + rect.h); y++) {
+      for (let x = Math.max(0, rect.x); x < Math.min(f.cols, rect.x + rect.w); x++) { f.glyphs[y * f.cols + x] = 32; f.shades[y * f.cols + x] = 0; }
+    }
+    return false;
+  }
+}
+
 // ---- the shelf, shared by the library (at rest) and the insert animation (o carries the animation)
 //   o.lift       rows the selected cartridge is raised (0 or 1)
 //   o.drop       rows it has dropped (0..3)
@@ -817,6 +900,7 @@ function drawListPane(ctx, view, skin, x, y, w, slots, gap) {
 //   o.spread     columns the neighbours have slid outward (each to its own side)
 //   o.sweep      { x, style, band: { w, style } }: the skin-takeover over the console. Columns left of x - w show the
 //                console in `style`; the w columns before x show it in band.style (the band); the rest is unchanged
+//   o.hook       { hook, phase, p, t }: a cartridge's console hook draws the console body instead of the standard one (see above)
 //   o.hint       replaces the hint line text
 //   o.noArrows   accepted for the insert animation (the shelf draws no arrows: the hint names the keys)
 export function drawShelf(f, view, skin, o = {}) {
@@ -852,7 +936,13 @@ export function drawShelf(f, view, skin, o = {}) {
     return memo && style === plain ? memoConsole(memo, sel, skin, co) : consoleGrid(sel, co);
   };
   const cx = L.full ? L.consoleX : L.miniX, cy = L.full ? L.consoleTop : L.miniTop;
-  blit(f, makeConsole(st), cx, cy, { fadeP });
+  if (o.hook && drawHookBody(f, o.hook, L, cx, cy)) {
+    // the cartridge's console hook drew the body; the screen text and the LEDs are the shell's and go on top, unchanged
+    const over = L.full
+      ? consoleOverlayGrid(sel, { st, ui, n, type: view.type })
+      : miniOverlayGrid({ st, ui });
+    blit(f, over, cx, cy, { fadeP });
+  } else blit(f, makeConsole(st), cx, cy, { fadeP });
   if (o.sweep && o.sweep.x > 0) {
     // behind the band the console is in its swapped state; the band itself (sweep.band = { w, style }) is that state one shade up
     const x = Math.floor(o.sweep.x), bw = o.sweep.band ? o.sweep.band.w : 0, x0 = Math.max(0, x - bw);

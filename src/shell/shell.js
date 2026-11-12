@@ -20,7 +20,7 @@ import { loadScenes as defaultLoadScenes } from '../cartridge/loader.js';
 import { parseHex, sgrFor, shadeRGB, colourTables, unpackRgb } from '../color.js';
 import { driftmanSkin, classicBootSkin, plainBootSkin } from './driftman.js';
 import { drawLibrary, idleSignature, dipAt, DIP_SECONDS, makeLibraryMemo } from './library.js';
-import { drawInsert, INSERT_END } from './insert.js';
+import { drawInsert, INSERT_END, INSERT_CLICK_END } from './insert.js';
 import { drawBoot, bootPhases, mergeBootPalette, FIRST_INSERT_HINT } from './boot.js';
 import { createCartridgeRuntime, dissolveFrames } from './runtime.js';
 import { newFrame, clearFrame, ramp, sizeTier, dissolveThresholds } from './ui.js';
@@ -108,6 +108,13 @@ export function createShell(o) {
   let runtime = null;
   let bt = 0; // boot-local seconds
   let hintNow = false; // this insert is the process's first: the boot shows the hint
+  // The cartridge's console hook (manifest "console": "code"), decided ONCE per insert: null = not decided yet, true = the hook
+  // draws the console from step 5 of the insert to the end of the boot (and the eject plays it back), false = the standard
+  // sweep and console for the whole insert. Decided at the first frame with t >= INSERT_CLICK_END (1.0 s): the hook is used only
+  // if its module had loaded by then, and a late arrival never switches a console that is already on screen.
+  let hookUse = null;
+  const decideHook = () => { if (hookUse === null) hookUse = !classic && load.status === 'ok' && !!load.console; };
+  const hookNow = () => (hookUse ? load.console : null);
 
   let resolveRunning = null;
   let runningPromise = null;
@@ -128,7 +135,7 @@ export function createShell(o) {
 
   function resetLibrary(newFrom) {
     screen = 'library'; st = 0; helpOpen = false; message = ''; slideT = SLIDE_SECONDS; dipT = DIP_SECONDS; prev = index; queued = 0; idleT = 0; drawnSig = '';
-    runtime = null; load = { status: 'none', scenes: null, error: null }; cart = null; entry = null; skipped = false;
+    runtime = null; load = { status: 'none', scenes: null, error: null }; cart = null; entry = null; skipped = false; hookUse = null;
     if (newFrom !== undefined) from = newFrom;
     forced = true;
   }
@@ -139,7 +146,7 @@ export function createShell(o) {
     index = i; prev = i; queued = 0;
     cart = carts[i]; entry = libCarts[i];
     classic = cart.runtime === 'classic';
-    skipped = false; menuOnArrive = true;
+    skipped = false; menuOnArrive = true; hookUse = null;
     hintNow = firstInsertPending; firstInsertPending = false;
     host.persist({ lastCartridge: cart.id });
     screen = 'insert'; st = 0; forced = true;
@@ -152,7 +159,7 @@ export function createShell(o) {
       if (!r || (r.errors && r.errors.length) || !r.scenes) {
         const why = r && r.errors && r.errors[0] ? r.errors[0].reason : 'the cartridge has no scenes';
         mine.status = 'fail'; mine.error = String(why);
-      } else { mine.status = 'ok'; mine.scenes = r.scenes; }
+      } else { mine.status = 'ok'; mine.scenes = r.scenes; mine.console = r.console || null; }
       forced = true;
     }).catch((err) => {
       if (disposed || load !== mine) return;
@@ -162,6 +169,7 @@ export function createShell(o) {
   }
 
   function toBoot() {
+    decideHook(); // an insert skipped or stepped past 1.0 s without a frame is decided here, by whether the hook is loaded now
     screen = 'boot'; st = 0; bt = 0; forced = true;
     bootSkin = classic ? classicBootSkin : (cart.skin || plainBootSkin(cart.title));
     bootMap = null;
@@ -387,7 +395,8 @@ export function createShell(o) {
         if (helpOpen) drawHelp(f.glyphs, f.shades, cols, rows, helpInfo('library'));
         break;
       case 'insert':
-        drawInsertFn(f, { item: insertItem(), t: st }, driftmanSkin);
+        if (st >= INSERT_CLICK_END) decideHook();
+        drawInsertFn(f, { item: insertItem(), t: st, hook: hookNow() }, driftmanSkin);
         if (insFrom && st < INSERT_DISSOLVE_SECONDS && insFrom.cols === cols && insFrom.rows === rows) {
           dissolveFrames(insFrom, f, ramp(st, 0, INSERT_DISSOLVE_SECONDS), dissolveThresholds(cols * rows), f);
         }
@@ -401,7 +410,7 @@ export function createShell(o) {
           break;
         }
         const a = st - EJECT_FADE_SECONDS; // the animation's own clock
-        drawInsertFn(f, { item: insertItem(), t: INSERT_END * (1 - ramp(a, 0, EJECT_ANIM_SECONDS)) }, driftmanSkin);
+        drawInsertFn(f, { item: insertItem(), t: INSERT_END * (1 - ramp(a, 0, EJECT_ANIM_SECONDS)), hook: hookNow(), phase: 'eject' }, driftmanSkin);
         if (a < EJECT_FADE_SECONDS) dissolveFrames(blank, f, ramp(a, 0, EJECT_FADE_SECONDS), thr, f);
         keepForHandover(f);
         break;
@@ -414,7 +423,7 @@ export function createShell(o) {
         const P = bootPhases(bootSkin);
         drawBoot(f, {
           skin: bootSkin, labelArt: cart.label, bootArt: cart.boot, t: bt, loading: load.status !== 'ok', title: cart.title,
-          item: insertItem(), consoleMap: bootMap || undefined, hint: hintNow ? FIRST_INSERT_HINT : undefined,
+          item: insertItem(), consoleMap: bootMap || undefined, hint: hintNow ? FIRST_INSERT_HINT : undefined, hook: hookNow(),
         }, driftmanSkin);
         if (bt > P.titleEnd) {
           const p = ramp(bt, P.titleEnd, P.end);
