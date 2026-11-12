@@ -14,16 +14,16 @@
 █████▄▄▙        ▟▄█▄▙              ┃  tape: Night Drive    track: Midnight On-Ramp  ┃           ▟▄█████▄▄▙              
 ████████▄▙    ▟▄█████▄▙            ┃                                                ┃▟▙       ▟▄██████████▄▙         ▟▄▙
 ██████████▄▄▄▄█████████▄▖          ┃  Tracks                                        ┃██▄▄▄▄▄▄▄██████████████▄▖   ▗▄▄▄███
-▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁┃  Enter         open the tape deck, or play     ┃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
-                                   ┃  up or left    tape deck: previous track       ┃                                   
-                                   ┃  down or right tape deck: next track           ┃                                   
-                                   ┃  Esc           close the tape deck or page     ┃                                   
+▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁┃  Enter         open tape deck, or play         ┃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+                                   ┃  up or left    deck: previous track            ┃                                   
+                                   ┃  down or right deck: next track                ┃                                   
+                                   ┃  Esc           close the deck or page          ┃                                   
                                    ┃  e or l        eject the tape                  ┃                                   
                                    ┃  space         skip to the next track          ┃                                   
-                                   ┃  p             pause the tape or play on       ┃                                   
+                                   ┃  p             pause the tape, or play         ┃                                   
                                    ┃  +             cruise control: faster          ┃                                   
                                    ┃  -             cruise control: slower          ┃                                   
-                                   ┃  c             colours: none on this tape      ┃                                   
+                                   ┃  c             colours: none on tape           ┃                                   
                                   ▁┃                                                ┃▁                                  
                               ▁▁╱  ┃  Glovebox                                      ┃  ╲▁▁                              
                              ▁╱    ┃  h             show or hide these keys         ┃    ╲▁                             
