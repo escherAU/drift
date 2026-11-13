@@ -68,7 +68,11 @@ for (const sz of ['120x40', '80x24', '61x21', '88x39', '176x58', '240x67']) {
   });
 }
 
-test('rosette 256 colours: the output is not garbage, at least 16 distinct 256-colour indexes over 60 s (measured 17 once the 256-colour contour sits at fill lightness (was 32 with the contour at 0.72)), and every index is a cube or grey entry', () => {
+// What this floor protects: that the 256-colour output is a real picture and not garbage (a handful of indexes, or one outside the cube and the greys). It does NOT protect the
+// contours: the fills alone yield 17 distinct indexes, and the DRIFT-8 final challenge found it passing with the contours removed. The contours are guarded by tests/driftman-9000-rosette.test.js
+// T1.4 (the contour's lightness per colour mode, read from what the scene draws), 'rosette as drawn (256)' in tests/driftman-9000-rosette.test.js (every pixel of every cell is the colour the spec gives it), the T1.1 controls in
+// tests/driftman-9000-rosette-range.test.js (the per-pixel brightness range, with a contour that must fail) and T4.1f in tests/flash-colour-rosette.test.js (rule C at real 4x).
+test('rosette 256 colours: the output is not garbage, at least 16 distinct 256-colour indexes over 60 s (the fills alone give 17, so this floor does not guard the contours), and every index is a cube or grey entry', () => {
   const cols = 120, rows = 40, n = cols * rows;
   const cc = composerFor([rosette], cols, rows, { seed: 1, mode: '256' });
   const used = new Set();
