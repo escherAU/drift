@@ -662,7 +662,7 @@ not a TTY, drift prints a message and exits 0 without emitting any escape sequen
 npm test            # node --test, no dependencies
 ```
 
-The suite is 2572 tests in `tests/*.test.js` and takes about 280 to 300 seconds on a 32-thread machine (220 s before the colour rule C: the meter reads colour too now, which costs about twice as much on an animated full-colour scene, and rule C has its own flash-colour files) (test files run in parallel; the longest are the 9000's flash-meter runs over its menu and help, about 2 minutes by themselves, and the real-process arms, which start the real program and wait in real time). The cartridge work is
+The suite is 2597 tests in `tests/*.test.js` and takes about 280 to 300 seconds on a 32-thread machine (220 s before the colour rule C: the meter reads colour too now, which costs about twice as much on an animated full-colour scene, and rule C has its own flash-colour files) (test files run in parallel; the longest are the 9000's flash-meter runs over its menu and help, about 2 minutes by themselves, and the real-process arms, which start the real program and wait in real time). The cartridge work is
 covered by `cartridge-schema` (validators, text scene, skin palette), `cartridge-loader`
 (every way a cartridge can be wrong, and both arms of the trust rule), `cartridge-scenes` (every
 install cartridge's scenes through the size, glyph, colour, determinism and flash checks, with controls
@@ -694,6 +694,15 @@ node tools/measure.mjs --library [--cycle N]                      # the cartridg
 node tools/measure.mjs --cartridge ID [--program P] [--scene S]   # a running cartridge (boot skipped, sampling starts once it runs); prints RESULT load_ms=
 node tools/measure.mjs --cartridge all                            # one fresh process per unlocked cartridge scene
 ```
+
+**Is my terminal keeping up? `tools/tty-probe.mjs`.** Run `node tools/tty-probe.mjs` in the terminal you watch drift on, at the size you run it at (`--seconds 20`, `--fps 18`;
+`--cols` and `--rows` override the size). It is not a scene: it enters the alternate screen and raw mode as the app does and writes frames in which EVERY cell changes every
+frame (truecolor foreground and background, a different glyph), inside the synchronised-output markers, about 700 KB a frame at 280x70, far more than any scene sends. Like the
+app it drops a tick's frame while the stream still says it needs to drain. Once a second it logs the bytes written, how many `write()` calls returned false, how many ticks the
+stream still needed to drain, the largest queue and the event-loop delay (p50, p99, max); the lines are printed after the terminal is restored. Press `q` at any moment (or wait
+for the end): the time from the key to the moment the restore write is confirmed is `quitMs`. Then it writes 5 frames back to back without waiting and quits again:
+`flood5 quitMs` is how long a `q` takes with that much picture queued ahead of it, and `restored=no` means the restore was not confirmed in 15 s. It restores the terminal on
+every way out (q, the end of the run, Ctrl+C, SIGTERM, SIGHUP, an uncaught error). Send back the six `PROBE` lines at the end.
 
 The same capture command also writes the mode captures (`<mode>-<scene>-1/-2.txt`, `help-<mode>.txt`,
 `dissolve-<mode>.txt`), the artist's gallery and the cartridge console (all plain text, one frame per file):

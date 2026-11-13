@@ -64,8 +64,8 @@ export function addBoom(root) {
 
 export function mkShell(extra = {}) {
   const { cols = 80, rows = 24, config, root: rootIn, startScreen, dirs: dirsIn, ...rest } = extra;
-  const stdin = fakeStdin(), stdout = fakeStdout({ columns: cols, rows });
-  const stderr = fakeStderr(), proc = fakeProc();
+  const stdin = fakeStdin(), stdout = extra.stdout || fakeStdout({ columns: cols, rows });
+  const stderr = extra.stderr || fakeStderr(), proc = fakeProc();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-shell-'));
   const configPath = extra.configPath || path.join(dir, 'drift', 'config.json');
   if (config) {
