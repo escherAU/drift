@@ -2,7 +2,7 @@
 // over EACH vision of the Driftman 9000, in a real shell with the installed cartridge (the runtime, the skin, the chrome border that comes with the menu).
 // The flow, from about 20 s into the vision: rest 1 s, Enter (the menu ramps in), 1 s, Esc (it ramps out), 1 s, h (the help box ramps in), 1 s, h (it ramps out), 1 s.
 // Runtime speed 1x and 4x (the scene clock; the panels' ramps are real seconds), the three usual sizes and the size just above each layout breakpoint.
-// Every rule at its own limit, no per-size exceptions, except that the meter's 4x view of L2 is printed and not judged (see NOT_JUDGED). The control: the same flow with each ramp stepped over in one tick (the old hard cut) must be flagged.
+// Every rule at its own limit, no per-size exceptions, except that the meter's 4x view of L2 is neither judged nor printed (see RULES: the ramps run in real seconds at every speed, tests/shell-clock.test.js). The control: the same flow with each ramp stepped over in one tick (the old hard cut) must be flagged.
 import test from 'node:test';
 import { RULE_IDS, ruleOf } from './helpers-flash.js';
 import assert from 'node:assert/strict';
@@ -10,15 +10,12 @@ import { shownMeter, FLASH_MODE, MODE_NOTE } from './helpers-flash-modes.js';
 import { arrive9000, stepFrames, stepSeconds, pickVision, VISIONS, FPS } from './helpers-driftman-panels.js';
 
 const SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [176, 58], [78, 24]];
-const RULES = RULE_IDS.map((id) => [id, (r) => ruleOf(r, id)]); // the shared list (helpers-flash.js): the brightness and red rules and C (DRIFT-8 C4)
+const RULES = RULE_IDS.filter((id) => id !== 'l2.x4').map((id) => [id, (r) => ruleOf(r, id)]); // the shared list (helpers-flash.js): the brightness and red rules and C (DRIFT-8 C4)
 const pc = (x) => (x * 100).toFixed(1);
-const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
+const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
 // the cell grid (the old reading) and the pixel grid (DRIFT-8 C2)
 const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
-// The shell's flows are held at 1x for L2 (the speed key reaches only the scene clock, so the meter's own 4x view of a menu or help ramp is a stress outside the
-// shell's speeds; the foil walk and the shelf are held the same way): l2.x4 is measured and printed but not judged. Every other rule is judged at its own limit.
-const NOT_JUDGED = new Set(['l2.x4']);
-const failing = (rep) => RULES.filter(([n, get]) => !NOT_JUDGED.has(n) && !get(rep).pass).map(([n]) => n);
+const failing = (rep) => RULES.filter(([, get]) => !get(rep).pass).map(([n]) => n);
 const TABLE = [];
 
 async function run(cols, rows, id, speed, { hard = false, offset = 0 } = {}) {

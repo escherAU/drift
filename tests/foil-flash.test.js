@@ -31,7 +31,7 @@ const pc = (x) => (x * 100).toFixed(2);
 const CEIL_L2 = { // fractions
   '120x40': [0.046, 0.162, 0.010], '80x24': [0.094, 0.177, 0.024], '240x67': [0.020, 0.055, 0.004], '88x39': [0.083, 0.216, 0.029], '176x58': [0.037, 0.095, 0.004], '78x24': [0.083, 0.169, 0.035],
 };
-// The shelf walk is held to ABSOLUTE limits at 1x only (shell flows are held at 1x for the L2 rule): every 1x rule at its limit, and a ceiling on L2 per
+// The shelf walk is held to ABSOLUTE limits at 1x only (it runs in real seconds at every speed, tests/shell-clock.test.js, so the meter's 4x view of L2 is neither judged nor printed for it): every other rule at its limit, and a ceiling on L2 per
 // size, the worst measured over both arts, foil on and off, plus a hair, rounded up to the next tenth of a point (fractions).
 const WALK_RULES = RULES.filter(([name]) => !name.endsWith('.x4'));
 // Re-measured for the scrub (DRIFT-7 item 2b): the walk's last two presses used to be a queued step; now they scrub, and the console text and dots (the
@@ -47,9 +47,9 @@ const PIXEL_WALK_L2 = { '120x40': 0.071, '80x24': 0.001, '240x67': 0.028, '88x39
 const PIXEL_CEIL_L2 = {
   '120x40': [0.048, 0.195, 0.009], '80x24': [0.107, 0.204, 0.029], '240x67': [0.030, 0.071, 0.005], '88x39': [0.101, 0.25, 0.030], '176x58': [0.049, 0.112, 0.006], '78x24': [0.085, 0.186, 0.030],
 };
-const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
+const showOne = (rep, l2x4 = true) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}${l2x4 ? `/${pc(rep.l2.x4.worstFraction)}` : ""} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
 // the cell grid (the old reading) and the pixel grid (DRIFT-8 C2)
-const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
+const show = (rep, l2x4 = true) => `${showOne(rep.cell, l2x4)} | pixel ${showOne(rep.pixel, l2x4)}`;
 const TRUECOLOR = FLASH_MODE === 'truecolor'; // the ceilings are measured on truecolor; in 256 colours every rule is held at its own limit and the numbers are printed
 
 // the 30 s at rest: wait for nothing, the library is the start screen
@@ -133,8 +133,8 @@ for (const [cols, rows] of SIZES) {
 
     for (const art of ['dense', 'delza']) {
       const w = walk(cols, rows, { art }), b = walk(cols, rows, { withFoil: false, art });
-      TABLE.push(at + `walk   foil ${art.padEnd(5)} ` + show(w.rep));
-      TABLE.push(at + `walk   none ${art.padEnd(5)} ` + show(b.rep));
+      TABLE.push(at + `walk   foil ${art.padEnd(5)} ` + show(w.rep, false));
+      TABLE.push(at + `walk   none ${art.padEnd(5)} ` + show(b.rep, false));
       assert.deepEqual(w.path, b.path);
       assert.ok(new Set(w.path).size >= 3, 'the walk visits foil and plain cards: ' + w.path.join(' > '));
       const bad = [];

@@ -489,8 +489,8 @@ terminal restored each time, are checked against the real process. Read what it 
   0.70 in truecolor and the fill's lightness on 256 colours (the scene reads the colour mode from `params.cmode`), with the hue turned 180 degrees (0.82 failed the meter in truecolor, 0.78 failed it on the 256-colour cube; the per-pixel brightness range over a 4x run is 0.0585 in truecolor and 0.0665 on 256 colours, tripwire 0.07). The contour share of the Rosette's cells is 4.7 % at the median and
   10 to 14 % at the peak.
 - Cortex's content is fixed while its glass slides (the slide is the motion; moving the content too would have been the cost).
-- The meter's own 4x view of L2 is printed but not judged for the menu and help ramps and the shelf walk: the shell's flows are held at 1x (the speed key reaches only the scene
-  clock). Every other rule (L1, L3, R, and L2 at 1x) is judged at every size, at 1x and 4x runtime speed.
+- The meter's own 4x view of L2 is neither judged nor printed for the menu and help ramps, the shelf walk and the eject: the shell's flows run in real seconds at every speed (the speed key
+  reaches only the scene clock), which tests/shell-clock.test.js times for every flow at all eight speeds. Every other rule (L1, L3, R, and L2 at 1x) is judged at every size, at 1x and 4x runtime speed.
 - **Colour flicker, rule C: a HOUSE RULE, beyond WCAG.** WCAG counts brightness and saturated red; it calls a change of hue at steady brightness free. The flash meter also
   has a rule of our own for colour, because a whole screen turning hue several times a second is uncomfortable and was about half of the Rosette's field at 4x. Each pixel's
   colour is read in OKLab and four axes are followed (a, b and the diagonals (a + b) / sqrt 2 and (a - b) / sqrt 2; a and b alone are blind to a change along a diagonal). A swing is a
@@ -662,7 +662,7 @@ not a TTY, drift prints a message and exits 0 without emitting any escape sequen
 npm test            # node --test, no dependencies
 ```
 
-The suite is 2519 tests in `tests/*.test.js` and takes about 280 to 300 seconds on a 32-thread machine (220 s before the colour rule C: the meter reads colour too now, which costs about twice as much on an animated full-colour scene, and rule C has its own flash-colour files) (test files run in parallel; the longest are the 9000's flash-meter runs over its menu and help, about 2 minutes by themselves, and the real-process arms, which start the real program and wait in real time). The cartridge work is
+The suite is 2572 tests in `tests/*.test.js` and takes about 280 to 300 seconds on a 32-thread machine (220 s before the colour rule C: the meter reads colour too now, which costs about twice as much on an animated full-colour scene, and rule C has its own flash-colour files) (test files run in parallel; the longest are the 9000's flash-meter runs over its menu and help, about 2 minutes by themselves, and the real-process arms, which start the real program and wait in real time). The cartridge work is
 covered by `cartridge-schema` (validators, text scene, skin palette), `cartridge-loader`
 (every way a cartridge can be wrong, and both arms of the trust rule), `cartridge-scenes` (every
 install cartridge's scenes through the size, glyph, colour, determinism and flash checks, with controls

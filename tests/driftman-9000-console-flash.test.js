@@ -5,7 +5,7 @@
 // Held to ABSOLUTE limits, as every shell flow is (DRIFT-7 item 1): every rule (L1, L2, L3, R) at its own limit for insert + boot at 1x AND 4x and for the
 // eject at 1x and 4x, at every size, with no exception (DRIFT-7 stage C: the compact screens' L2 at 4x was 27.8 to 29.8 % because the boot lines'
 // typed cells sat on the library's blurb cells and were cleared again within the meter's 4 s window; the 9000's skin.json holds the lines 0.5 s longer,
-// boot.seconds 2.0 (1.75 until the third menu entry, when the menu list at 80x24 and 78x24 came to overlap the typed lines), which puts the clear outside it), and a constant 10 % headroom pin on L2 (L2_HEADROOM, below). The eject at 4x gets no L2 pin: playback speed reaches only the scene clock, so the shell's eject is a 1x condition.
+// boot.seconds 2.0 (1.75 until the third menu entry, when the menu list at 80x24 and 78x24 came to overlap the typed lines), which puts the clear outside it), and a constant 10 % headroom pin on L2 (L2_HEADROOM, below).
 // The control: the same flow with the brightness of every console cell flipped between black and white on alternate frames must fail the meter.
 // A load-proof CPU budget for the hook at 240x67 (a ratio to a calibration loop, with a 3x-slower control) closes the file. TABLE lines print every measured value.
 import test from 'node:test';
@@ -99,7 +99,6 @@ for (const [cols, rows] of SIZES) {
       }
       for (const [flow, rep] of [['insert+boot', m.ins], ['eject', m.eje]]) {
         for (const [name, get] of [['l2.x1', (r) => r.l2.x1], ['l2.x4', (r) => r.l2.x4]]) {
-          if (flow === 'eject' && name === 'l2.x4') continue; // playback speed reaches only the scene clock: the eject is a 1x flow
           const r = get(rep);
           if (r.worstFraction > r.limit * L2_HEADROOM) bad.push(`phase ${phase * 4}/4 ${flow} ${name}: ${pc(r.worstFraction)}% is over ${pc(r.limit * L2_HEADROOM)}% (${L2_HEADROOM} of the limit)`);
         }

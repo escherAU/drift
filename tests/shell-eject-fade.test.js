@@ -237,14 +237,14 @@ test('eject: any key during the fade skips to the library at once; a resize duri
 //   L2 (3 transitions in 1 s, field of a ninth of the screen) was the insert animation's own (cells that lit, slid away and lit again,
 //   and the blank in between added one more transition); the old ratchet allowed up to 44% at 1x. DRIFT-7 item 1 made the insert's step 3 a dissolve, so at 1x it
 //   passes the 25% rule at every size, and is held ABSOLUTELY: the rule, plus a ceiling per size (the measured value plus a hair, to the
-//   next tenth of a point). At 4x it still fails (about 38% at 80x24, 78x24 and 40x10): the shell's eject is a 1x condition (the speed key
-//   reaches only the scene clock), so the 4x L2 is printed in the TABLE and NOT asserted. L1, L3 and R pass at both.
+//   next tenth of a point). The eject is a 1x condition: it runs in real seconds at every speed (tests/shell-clock.test.js), so the meter's 4x view of L2 is
+//   neither judged nor printed here. L1, L3 and R pass at both views.
 const METER_SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [78, 24], [40, 10]];
 const L2_CEIL_X1 = { '120x40': 0.047, '80x24': 0.084, '240x67': 0.020, '88x39': 0.075, '78x24': 0.107, '40x10': 0.090 };
 // DRIFT-8 C2: the same flow again in 256 colours (the shell built with cmode '256', each frame shown to the meter through the 256-colour reducer), and the
 // meter now reads the cell grid AND the pixel grid; the ceilings below are truecolor, cell-grid facts, so in 256 colours every rule is held at its own limit.
 for (const mode of ['truecolor', '256']) {
-test('flash meter over the whole eject at 1x and 4x on a lit full-colour fixture at six sizes: L1, L3 and R pass; L2 at 1x passes and sits under its absolute ceiling (4x is printed, not asserted)' + (mode === '256' ? ' [256 colours]' : ''), async () => {
+test('flash meter over the whole eject at 1x and 4x on a lit full-colour fixture at six sizes: L1, L3 and R pass; L2 at 1x passes and sits under its absolute ceiling' + (mode === '256' ? ' [256 colours]' : ''), async () => {
   const lines = [], bad = [];
   for (const [cols, rows] of METER_SIZES) {
     const { sh } = await running(cols, rows, { cmode: mode });
@@ -254,7 +254,7 @@ test('flash meter over the whole eject at 1x and 4x on a lit full-colour fixture
     for (let k = 0; k < Math.round((EJECT_SECONDS + 1) * FPS); k++) { sh.tick(1 / FPS); meter.push(sh.frame()); }
     const rep = meter.report();
     const p = (r) => `${(r.worstFraction * 100).toFixed(2)}%`;
-    const show = (r) => `L1 ${p(r.l1.x1)}/${p(r.l1.x4)}, L2 ${p(r.l2.x1)}/${p(r.l2.x4)}, L3 ${p(r.l3)}, R ${p(r.r.x1)}/${p(r.r.x4)}, C ${p(r.c)}`;
+    const show = (r) => `L1 ${p(r.l1.x1)}/${p(r.l1.x4)}, L2 ${p(r.l2.x1)}, L3 ${p(r.l3)}, R ${p(r.r.x1)}/${p(r.r.x4)}, C ${p(r.c)}`;
     lines.push(`${cols}x${rows}: ${show(rep.cell)} (x1/x4) | pixel ${show(rep.pixel)}`);
     for (const [name, r] of [['l1.x1', rep.l1.x1], ['l1.x4', rep.l1.x4], ['l3', rep.l3], ['r.x1', rep.r.x1], ['r.x4', rep.r.x4], ['c', rep.c]]) if (!r.pass) bad.push(`${cols}x${rows} ${name} ${p(r)}`);
     if (!rep.l2.x1.pass) bad.push(`${cols}x${rows} l2.x1 ${p(rep.l2.x1)} is over the rule`);
