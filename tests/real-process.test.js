@@ -33,7 +33,7 @@ function run({ env = {}, drive, waitForFrame = true, args = [], timeoutMs = TIME
     });
     const chunks = [], errChunks = [];
     let timedOut = false, driven = false;
-    const doDrive = () => { if (!driven) { driven = true; if (drive) drive(child); } };
+    const doDrive = () => { if (!driven) { driven = true; if (drive) drive(child, () => Buffer.concat(chunks).toString('utf8')); } };
     child.stdout.on('data', (d) => {
       chunks.push(d);
       if (waitFor !== null) { if (Buffer.concat(chunks).toString('utf8').includes(waitFor)) doDrive(); }
@@ -226,6 +226,7 @@ const NIGHT_PROMPT = 'MIDNIGHT'; // the first row of the tape deck (A1 MIDNIGHT 
 const SHELF = discoverCartridges({ dirs: [{ dir: path.join(path.dirname(BIN), '..', 'cartridges'), trusted: true }] }).cartridges
   .map((c) => c.id).sort((a, b) => (a === 'classic' ? -1 : b === 'classic' ? 1 : 0));
 const NIGHT_SLOT = SHELF.indexOf('night-drive');
+const SHELF_BLURBS = Object.fromEntries(SHELF.map((id) => [id, JSON.parse(fs.readFileSync(path.join(path.dirname(BIN), '..', 'cartridges', id, 'manifest.json'), 'utf8')).blurb]));
 const PLAIN = /\x1b\[[0-9;?]*[A-Za-z]/g; // an escape sequence, to read the screen text without them
 const RIGHT = '\x1b[C', DOWN = '\x1b[B';
 
@@ -252,11 +253,19 @@ test('real process (night-drive a): --library, Night Drive selected on the shelf
   for (const rights of [NIGHT_SLOT, 0, 2]) {
     const cfg = freshConfig();
     const r = await run({
-      args: ['--library'], env: { ...FORCE, ...cfg.env }, timeoutMs: DELZA_TIMEOUT,
-      drive: (c) => {
-        // a key every 0.6 s: every press registers at once and the shelf scrubs (DRIFT-7 item 2b)
+      args: ['--library'], env: { ...FORCE, ...cfg.env }, timeoutMs: 30000,
+      drive: (c, out) => {
+        // a key every 0.6 s: every press registers at once and the shelf scrubs (DRIFT-7 item 2b). The q is NOT sent at a
+        // fixed time after the last key (under load the child draws the selected card late, and an early q ends the run
+        // before its blurb is ever written): it is sent once the selected card's blurb has been written to stdout
+        // (polled every 100 ms), with the kill timer (30 s) as the ceiling.
         for (let i = 0; i < rights; i++) setTimeout(() => c.stdin.write(RIGHT), i * 600);
-        setTimeout(() => c.stdin.write('q'), rights * 600 + 700);
+        const want = SHELF_BLURBS[SHELF[rights]].slice(0, 12);
+        const poll = setInterval(() => {
+          if (out().replace(PLAIN, '').includes(want)) { clearInterval(poll); setTimeout(() => c.stdin.write('q'), Math.max(0, rights * 600 + 300 - (Date.now() - t0))); }
+        }, 100);
+        const t0 = Date.now();
+        c.on('close', () => clearInterval(poll));
       },
     });
     assertRestored(r, t, `(night-drive a) ${rights} right arrows (${SHELF[rights]} selected)`);

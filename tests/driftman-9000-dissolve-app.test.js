@@ -5,7 +5,8 @@
 //
 // What is driven: the program is the manifest's (rosette, cortex, bloomfall, hold 60 s, dissolve 2 s). In an 82 s run at 4x the app dissolves four times
 // (rosette>cortex while the opening menu is still up, cortex>bloomfall, bloomfall>rosette, rosette>cortex with the menu gone); each is metered from 4 real seconds before it starts to 4 real seconds after it
-// ends, with every rule of the meter (L1, L2, L3, R, C). At 4x the rules judged at the playback speed are judged (X1_RULE_IDS, as the replay test does); at 1x all of them.
+// ends. ASSERTED, at both 4x and 1x: the rules judged at the playback speed (X1_RULE_IDS: L1, L2, L3, R and C at the 18 fps the viewer sees). NOT ASSERTED here: the meter's 4x
+// view of the same frames (l1.x4, l2.x4, r.x4); see the known gap below.
 // The other three ordered pairs (cortex>rosette, bloomfall>cortex, rosette>bloomfall) cannot occur in the app (a program only ever moves to its next scene, the menu starts
 // it at a scene, and there are no palette scenes in this cartridge); the replay test still covers them.
 //
@@ -32,7 +33,7 @@ const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 // one run -> { lines, bad }; asserts the rig is what it says it is
 function judge(res, { cols, rows, seed, speed }) {
   const lines = [], bad = [];
-  const tag = `${FLASH_MODE}${MODE_NOTE ? '' : ''} ${cols}x${rows} seed ${seed} ${speed}x`;
+  const tag = `${FLASH_MODE} ${cols}x${rows} seed ${seed} ${speed}x`;
   const want = speed === 4 ? 4 : 3;
   assert.ok(res.dissolves.length >= want, `${tag}: expected at least ${want} dissolves, the app made ${res.dissolves.length} (running from frame ${res.runningAt}, ${res.frames} frames)`);
   const seen = new Set();
@@ -49,8 +50,9 @@ function judge(res, { cols, rows, seed, speed }) {
     // not vacuous: the picture changed from the old scene to the new one over the window
     assert.ok(d.sigAfter && dist(d.sigBefore, d.sigAfter) > 15, `${tag}: ${d.from}>${d.to} the field's mean colour ${d.sigBefore} -> ${d.sigAfter} did not change`);
     // the rules judged at the playback speed (L1, L2, L3, R, C at the 18 fps the viewer sees). A 1x run is also printed with its x4 view (the same frames judged over a 72-frame
-    // window, the proxy for a viewer who speeds up) but that view is not asserted here: the 4x runs measure the real thing, and the x4 view of Bloomfall>Rosette in the app
-    // reads 34-35 % at seeds 8, 12 and 16 (see the ticket report); the replay test keeps judging it.
+    // window, the proxy for a viewer who speeds up) but that view is PRINTED, NOT ASSERTED, here. KNOWN GAP: that 4x view of Bloomfall>Rosette at 1x runtime reads about 34-35 %
+    // (limit 25 %) at seeds 8, 12 and 16 and is open. The replay test (tests/driftman-9000-dissolve.test.js) does assert its own 4x view of this pair, but from a fresh composer at
+    // seed 1, which does not reproduce the app's state (the header above), so it does not cover this reading either. The 4x runs here do assert the real 4x playback.
     const f = failedRules(d.report, { only: X1_RULE_IDS });
     lines.push(`${tag} ${d.from}>${d.to} ${show(d.report)}`);
     if (f.length) bad.push(`${tag} ${d.from}>${d.to}: ${f.join(',')} ${show(d.report)}`);
