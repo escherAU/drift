@@ -10,7 +10,7 @@ import { discoverCartridges, loadScenes, INSTALL_DIR } from '../src/cartridge/lo
 import { createCellComposer } from '../src/cells.js';
 import { Scheduler } from '../src/compose.js';
 import { createFlashMeter } from './helpers-flash.js';
-import { makeReducer256 } from './helpers-flash-controls.js';
+import { flashRig } from './helpers-flash-controls.js';
 
 const FPS = 18, FADE = 2, LEAD = 4, TAIL = 4;
 const pc = (x) => (x * 100).toFixed(1);
@@ -31,10 +31,10 @@ for (const a of ORDER) for (const b of ORDER) if (a !== b) PAIRS.push([a, b]);
 
 function pairRun(idA, idB, cols, rows, { speed = 1, reduce256 = false, seed = 1, scenes = null } = {}) {
   const [sa, sb] = scenes || [byId(idA).scene, byId(idB).scene];
-  const cc = createCellComposer({ scenes: [sa, sb], cols, rows, seed });
+  const rig = flashRig([sa, sb], cols, rows, { seed, mode: reduce256 ? '256' : 'truecolor' }); // a 256 run gets a 256 composer (scenes see params.cmode)
+  const cc = rig.cc;
   const sched = new Scheduler({ count: 2, durationSec: HOLD, fadeSec: FADE, start: 0, durations: [HOLD, HOLD] });
   const meter = createFlashMeter(cols, rows, FPS);
-  const reduce = reduce256 ? makeReducer256(cols, rows) : null;
   const step = speed / FPS;
   cc.frame(sched.state(), 0); // A's t0 is 0
   const t0 = HOLD - LEAD, t1 = HOLD + FADE + TAIL;
@@ -44,7 +44,8 @@ function pairRun(idA, idB, cols, rows, { speed = 1, reduce256 = false, seed = 1,
   for (; t <= t1; t += step) {
     sched.advance(step);
     const f = cc.frame(sched.state(), t);
-    if (reduce) { const r = reduce(f, null); meter.push(r.frame, r.palette); } else meter.push(f);
+    const s = rig.show(f);
+    meter.push(s.frame, s.palette);
   }
   return meter.report();
 }

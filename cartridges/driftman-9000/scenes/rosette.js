@@ -11,8 +11,11 @@
 // 180 is the least that does (95.2 % on the worst of three seeds), 200 is shipped for margin (96.4 %). Hue only, at steady lightness:
 // free under the flash meter, in truecolor and in 256 colours.
 //
-// The contours, where |f| < CONTOUR_BAND, are the same colour turned half way round the wheel (hue + 180) and a little lighter
-// (CONTOUR_L 0.72). Why not the designer's L 0.82: the flash meter. A brighter line changes the cell's brightness by more
+// The contours, where |f| < CONTOUR_BAND, are the same colour turned half way round the wheel (hue + 180). In truecolor they are a
+// little lighter, CONTOUR_L 0.70 (safeHue row 44 of 64; it was 0.72, row 45, until DRIFT-8: the per-pixel brightness range over the whole
+// run is 0.0585 at 0.70 and 0.0814 at 0.72, and 0.07 is the tripwire). On 256 colours (params.cmode, set by the cell composer) they are
+// at the fill's lightness: snapped to the xterm cube, a lightness step between contour and fill shows as a larger brightness jump than
+// in truecolor (measured per pixel over a 4x run: 0.1333 at 0.70, 0.0665 at the fill's lightness). The numbers below are from stage C14 at 0.72. Why not the designer's L 0.82: the flash meter. A brighter line changes the cell's brightness by more
 // than the 0.10 swing the meter counts, every time the picture drifts across it; measured at 120x40 that was L2 at 4x 76.6 %
 // (limit 25) and L1 at 4x 24.3 %. L 0.78 passes in truecolor (L2 at 4x 11.8 %) but on 256-colour output, where the same colours
 // are snapped to the xterm cube, it fails (63.6 %); 0.74 fails there too (28.4 %), 0.72 and below pass (8.2 % with the hue
@@ -34,7 +37,8 @@ export const MIN_W = 60, MIN_H = 20;
 export const MESSAGE = 'This vision needs 60 x 20.';
 export const FOLDS = Object.freeze([6, 8, 12, 10]);
 export const FOLD_SECONDS = 15, MELT_SECONDS = 3;
-export const FILL_L = 0.66, CONTOUR_L = 0.72, CONTOUR_TURN = 180, CONTOUR_BAND = 0.06;
+export const FILL_L = 0.66, CONTOUR_L = 0.70, CONTOUR_TURN = 180, CONTOUR_BAND = 0.06;
+export const CONTOUR_L_256 = FILL_L; // on 256 colours the contour is drawn at the fill's lightness (params.cmode === '256')
 export const HUE_RATE = 200; // degrees of hue per second (the designer's 90, see the header)
 const BG = 0x05060c; // the skin background
 const DIM = 0x5a6a94; // the message: dim mist
@@ -131,7 +135,9 @@ function message(w, h, params) {
 
 // The scene function. makeRosette(contourL, contourTurn) exists so the tests can build the designer's L 0.82 contour as a
 // control that must fail the meter; the shipped scene is makeRosette() with the defaults.
-export function makeRosette(contourL = CONTOUR_L, contourTurn = CONTOUR_TURN) {
+// contourL256 is the lightness used when params.cmode is '256'; a control that names only contourL gets that one in both modes.
+export function makeRosette(contourL, contourTurn = CONTOUR_TURN, contourL256) {
+  if (contourL === undefined) { contourL = CONTOUR_L; if (contourL256 === undefined) contourL256 = CONTOUR_L_256; } else if (contourL256 === undefined) contourL256 = contourL;
   function rosette(t, w, h, params) {
     if (!(w > 0 && h > 0)) return;
     if (w < MIN_W || h < MIN_H) { message(w, h, params); return; }
@@ -142,6 +148,7 @@ export function makeRosette(contourL = CONTOUR_L, contourTurn = CONTOUR_TURN) {
     const melting = local < MELT_SECONDS;
     const rot = 0.05 * T, hueT = 200 + HUE_RATE * T;
     const { r, ang, delay, pixels, n } = c;
+    const cL = params.cmode === '256' ? contourL256 : contourL;
     const segC = TAU / cur, segP = TAU / prev;
     for (let i = 0; i < n; i++) {
       const ri = r[i];
@@ -152,7 +159,7 @@ export function makeRosette(contourL = CONTOUR_L, contourTurn = CONTOUR_TURN) {
       const cth = COS(th), sth = SIN(th);
       const f = SIN(5 * ri - 0.7 * T + 3 * COS((N * th) / 2)) + 0.6 * SIN(11 * ri * cth + 0.4 * T + p1) + 0.4 * SIN(17 * ri * sth - 0.3 * T + p2);
       const hue = hueT + 120 * f + 40 * ri;
-      pixels[i] = f > -CONTOUR_BAND && f < CONTOUR_BAND ? safeHue(hue + contourTurn, contourL) : safeHue(hue, FILL_L);
+      pixels[i] = f > -CONTOUR_BAND && f < CONTOUR_BAND ? safeHue(hue + contourTurn, cL) : safeHue(hue, FILL_L);
     }
     pixelsToCells(params, w, h, pixels, w, 2 * h);
   }

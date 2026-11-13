@@ -53,7 +53,7 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
 
   const cellList = scenes.filter((s) => s.family === 'cells');
   const fieldList = scenes.filter((s) => s.family === 'field');
-  let cellComp = cellList.length ? createCellComposer({ scenes: cellList.map((s) => s.scene), cols, rows, seed }) : null;
+  let cellComp = cellList.length ? createCellComposer({ scenes: cellList.map((s) => s.scene), cols, rows, seed, cmode }) : null;
   let fieldComp = fieldList.length ? createComposer({ scenes: fieldList.map((s) => s.scene), cols, rows, seed }) : null;
 
   const programs = new Map();

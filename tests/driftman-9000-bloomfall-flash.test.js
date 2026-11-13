@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFlashMeter } from './helpers-flash.js';
-import { makeReducer256, bloom as bloomControl, runControl } from './helpers-flash-controls.js';
+import { flashRig, bloom as bloomControl, runControl } from './helpers-flash-controls.js';
 import {
   STEADY_CEILING, WORST_SECOND_CEILING, CPU_MEAN_CEILING_MS, BUDGET_RUN, limitFromMeasured, measureBytes, checkBudget, measureCpu, checkCpu,
 } from './helpers-budget.js';
@@ -25,13 +25,12 @@ const failed = (rep) => [['l1.x1', rep.l1.x1], ['l1.x4', rep.l1.x4], ['l2.x1', r
 
 // One solo run through the composer. `step` is the frame step in seconds (1/18 at the shell's 1x; speed/18 at 2x to 4x). reduce256: as 256-colour output shows it.
 function run(scene, cols, rows, { phase = 0, seed = 1, seconds = SECONDS, reduce256 = false, speed = 1, start = 0 } = {}) {
-  const cc = createCellComposer({ scenes: [scene], cols, rows, seed });
+  const rig = flashRig([scene], cols, rows, { seed, mode: reduce256 ? '256' : 'truecolor' }); // a 256 run gets a 256 composer (scenes see params.cmode)
   const meter = createFlashMeter(cols, rows, FPS);
-  const reduce = reduce256 ? makeReducer256(cols, rows) : null;
   const N = Math.round((seconds * FPS) / speed);
   for (let k = 0; k < N; k++) {
-    const f = cc.frame({ a: 0, b: 0, p: 0 }, start + ((k + phase) * speed) / FPS);
-    if (reduce) { const r = reduce(f, null); meter.push(r.frame, r.palette); } else meter.push(f);
+    const s = rig.show(rig.cc.frame({ a: 0, b: 0, p: 0 }, start + ((k + phase) * speed) / FPS));
+    meter.push(s.frame, s.palette);
   }
   return meter.report();
 }

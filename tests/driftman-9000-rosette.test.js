@@ -11,7 +11,7 @@ import { RGB_CELL } from '../src/renderer.js';
 import { safeHue } from '../src/pixels.js';
 import rosette, {
   makeRosette, cacheFor, foldsAt, foldOf, meltDelay, fieldAt, phiOf, hash2, FOLDS, FOLD_SECONDS, MELT_SECONDS, MIN_W, MIN_H,
-  FILL_L, CONTOUR_L, CONTOUR_TURN, CONTOUR_BAND, HUE_RATE, SINE, SINE_N,
+  FILL_L, CONTOUR_L, CONTOUR_L_256, CONTOUR_TURN, CONTOUR_BAND, HUE_RATE, SINE, SINE_N,
 } from '../cartridges/driftman-9000/scenes/rosette.js';
 
 const FPS = 18;
@@ -20,9 +20,9 @@ function buffers(w, h) {
   const n = w * h;
   return { glyphs: new Uint16Array(n).fill(0x7e), colours: new Uint8Array(n).fill(7), fg: new Uint32Array(n).fill(SENTINEL), bg: new Uint32Array(n).fill(SENTINEL) };
 }
-function draw(scene, t, w, h, seed = 1, t0 = 0, params = null) {
+function draw(scene, t, w, h, seed = 1, t0 = 0, params = null, cmode = 'truecolor') {
   const p = params || buffers(w, h);
-  p.seed = seed; p.t0 = t0;
+  p.seed = seed; p.t0 = t0; p.cmode = cmode;
   scene(t, w, h, p);
   return p;
 }
@@ -97,7 +97,7 @@ const hueOf = (c) => {
   return h < 0 ? h + 360 : h;
 };
 
-test('rosette intricacy: at seven times and three sizes the frame has all 36 ten-degree hue bins (floor 30), a wide hue spread (floor 90 degrees) and a real brightness spread (floor 0.006)', () => {
+test('rosette intricacy: at seven times and three sizes the frame has all 36 ten-degree hue bins (floor 30), a wide hue spread (floor 90 degrees) and a real brightness spread (floor 0.005)', () => {
   const lines = [];
   for (const [w, h] of [[120, 40], [240, 67], [60, 20]]) {
     for (const t of [1, 7, 16, 25, 33, 47, 55]) {
@@ -121,11 +121,11 @@ test('rosette intricacy: at seven times and three sizes the frame has all 36 ten
       lines.push(`${w}x${h} t=${t}: bins ${bins.size}/36 hue spread ${sd.toFixed(0)} deg brightness sd ${ysd.toFixed(4)}`);
       assert.ok(bins.size >= 30, `${w}x${h} t=${t}: ${bins.size} hue bins`);
       assert.ok(sd >= 90, `${w}x${h} t=${t}: hue spread ${sd}`);
-      assert.ok(ysd >= 0.006, `${w}x${h} t=${t}: brightness sd ${ysd}`);
+      assert.ok(ysd >= 0.005, `${w}x${h} t=${t}: brightness sd ${ysd}`);
       assert.ok(m > 0.2 && m < 0.4, `${w}x${h} t=${t}: mean brightness ${m} (fills are held at L ${FILL_L})`);
     }
   }
-  console.log('INTRICACY (measured: bins 36/36 everywhere, hue spread 105 to 146 deg, brightness sd 0.0089 to 0.0159 (the fills are all at one lightness; the spread is the contours)):\n  ' + lines.join('\n  '));
+  console.log('INTRICACY (measured: bins 36/36 everywhere, hue spread 105 to 146 deg, brightness sd 0.0059 to 0.0102 with the contour at L 0.70 (DRIFT-8 C1; it was 0.0089 to 0.0159 at 0.72, floor 0.006), so the floor is 0.005; the fills are all at one lightness, the spread is the contours):\n  ' + lines.join('\n  '));
 });
 
 test('rosette contours: the share of pixels on a contour (|f| < 0.06) over a 75 s scan every 0.5 s, three seeds, 120x40 and 88x39: median under 8 %, worst under 15 %', () => {
@@ -194,12 +194,13 @@ test('rosette melt: after each change every pixel switches from the old fold to 
   assert.equal(meltDelay(5, 7, 1), 3 * hash2(5, 7, 1));
 });
 
-test('rosette as drawn: every pixel of every cell is the colour the spec gives it, including in the middle of a melt (each pixel on its own fold at that instant)', () => {
+for (const cmode of ['truecolor', '256']) test(`rosette as drawn (${cmode}): every pixel of every cell is the colour the spec gives it, including in the middle of a melt (each pixel on its own fold at that instant)`, () => {
   const w = 60, h = 20, hPx = 2 * h;
+  const contourL = cmode === '256' ? FILL_L : CONTOUR_L;
   for (const seed of [1, 4]) {
     const c = cacheFor(w, h, seed), [p1, p2] = phiOf(seed);
     for (const T of [0.3, 1.5, 2.9, 7, 15.2, 16.5, 17.9, 30.4, 31.5, 45.1, 46.5, 59, 60.5, 61.5, 62.9, 119.7]) {
-      const p = draw(rosette, T, w, h, seed, 0);
+      const p = draw(rosette, T, w, h, seed, 0, null, cmode);
       let wrong = 0, inMelt = 0;
       for (let py = 0; py < hPx; py++) {
         for (let px = 0; px < w; px++) {
@@ -208,7 +209,7 @@ test('rosette as drawn: every pixel of every cell is the colour the spec gives i
           if (N !== foldsAt(T).cur) inMelt++;
           const f = fieldAt(c.r[i], c.ang[i], N, T, p1, p2);
           const hue = 200 + HUE_RATE * T + 120 * f + 40 * c.r[i];
-          const want = f > -CONTOUR_BAND && f < CONTOUR_BAND ? safeHue(hue + CONTOUR_TURN, CONTOUR_L) : safeHue(hue, FILL_L);
+          const want = f > -CONTOUR_BAND && f < CONTOUR_BAND ? safeHue(hue + CONTOUR_TURN, contourL) : safeHue(hue, FILL_L);
           const cell = (py >> 1) * w + px;
           const got = py % 2 === 0 ? p.fg[cell] : (p.glyphs[cell] === 32 ? p.fg[cell] : p.bg[cell]);
           if (got !== want) wrong++;
@@ -337,7 +338,39 @@ test('rosette sine table: 4096 entries, one turn, equal to Math.sin at its entri
   assert.ok(max < 0.012, `field differs from the straight maths by ${max}`);
 });
 
-test('rosette constants: fill L 0.66, contour L 0.72 turned 180 degrees, band 0.06, hue rate 200; the shipped scene is the factory default', () => {
-  assert.equal(FILL_L, 0.66); assert.equal(CONTOUR_L, 0.72); assert.equal(CONTOUR_TURN, 180); assert.equal(CONTOUR_BAND, 0.06); assert.equal(HUE_RATE, 200);
+test('rosette constants: fill L 0.66, contour L 0.70 (safeHue row 44) in truecolor and the fill L on 256 colours, turned 180 degrees, band 0.06, hue rate 200; the shipped scene is the factory default', () => {
+  assert.equal(FILL_L, 0.66); assert.equal(CONTOUR_L, 0.70); assert.equal(CONTOUR_L_256, FILL_L); assert.equal(CONTOUR_TURN, 180); assert.equal(CONTOUR_BAND, 0.06); assert.equal(HUE_RATE, 200);
   assert.equal(rosette.id, 'rosette'); assert.equal(rosette.kind, 'cells'); assert.equal(rosette.rgb, true);
+});
+
+// T1.4: the contour's lightness per colour mode, read from what the scene draws (the pixel colours), not from the constants.
+test('T1.4 rosette contour lightness: truecolor contours are safeHue row 44 (L 0.70); 256-colour contours are at the fill lightness; the hue still turns 180 degrees', () => {
+  assert.equal(Math.round(CONTOUR_L * 63), 44, 'row 44 of the 64 safeHue rows');
+  const w = 60, h = 20, hPx = 2 * h, seed = 1;
+  const c = cacheFor(w, h, seed), [p1, p2] = phiOf(seed);
+  const row = (L) => Math.round(L * 63);
+  const seen = { truecolor: 0, 256: 0 };
+  for (const cmode of ['truecolor', '256']) {
+    for (const T of [0.3, 3.2, 7, 15.2, 20, 31.5, 45.1, 59, 61.5, 100]) {
+      const p = draw(rosette, T, w, h, seed, 0, null, cmode);
+      for (let py = 0; py < hPx; py++) {
+        for (let px = 0; px < w; px++) {
+          const i = py * w + px;
+          const f = fieldAt(c.r[i], c.ang[i], foldOf(px, py, seed, T), T, p1, p2);
+          if (!(f > -CONTOUR_BAND && f < CONTOUR_BAND)) continue;
+          const hue = 200 + HUE_RATE * T + 120 * f + 40 * c.r[i];
+          const cell = (py >> 1) * w + px;
+          const got = py % 2 === 0 ? p.fg[cell] : p.bg[cell];
+          const turned = safeHue(hue + 180, cmode === '256' ? FILL_L : 0.70), straight = safeHue(hue, cmode === '256' ? FILL_L : 0.70);
+          assert.equal(got, turned, `${cmode} T=${T} px ${px},${py}`);
+          // the row the colour comes from: the contour row is 44 in truecolor and the fill's row (42) on 256 colours
+          assert.equal(got, safeHue(hue + 180, (cmode === '256' ? row(FILL_L) : 44) / 63));
+          if (hue % 360 !== (hue + 180) % 360 && turned !== straight) seen[cmode]++;
+          // a hue turned half way round is a different hue: the contour is never the fill's colour at this place
+          assert.notEqual(got, safeHue(hue, FILL_L), `${cmode}: contour equals the fill colour at T=${T} px ${px},${py}`);
+        }
+      }
+    }
+  }
+  assert.ok(seen.truecolor > 500 && seen['256'] > 500, `contour pixels checked: ${JSON.stringify(seen)}`);
 });

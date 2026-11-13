@@ -4,13 +4,14 @@
 // 3 s melts at 15, 30, 45 and 60 s are all inside), at 120x40, 80x24, 240x67, 61x21, 60x20 and the size just above each layout
 // breakpoint (compact 78x24, full 88x39, extra-large 176x58). A second clock phase and a second seed at the sizes where the contours cost most.
 //
-// Why the contour is L 0.72 turned 180 degrees and not the designer's 0.82 (or stage A's 0.78): see the header of rosette.js and the
-// controls below. 0.82 fails the meter in truecolor (L2 at 4x 76.6 % at 120x40). 0.78 passes in truecolor but, snapped to the 256-colour
-// cube, fails (L2 at 4x 63.6 %). 0.72 and below pass both; the hue turn is what gives the line its contrast.
+// Why the contour is turned 180 degrees, at L 0.70 in truecolor and at the fill's lightness on 256 colours (DRIFT-8 C1; it was 0.72 in
+// both), and not the designer's 0.82 (or stage A's 0.78): see the header of rosette.js and the controls below. 0.82 fails the meter in
+// truecolor (L2 at 4x 76.6 % at 120x40). 0.78 passes in truecolor but, snapped to the 256-colour cube, fails (L2 at 4x 63.6 %). The
+// hue turn is what gives the line its contrast. The per-pixel brightness range of both modes is pinned in driftman-9000-rosette-range.test.js.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFlashMeter } from './helpers-flash.js';
-import { makeReducer256 } from './helpers-flash-controls.js';
+import { flashRig, composerFor } from './helpers-flash-controls.js';
 import {
   STEADY_CEILING, WORST_SECOND_CEILING, CPU_MEAN_CEILING_MS, BUDGET_RUN, limitFromMeasured, measureBytes, checkBudget, measureCpu, checkCpu,
 } from './helpers-budget.js';
@@ -26,13 +27,12 @@ const failed = (rep) => [['l1.x1', rep.l1.x1], ['l1.x4', rep.l1.x4], ['l2.x1', r
 
 // One solo run through the composer. reduce256: the frames as 256-colour output would show them.
 function run(scene, cols, rows, { phase = 0, seed = 1, seconds = SECONDS, reduce256 = false } = {}) {
-  const cc = createCellComposer({ scenes: [scene], cols, rows, seed });
+  const rig = flashRig([scene], cols, rows, { seed, mode: reduce256 ? '256' : 'truecolor' }); // a 256 run gets a 256 composer (the scene sees params.cmode)
   const meter = createFlashMeter(cols, rows, FPS);
-  const reduce = reduce256 ? makeReducer256(cols, rows) : null;
   const N = Math.round(seconds * FPS);
   for (let k = 0; k < N; k++) {
-    const f = cc.frame({ a: 0, b: 0, p: 0 }, (k + phase) / FPS);
-    if (reduce) { const r = reduce(f, null); meter.push(r.frame, r.palette); } else meter.push(f);
+    const s = rig.show(rig.cc.frame({ a: 0, b: 0, p: 0 }, (k + phase) / FPS));
+    meter.push(s.frame, s.palette);
   }
   return meter.report();
 }
@@ -66,9 +66,9 @@ for (const sz of ['120x40', '80x24', '61x21', '88x39', '176x58', '240x67']) {
   });
 }
 
-test('rosette 256 colours: the output is not garbage, at least 24 distinct 256-colour indexes over 60 s (measured 32), and every index is a cube or grey entry', () => {
+test('rosette 256 colours: the output is not garbage, at least 16 distinct 256-colour indexes over 60 s (measured 17 once the 256-colour contour sits at fill lightness (was 32 with the contour at 0.72)), and every index is a cube or grey entry', () => {
   const cols = 120, rows = 40, n = cols * rows;
-  const cc = createCellComposer({ scenes: [rosette], cols, rows, seed: 1 });
+  const cc = composerFor([rosette], cols, rows, { seed: 1, mode: '256' });
   const used = new Set();
   let cells = 0;
   for (let k = 0; k < 60 * FPS; k += 5) {
@@ -76,7 +76,7 @@ test('rosette 256 colours: the output is not garbage, at least 24 distinct 256-c
     for (let i = 0; i < n; i++) { used.add(nearest256(f.fg[i])); used.add(nearest256(f.bg[i])); cells++; }
   }
   console.log(`256-colour: ${used.size} distinct indexes over ${cells} cells`);
-  assert.ok(used.size >= 24, `${used.size}`);
+  assert.ok(used.size >= 16, `${used.size}`);
   for (const i of used) assert.ok(i >= 16 && i <= 255, `index ${i}`);
 });
 
@@ -115,7 +115,7 @@ test('rosette controls: a strobe over the Rosette\'s own frames (every cell blac
 // ---- 4. the byte budget
 
 // Measured with measureBytes at BUDGET_RUN (60 s at 120x40, 30 s at 240x67, the real renderer, truecolor, seed 1).
-const MEASURED = { '120x40': { steady: 2_938_100, worst: 3_057_338 }, '240x67': { steady: 9_131_554, worst: 9_901_177 } };
+const MEASURED = { '120x40': { steady: 2_938_377, worst: 3_057_768 }, '240x67': { steady: 9_133_750, worst: 9_903_034 } }; // DRIFT-8 C1: re-measured with the contour at L 0.70 (was 2_938_100 / 3_057_338 and 9_131_554 / 9_901_177 at 0.72); the limits (x 1.10, rounded up) did not move
 // The limits: measured x 1.10, rounded up to the next 10 KB/s (limitFromMeasured), each under the global ceilings.
 const LIMIT = { '120x40': { steady: 3_240_000, worst: 3_370_000 }, '240x67': { steady: 10_050_000, worst: 10_900_000 } };
 

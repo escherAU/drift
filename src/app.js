@@ -184,7 +184,7 @@ export function createApp(o) {
     return scheds[mode];
   }
   function cells(mode) {
-    if (!cellComps[mode]) cellComps[mode] = createCellComposer({ scenes: playlists[mode], cols, rows, seed });
+    if (!cellComps[mode]) cellComps[mode] = createCellComposer({ scenes: playlists[mode], cols, rows, seed, cmode });
     return cellComps[mode];
   }
   const listOf = (mode) => (mode === 'calm' ? scenes : playlists[mode]);

@@ -18,7 +18,7 @@ test('README Driftman 9000 section: the three visions, the program, the console,
   const s = section(README);
   for (const need of ['**Rosette**', '**Cortex**', '**Bloomfall**', 'The transmission', 'THE THREE VISIONS', 'No new keys', 'To try it', 'Caveats',
     'Not seen on a real screen', 'A 256-colour terminal is degraded, not identical', '`arrows · Enter wakes · e folds · h keys`', '2.0 s', '200 degrees a second (the design had 90)',
-    'lightness\n  0.72 with the hue turned 180 degrees', '4.7 % at the median', '10 to 14 % at the peak', 'Cortex\'s content is fixed while its glass slides',
+    'lightness\n  0.70 in truecolor and the fill\'s lightness on 256 colours', '4.7 % at the median', '10 to 14 % at the peak', 'Cortex\'s content is fixed while its glass slides',
     'Delza\'s four key labels exceed 23 characters', 'Spindle, Silk Wake, Reverie, Filigree, Tidefield and The Archive', '`shelf: "last"`']) {
     assert.ok(s.includes(need), `the section says: ${need}`);
   }

@@ -11,6 +11,8 @@
 //                  A scene with `rgb: true` (DRIFT-7, cells and sim only; see src/pixels.js) also gets params.fg and
 //                  params.bg (Uint32Array w*h, 0xRRGGBB). The composer pre-fills its colours with RGB_CELL (255), which
 //                  means "this cell's colours are in fg/bg"; the scene may still write a palette index into any cell.
+//                  DRIFT-8: params.cmode is the colour mode the frame will be shown in, 'truecolor' or '256' (the names of
+//                  detectColorMode in color.js), so a scene can pick colours that stay safe once snapped to the 256-colour cube.
 //                  A palette scene gets the same buffers but no pre-fill, and its colours never reach the renderer's rgb branch.
 //   kind 'sim'     { id, kind: 'sim', init(w, h, seed) -> state, step(state), draw(state, params) }
 //                  step runs at a fixed 1/30 s. Same seed + same step count gives the same frame.
@@ -36,7 +38,7 @@ function dims(w, h) {
 
 // One frame of a scene from a fresh state (used by captures and the shared tests).
 // Sims are stepped round(t * 30) times from init. Pass glyphs/colours/fg/bg to reuse buffers.
-export function renderScene(scene, t, w, h, seed = 1, glyphs = null, colours = null, fg = null, bg = null) {
+export function renderScene(scene, t, w, h, seed = 1, glyphs = null, colours = null, fg = null, bg = null, cmode = 'truecolor') {
   const [W, H] = dims(w, h);
   const n = W * H;
   const g = glyphs && glyphs.length === n ? glyphs : new Uint16Array(n);
@@ -44,7 +46,7 @@ export function renderScene(scene, t, w, h, seed = 1, glyphs = null, colours = n
   const F = fg && fg.length === n ? fg : new Uint32Array(n);
   const B = bg && bg.length === n ? bg : new Uint32Array(n);
   if (scene && scene.rgb === true) c.fill(RGB_CELL);
-  const params = { seed, glyphs: g, colours: c, fg: F, bg: B };
+  const params = { seed, glyphs: g, colours: c, fg: F, bg: B, cmode: cmode === '256' ? '256' : 'truecolor' };
   const T = Number.isFinite(t) ? t : 0;
   if (sceneKind(scene) === 'sim') {
     const state = scene.init(W, H, seed);
@@ -57,8 +59,9 @@ export function renderScene(scene, t, w, h, seed = 1, glyphs = null, colours = n
   return { glyphs: g, colours: c, fg: F, bg: B, cols: W, rows: H };
 }
 
-export function createCellComposer({ scenes, cols, rows, seed = 1 }) {
+export function createCellComposer({ scenes, cols, rows, seed = 1, cmode = 'truecolor' }) {
   const c = {
+    cmode: cmode === '256' ? '256' : 'truecolor', // handed to every scene as params.cmode
     cols: 0, rows: 0, glyphs: null, shades: null, fg: null, bg: null,
     resize, reset, frame,
     stepsLastFrame: 0, stepsTotal: 0,
@@ -67,7 +70,7 @@ export function createCellComposer({ scenes, cols, rows, seed = 1 }) {
   let states = scenes.map(() => null);
   let since = scenes.map(() => null); // clock value when each scene became active (its visit started)
   let acc = 0, lastT = null;
-  const params = { seed, glyphs: null, colours: null, fg: null, bg: null };
+  const params = { seed, glyphs: null, colours: null, fg: null, bg: null, cmode: c.cmode };
 
   function resize(w, h) {
     const [W, H] = dims(w, h);

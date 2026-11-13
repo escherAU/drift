@@ -11,6 +11,7 @@ import { safeHue } from '../src/pixels.js';
 import { rgbTo256 } from '../src/color.js';
 import { nearest256 } from '../src/renderer.js';
 import { createFlashMeter } from './helpers-flash.js';
+import { createCellComposer } from '../src/cells.js';
 
 export const CONTROL_COLS = 120;
 export const CONTROL_ROWS = 40;
@@ -218,6 +219,25 @@ export function makeReducer256(cols, rows) {
     }
     return { frame: out, palette: pal };
   };
+}
+
+// DRIFT-8 C1: the one way a flash test gets a cell composer and the reducer that goes with it. A scene can draw differently per
+// colour mode (params.cmode, set by the composer), so a test that judges 256-colour output must run a composer built for 256
+// colours: flashRig builds both from one `mode`, and reducerFor refuses a composer of the other mode (it cannot be misused to
+// feed a truecolor composer's frames through the 256-colour reducer and call that a 256-colour test).
+export function composerFor(scenes, cols, rows, { seed = 1, mode = 'truecolor' } = {}) {
+  if (mode !== 'truecolor' && mode !== '256') throw new Error(`composerFor: unknown colour mode '${mode}'`);
+  return createCellComposer({ scenes, cols, rows, seed, cmode: mode });
+}
+export function reducerFor(cc, mode, cols, rows) {
+  if (cc.cmode !== mode) throw new Error(`reducerFor: a ${mode} test was handed a ${cc.cmode} composer`);
+  return mode === '256' ? makeReducer256(cols, rows) : null;
+}
+// { cc, mode, show(frame) -> { frame, palette } as that mode shows it }. Push `s.frame, s.palette` into the meter.
+export function flashRig(scenes, cols, rows, { seed = 1, mode = 'truecolor' } = {}) {
+  const cc = composerFor(scenes, cols, rows, { seed, mode });
+  const reduce = reducerFor(cc, mode, cols, rows);
+  return { cc, mode, reduce, show: (f) => (reduce ? reduce(f, null) : { frame: f, palette: undefined }) };
 }
 
 // Feeds `seconds` of the generator (frame k at t = k / fps) into a fresh meter and returns report().
