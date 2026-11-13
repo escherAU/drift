@@ -116,13 +116,13 @@ for (const size of SIZES) {
 
 // ---- T4.1 c: the whole screen turning hue: 3.6 cycles a second fails, 3.0 passes
 
-// The limit is 7 swings a second on one axis = 3.5 cycles a second of hue. 3.0 cycles a second (6 swings) is the pass arm the brief names and passes at the tuned sample
-// (18 fps, truecolor, a run that starts on a turning point). It sits close enough to the line that three things move it, all measured below and none a loosening: the first
+// The limit is 7 swings a second on one axis = 3.5 cycles a second of hue. 3.0 cycles a second (6 swings) passes at the tuned sample only
+// (18 fps, truecolor, a run that starts on a turning point), so it is PINNED below (what is true of it), not a pass arm. It sits close enough to the line that three things move it, all measured below and none a loosening: the first
 // excursion from the run's first frame is a swing too (about one start phase in five puts a 7th swing in the first second: frame 19, never later), 24 fps, and the 256-colour
 // cube (a quantised hue wheel adds jitter). 2.6 cycles a second (5.2 swings) passes in every one of those, and is the pass arm where the phase is not the tuned one.
 const spin = (size, cps, phase = 0, o = {}) => { const g = hueSpin(...size, { cps }); return run((t) => g(t + phase), size, o); };
 for (const size of SIZES) {
-  test(`T4.1c ${size.join('x')}: the whole screen turning hue at 3.6 cycles a second FAILS rule C at four clock phases (one at the biggest size); at 3.0 cycles a second it PASSES (the 3.5 limit is not loosened); at 2.6 it passes at the same four phases`, () => {
+  test(`T4.1c ${size.join('x')}: the whole screen turning hue at 3.6 cycles a second FAILS rule C at four clock phases (one at the biggest size); 3.0 is pinned (passes at phase 0, fails at phase 7/180; the 3.5 limit is not loosened); at 2.6 it passes at the same four phases`, () => {
     for (const phase of size[0] >= 200 ? [0] : [0, 0.11, 0.23, 0.37]) { // the biggest size at the tuned phase only: its cost is the cost of the file
       const fast = spin(size, 3.6, phase);
       row(`T4.1c hue turning 3.6 cycles/s, phase ${phase}`, size.join('x'), fast);
@@ -132,9 +132,15 @@ for (const size of SIZES) {
       row(`T4.1c hue turning 2.6 cycles/s, phase ${phase} (pass arm)`, size.join('x'), slow);
       assert.deepEqual(failedRules(slow), [], `2.6 cycles/s phase ${phase}: C ${pct(slow.c.worstFraction)}`);
     }
+    // 3.0 cycles/s is PINNED, not a pass arm: it passes at the tuned start (phase 0) and FAILS at a start phase that puts a 7th swing in the first second
+    // (phase index 7 of the 60 in the edge test below, at frame 19), whatever the size. Both are measured and deterministic.
     const tuned = spin(size, 3.0, 0);
-    row('T4.1c hue turning 3.0 cycles/s, phase 0 (pass arm)', size.join('x'), tuned);
-    assert.deepEqual(failedRules(tuned), [], `3.0 cycles/s: C ${pct(tuned.c.worstFraction)}`);
+    row('T4.1c hue turning 3.0 cycles/s, phase 0 (pinned: passes)', size.join('x'), tuned);
+    assert.deepEqual(failedRules(tuned), [], `3.0 cycles/s phase 0: C ${pct(tuned.c.worstFraction)}`);
+    const edge = spin(size, 3.0, 7 / 60 / 3);
+    row('T4.1c hue turning 3.0 cycles/s, phase 7/180 (pinned: fails)', size.join('x'), edge);
+    assert.ok(failsC(edge), `3.0 cycles/s phase 7/180: C ${pct(edge.c.worstFraction)}`);
+    assert.equal(edge.c.details.frame, 19, 'in the first second, at frame 19');
   });
 }
 
@@ -142,26 +148,30 @@ test('T4.1c the edge of the pass arm, measured: over 60 start phases 3.6 cycles/
   const size = [40, 12];
   const N = 60;
   let fast = 0, slow = 0, edge = 0;
-  const frames = new Set();
+  const frames = new Set(), edgePhases = [];
   for (let i = 0; i < N; i++) {
     const phase = i / N / 3; // one period of a 3 cycles/s turn
     if (spin(size, 3.6, phase, { seconds: 5 }).c.pass === false) fast++;
     if (spin(size, 2.6, phase, { seconds: 5 }).c.pass === false) slow++;
     const e = spin(size, 3.0, phase, { seconds: 5 });
-    if (!e.c.pass) { edge++; frames.add(e.c.details.frame); }
+    if (!e.c.pass) { edge++; frames.add(e.c.details.frame); edgePhases.push(i); }
   }
   TABLE.push(`T4.1c edge over ${N} start phases: 3.6 cycles/s fails ${fast}, 3.0 fails ${edge} (at frames ${[...frames]}), 2.6 fails ${slow}`);
   assert.equal(fast, N);
   assert.equal(slow, 0);
-  assert.ok(edge < N * 0.3, `3.0 fails at ${edge} of ${N} start phases`);
-  assert.deepEqual([...frames].filter((f) => f > 19), [], 'and only in the first second');
+  // pinned (the run is deterministic): 3.0 fails at exactly these 11 of the 60 start phases, all at frame 19
+  assert.deepEqual(edgePhases, [7, 13, 14, 21, 22, 28, 37, 43, 51, 52, 58], `3.0 fails at ${edge} of ${N} start phases`);
+  assert.deepEqual([...frames], [19], 'always at frame 19, so only in the first second');
 });
 
-test('T4.1c at another frame rate: 24 fps (about 9 frames to a cycle at 2.6, 6.7 at 3.6) gives the same two verdicts (3.0 is printed: it is on the edge there)', () => {
+test('T4.1c at another frame rate: 24 fps (about 9 frames to a cycle at 2.6, 6.7 at 3.6) gives the same two verdicts (3.0 is pinned: it is on the edge there, and fails at frame 24)', () => {
   for (const [cols, rows] of [[80, 24], [120, 40]]) {
     const at = (cps) => runControl(hueSpin(cols, rows, { cps }), { cols, rows, fps: 24, seconds: SECONDS });
     const fast = at(3.6), slow = at(2.6), edge = at(3.0);
-    row('T4.1c hue turning 3.6 cycles/s at 24 fps', `${cols}x${rows}`, fast); row('T4.1c hue turning 2.6 cycles/s at 24 fps', `${cols}x${rows}`, slow); row('T4.1c hue turning 3.0 cycles/s at 24 fps (edge, printed)', `${cols}x${rows}`, edge);
+    row('T4.1c hue turning 3.6 cycles/s at 24 fps', `${cols}x${rows}`, fast); row('T4.1c hue turning 2.6 cycles/s at 24 fps', `${cols}x${rows}`, slow); row('T4.1c hue turning 3.0 cycles/s at 24 fps (edge, pinned: fails)', `${cols}x${rows}`, edge);
+    assert.ok(failsC(edge), `3.0 at 24 fps fails (measured: the whole field, frame 24): ${pct(edge.c.worstFraction)}`);
+    assert.ok(edge.c.worstFraction > 0.99);
+    assert.equal(edge.c.details.frame, 24);
     assert.ok(failsC(fast), pct(fast.c.worstFraction));
     assert.deepEqual(failedRules(slow), [], pct(slow.c.worstFraction));
   }
@@ -202,14 +212,18 @@ for (const size of SIZES) {
 
 // ---- 256 colours: the colour verdicts hold on the colours that a 256-colour terminal shows
 
-test('T4.1 on 256-colour output: teal/amber at 4 Hz and a screen turning hue at 3.6 cycles a second FAIL rule C, the same at 3 Hz and 2.6 cycles a second pass (3.0 is printed: the jitter of the cube takes it over the line)', () => {
+test('T4.1 on 256-colour output: teal/amber at 4 Hz and a screen turning hue at 3.6 cycles a second FAIL rule C, the same at 3 Hz and 2.6 cycles a second pass (3.0 is pinned: the jitter of the cube takes it over the line, and it fails at frame 17)', () => {
   for (const size of [[61, 21], [120, 40]]) {
     const o = { reduce256: true };
     const pair = run(colourPair(...size, { c1: TEAL, c2: AMBER, hz: 4 }), size, o);
     const pairSlow = run(colourPair(...size, { c1: TEAL, c2: AMBER, hz: 3 }), size, o);
     const spin = run(hueSpin(...size, { cps: 3.6 }), size, o);
     const spinSlow = run(hueSpin(...size, { cps: 2.6 }), size, o);
-    row('T4.1 256 colours: hue turning 3.0 cycles/s (edge, printed)', size.join('x'), run(hueSpin(...size, { cps: 3.0 }), size, o));
+    const edge = run(hueSpin(...size, { cps: 3.0 }), size, o);
+    row('T4.1 256 colours: hue turning 3.0 cycles/s (edge, pinned: fails)', size.join('x'), edge);
+    assert.ok(failsC(edge), `256 colours, 3.0 cycles/s fails (measured: the whole field, frame 17): ${pct(edge.c.worstFraction)}`);
+    assert.ok(edge.c.worstFraction > 0.99);
+    assert.equal(edge.c.details.frame, 17);
     row('T4.1 256 colours: teal/amber 4 Hz', size.join('x'), pair); row('T4.1 256 colours: teal/amber 3 Hz', size.join('x'), pairSlow);
     row('T4.1 256 colours: hue turning 3.6 cycles/s', size.join('x'), spin); row('T4.1 256 colours: hue turning 2.6 cycles/s', size.join('x'), spinSlow);
     assert.ok(failsC(pair), pct(pair.c.worstFraction));

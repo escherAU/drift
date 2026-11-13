@@ -68,6 +68,7 @@ function copyProject() {
   return dir;
 }
 
+const CHILD_CEILING_MS = 20 * 60 * 1000;
 function run(cwd, args) {
   return new Promise((resolve) => {
     // this file runs inside a test worker, whose NODE_TEST_CONTEXT would make the child a part of this run instead of a run of its own
@@ -77,17 +78,22 @@ function run(cwd, args) {
     let out = '';
     child.stdout.on('data', (d) => { out += d; });
     child.stderr.on('data', (d) => { out += d; });
-    const timer = setTimeout(() => child.kill('SIGKILL'), 170000);
-    child.on('close', (code) => { clearTimeout(timer); resolve({ code, out }); });
+    // A hang guard only, never a pass criterion: the suite takes minutes on a quiet machine and longer under load, so the ceiling is 20 minutes (several times the
+    // observed time). If it ever fires, the run is reported as an ERROR (timedOut), never counted as a mutant killed.
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, CHILD_CEILING_MS);
+    child.on('close', (code) => { clearTimeout(timer); resolve({ code, out, timedOut }); });
   });
 }
 async function runTests(cwd) {
-  const { code, out } = await run(cwd, ['--test', '--test-reporter=tap', `--test-name-pattern=${PATTERN}`, 'tests/flash-colour.test.js', 'tests/flash-colour-rosette.test.js']);
+  const { code, out, timedOut } = await run(cwd, ['--test', '--test-reporter=tap', `--test-name-pattern=${PATTERN}`, 'tests/flash-colour.test.js', 'tests/flash-colour-rosette.test.js']);
+  if (timedOut) throw new Error(`child process hit the ${CHILD_CEILING_MS / 1000} s hang ceiling and was killed (an error, not a kill of the mutant): ${cwd}`);
   const num = (k) => { const m = new RegExp(`^# ${k} (\\d+)`, 'm').exec(out); return m ? +m[1] : null; };
   return { code, pass: num('pass'), fail: num('fail'), failing: [...out.matchAll(/^\s*not ok \d+ - (.*)$/gm)].map((m) => m[1]).filter((n) => !/\.test\.js$/.test(n)) };
 }
 async function probe(cwd) {
-  const { code, out } = await run(cwd, ['probe.mjs']);
+  const { code, out, timedOut } = await run(cwd, ['probe.mjs']);
+  if (timedOut) throw new Error(`child process hit the ${CHILD_CEILING_MS / 1000} s hang ceiling and was killed (an error, not a kill of the mutant): ${cwd}`);
   const line = out.trim().split('\n').filter((l) => l.startsWith('PROBE ')).pop();
   return { code, rows: line ? JSON.parse(line.slice(6)) : null, out };
 }
