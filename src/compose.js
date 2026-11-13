@@ -46,7 +46,10 @@ export function blend(a, b, p, out, off, spread = 0) {
 }
 
 // Which scene is showing, and how far into the cross-fade to the next one.
-// Time is whatever the caller advances it by (the app passes scene seconds).
+// Time is whatever the caller advances it by (the app passes scene seconds). fadeScale (DRIFT-8 r2) is how many seconds of the cross-fade one second of
+// the caller's time is worth while a fade is running; 1 (the default) is the same clock for the hold and the fade. The shell runtime passes min(speed, 1) / speed so
+// that a dissolve lasts its own fade seconds of real time at every speed from 1x up. At 4x it used to flash by in a quarter of that (0.5 s), which put every cell's flip
+// inside the same second as the outgoing scene's own swings: Bloomfall into Rosette read 27 to 29 % of a field over the L2 limit at some seeds (tests/driftman-9000-dissolve-app.test.js).
 export class Scheduler {
   constructor({ count, durationSec = 180, fadeSec = 5, start = 0, durations = null }) {
     this.count = count;
@@ -61,7 +64,7 @@ export class Scheduler {
     this.pending = false;
   }
 
-  advance(dt) {
+  advance(dt, fadeScale = 1) {
     let rem = dt;
     let guard = 0;
     while (rem > 0 && guard++ < 10000) {
@@ -71,9 +74,10 @@ export class Scheduler {
         else { rem -= left; this.fading = true; this.fadeT = 0; this.hold = this.duration; }
       } else {
         const left = this.fade - this.fadeT;
-        if (rem < left) { this.fadeT += rem; rem = 0; }
+        const worth = rem * fadeScale;
+        if (worth < left) { this.fadeT += worth; rem = 0; }
         else {
-          rem -= left;
+          rem -= left / fadeScale;
           this.cur = (this.cur + 1) % this.count;
           if (this.durations) this.duration = this.durations[this.cur];
           this.fading = false; this.fadeT = 0; this.hold = 0;

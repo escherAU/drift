@@ -101,7 +101,7 @@ for (const [id, kind] of TRACKS) {
     assert.equal(SPEEDS[3], 1);
     assert.equal(SPEEDS[SPEEDS.length - 1], 4);
     const hold = holdOf(id);
-    const atWall = hold / 4 + 1.5; // 22.5 s of the 90 s hold at 4x, plus the dissolve and a margin: 24 s
+    const atWall = hold / 4 + 3.5; // 22.5 s of the 90 s hold at 4x, plus the 2 s dissolve (real seconds from 1x up since DRIFT-8 r2; it was 0.5 s at 4x) and the old margin of 1.5 s: 26 s
     const run = async (keys, seconds) => {
       const c = await boot(120, 40);
       await pick(c, idxOfScene(id));

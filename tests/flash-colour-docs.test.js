@@ -66,8 +66,8 @@ test('T4.8 RULE_IDS: rule C is in the shared list, resolves on a real report and
 // every file under tests/ that runs the flash meter and is not the meter's own: it must judge the shared list (failedRules, RULE_IDS, X1_RULE_IDS or the shelf's passes1x, which is made of
 // X1_RULE_IDS) or read rule C by name, and it must not carry a hand-typed rule list of its own (which would silently leave rule C out the next time a rule is added)
 // (this file is exempt: its control text below is deliberately a flash test that does not read rule C)
-const METER_FILES = new Set(['flash-colour-docs.test.js', 'helpers-flash.js', 'helpers-flash-controls.js', 'helpers-flash-modes.js', 'helpers-flash-halves.js', 'helpers-flash-colour.js', 'helpers-flash-scenes.js']);
-const USES_METER = /createFlashMeter|shownMeter|runControl\(|runAt\(|runScene\(/;
+const METER_FILES = new Set(['flash-colour-docs.test.js', 'helpers-flash.js', 'helpers-flash-controls.js', 'helpers-flash-modes.js', 'helpers-flash-halves.js', 'helpers-flash-colour.js', 'helpers-flash-scenes.js', 'helpers-flash-app.js']); // helpers-flash-app.js only builds the meter's input from the running app; the tests that use it judge the shared list
+const USES_METER = /createFlashMeter|shownMeter|runControl\(|runAt\(|runScene\(|runAppDissolves\(/;
 // rep.pass is the aggregate of every rule including C, so a test that judges rep.pass reads rule C too
 const JUDGES_SHARED_LIST = /failedRules|RULE_IDS|X1_RULE_IDS|passes1x|\.c\.pass|\brep\.c\b|\brep\.pass\b|assertMeterPasses/;
 export function auditFlashFiles(files) {
@@ -83,7 +83,7 @@ const FILES = fs.readdirSync(dir).filter((n) => n.endsWith('.js')).map((n) => [n
 
 test('T4.8 every test that runs the flash meter judges the shared rule list (none that never reads rule C)', () => {
   const users = FILES.filter(([n, t]) => !METER_FILES.has(n) && USES_METER.test(t)).map(([n]) => n);
-  for (const need of ['driftman-9000-rosette-flash.test.js', 'driftman-9000-bloomfall-flash.test.js', 'driftman-9000-cortex-flash.test.js', 'driftman-9000-huefield-flash.test.js', 'driftman-9000-dissolve.test.js',
+  for (const need of ['driftman-9000-rosette-flash.test.js', 'driftman-9000-bloomfall-flash.test.js', 'driftman-9000-cortex-flash.test.js', 'driftman-9000-huefield-flash.test.js', 'driftman-9000-dissolve.test.js', 'driftman-9000-dissolve-app.test.js', 'driftman-9000-dissolve-app-mutation.test.js',
     'driftman-9000-panels-flash.test.js', 'driftman-9000-console-flash.test.js', 'console-hook-flash.test.js', 'foil-flash.test.js', 'shell-eject-fade.test.js', 'shell-help-ramp.test.js', 'shell-shelf-move.test.js',
     'helpers-scene-checks.js', 'flash-meter.test.js', 'flash-halves.test.js', 'renderer-256-redsafe.test.js']) {
     assert.ok(users.includes(need), `the audit sees ${need} (it uses the meter)`);
@@ -104,4 +104,23 @@ test('T4.8 control: the aggregate pass really includes rule C (a colour-only fau
   const rep = runControl(colourPair(61, 21, { c1: TEAL, c2: AMBER, hz: 4 }), { cols: 61, rows: 21, seconds: 4 });
   assert.equal(rep.pass, false);
   assert.deepEqual(failedRules(rep, { not: ['c'] }), []);
+});
+
+// ---- DRIFT-8 r2: the README says how the dissolves are checked, and the files it names are the ones that do it
+
+test('r2 README: the dissolve claims name the app-driven arm (seeds 1 to 16, real 4x, both colour modes) and the replay test, and those files exist and say so', () => {
+  const flatR = flat(README);
+  for (const need of [
+    'The dissolves are judged on the running app itself, not on a replay of two scenes',
+    '`tests/driftman-9000-dissolve-app.test.js`', 'presses `+` four times for the real 4x', 'at 80x24 for all 16 seeds (seeds 1 to 16), in truecolor and in 256 colours',
+    '`tests/flash-256-9000-dissolve-app.test.js`', 'a dissolve lasts its 2 seconds of real time',
+    '`tests/driftman-9000-dissolve.test.js` runs every ordered pair from a fresh composer at seed 1',
+  ]) assert.ok(flatR.includes(need), `the README says: ${need}`);
+  const app = read('./driftman-9000-dissolve-app.test.js'), wrap = read('./flash-256-9000-dissolve-app.test.js');
+  assert.ok(/const SEEDS_16 = Array\.from\(\{ length: 16 \}, \(_, i\) => i \+ 1\)/.test(app), 'the app arm runs seeds 1 to 16');
+  assert.ok(app.includes("sweep('APP DISSOLVE 4x 80x24', SEEDS_16, 80, 24, 4)"), 'at 80x24 and 4x');
+  assert.ok(app.includes('PLAN_4X') && app.includes('FLASH_MODE'), 'with the + key presses, in the mode the file is run in');
+  assert.ok(wrap.includes("process.env.DRIFT_FLASH_MODE = '256'") && wrap.includes("import('./driftman-9000-dissolve-app.test.js')"), 'and the 256 file runs the same file in 256 colours');
+  // control: the check notices a README that no longer names the arm
+  assert.ok(!flat(README.replace('`tests/driftman-9000-dissolve-app.test.js`', 'x')).includes('`tests/driftman-9000-dissolve-app.test.js`'));
 });

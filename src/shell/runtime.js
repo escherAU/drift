@@ -200,7 +200,8 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
       const d = dt * SPEEDS[speedIdx];
       t += d;
       tc += dt * Math.min(SPEEDS[speedIdx], 1);
-      programs.get(cur).sched.advance(d);
+      // the hold runs on the scene clock (speed x real time); the dissolve runs on real time from 1x up (DRIFT-8 r2), so it lasts its fade seconds at every speed from 1x up
+      programs.get(cur).sched.advance(d, Math.min(SPEEDS[speedIdx], 1) / SPEEDS[speedIdx]);
     }
   }
 
