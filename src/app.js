@@ -33,6 +33,14 @@ export const DISSOLVE_SECONDS = 2;
 // Photosensitivity guard: the screen background flips between dark and light at most once
 // per this many seconds (a flip asked for sooner is deferred, never dropped).
 export const FLIP_WINDOW_SECONDS = 3;
+// DRIFT-8 r5: the fastest a FULL-COLOUR scene is painted in 256-colour output, whatever --fps asks for. Every flash test meters at 18 fps. Asked for more
+// (--fps 30), the same scenes read worse on the four-axis colour rule in 256 colours (Rosette up to 29.6 %, Bloomfall up to 34.7 %, over the 25 % limit), because snapping
+// two close colours to neighbouring palette indexes flips more pixels per second the more often the screen is sampled. One constant, held by construction: the loop
+// below never asks for a frame sooner than this period while a full-colour frame is on screen in 256 colours, and tick() (what the loop and the tests drive) folds any
+// shorter step into the next one, so the scene clock still runs at real speed and only the painting is thinned. Truecolor, palette cartridges and Classic are unchanged.
+export const FULLCOLOUR_256_MAX_FPS = 18;
+const FULLCOLOUR_256_PERIOD = 1 / FULLCOLOUR_256_MAX_FPS;
+const FULLCOLOUR_256_SLACK = 0.001; // a step this much short of the period still counts as the period (a timer firing early must not drop a frame)
 const DEFAULTS = { fps: 18, sceneSeconds: 180, fadeSeconds: DEFAULT_FADE_SECONDS, seed: 1 };
 
 // Palette entries the help panel uses in the single-hue palettes (calm, experimental).
@@ -47,7 +55,7 @@ ${cliKeysText()}
 options:
   --scene-seconds N   seconds per scene (default 180)
   --fade-seconds N    calm cross-fade length (default ${DEFAULT_FADE_SECONDS}); other modes dissolve in ${DISSOLVE_SECONDS} s
-  --fps N             frames per second, 1-30 (default 18)
+  --fps N             frames per second, 1-30 (default 18); full-colour cartridges in 256 colours are held to ${FULLCOLOUR_256_MAX_FPS}
   --seed N            random seed (default 1)
   --scene NAME|N      start on a scene, in its mode (${allSceneIds().join(' ')})
   --library           start in the cartridge library
@@ -193,6 +201,7 @@ export function createApp(o) {
   let t = 0, speedIdx = DEFAULT_SPEED_INDEX, paused = false, helpOpen = false;
   let dirty = true, running = false, exited = false, timer = null, uninstall = null;
   let lastNow = 0, nextAt = 0, palette = null, exitDone = false;
+  let fullColourOn = false, held = 0; // DRIFT-8 r5: is a full-colour frame on screen; time held back by the 256-colour paint cap
   let chaosPal = null, twoTone = null, lastFrame = null;
   // the console shell: created the first time it is needed (the library or a start screen)
   let shell = null, shellPal = null, runningResolve = null, runningPromise = null;
@@ -224,6 +233,7 @@ export function createApp(o) {
   function renderArgs(f, pal) {
     const a = { cols, rows, glyphs: f.glyphs, shades: f.shades, palette: pal };
     if (f.fg && f.shades.indexOf(RGB_CELL) !== -1) { a.fg = f.fg; a.bg = f.bg; a.mode = cmode; }
+    fullColourOn = a.fg !== undefined;
     return a;
   }
 
@@ -332,8 +342,20 @@ export function createApp(o) {
     libraryOpen: () => { ensureShell('classic'); want.shell = 'library'; settle(); },
   };
 
+  // The paint cap (DRIFT-8 r5). While a full-colour frame is on screen in 256 colours a step shorter than the cap's period is held back and added to the next one,
+  // so frames are never painted faster than FULLCOLOUR_256_MAX_FPS and time (the scene clock, wall, the dissolve) still advances by the real time that passed.
   function tick(dt) {
     if (!running) return;
+    if (dt > 0 && cmode === '256' && fullColourOn) {
+      held += dt;
+      if (held < FULLCOLOUR_256_PERIOD - FULLCOLOUR_256_SLACK) return;
+      dt = held;
+    }
+    held = 0;
+    step(dt);
+  }
+
+  function step(dt) {
     try {
       if (dt > 0) wall += dt;
       if (!helpOpen) settle();
@@ -445,10 +467,12 @@ export function createApp(o) {
     let dt = (n - lastNow) / 1000;
     lastNow = n;
     if (dt > 0.25) dt = 0.25; // after a stall, do not leap
-    tick(dt);
+    held = 0;
+    step(dt); // the loop's own schedule already honours the cap (below), so it does not go through the gate in tick()
     if (!running) return;
-    nextAt += interval;
-    if (nextAt < n) nextAt = n + interval;
+    const every = cmode === '256' && fullColourOn ? Math.max(interval, 1000 * FULLCOLOUR_256_PERIOD) : interval; // the cap, in the loop's own schedule
+    nextAt += every;
+    if (nextAt < n) nextAt = n + every;
     timer = setTimeout(loop, Math.max(1, nextAt - now()));
   }
 
