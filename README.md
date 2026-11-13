@@ -662,7 +662,7 @@ not a TTY, drift prints a message and exits 0 without emitting any escape sequen
 npm test            # node --test, no dependencies
 ```
 
-The suite is 2518 tests in `tests/*.test.js` and takes about 300 seconds on a 32-thread machine (220 s before the colour rule C: the meter reads colour too now, which costs about twice as much on an animated full-colour scene, and rule C has its own flash-colour files) (test files run in parallel; the longest are the 9000's flash-meter runs over its menu and help, about 2 minutes by themselves, and the real-process arms, which start the real program and wait in real time). The cartridge work is
+The suite is 2519 tests in `tests/*.test.js` and takes about 280 to 300 seconds on a 32-thread machine (220 s before the colour rule C: the meter reads colour too now, which costs about twice as much on an animated full-colour scene, and rule C has its own flash-colour files) (test files run in parallel; the longest are the 9000's flash-meter runs over its menu and help, about 2 minutes by themselves, and the real-process arms, which start the real program and wait in real time). The cartridge work is
 covered by `cartridge-schema` (validators, text scene, skin palette), `cartridge-loader`
 (every way a cartridge can be wrong, and both arms of the trust rule), `cartridge-scenes` (every
 install cartridge's scenes through the size, glyph, colour, determinism and flash checks, with controls
