@@ -9,7 +9,7 @@ import {
   checkSoloFlash, checkPairFlash,
 } from './helpers-scene-checks.js';
 import {
-  kaleidoscope, hueSweep, colourDrift, frozenRgb, nondeterministicFg, strobingRgb, writes255, wideField, paletteBgScene,
+  kaleidoscope, hueSweep, colourDrift, frozenRgb, nondeterministicFg, strobingRgb, colourFlickerRgb, writes255, wideField, paletteBgScene,
   partialWriter, paletteScribbler, paletteStrobe, landscapeOnly, portraitOnly, flatRgb, seedFg, nondeterministicSeedFg,
 } from './helpers-rgb-scenes.js';
 import { renderScene } from '../src/cells.js';
@@ -129,6 +129,10 @@ test('checkSoloFlash: a strobing rgb scene fails and the message names the meter
   assert.throws(() => checkSoloFlash(strobingRgb(), { seconds: 10 }), /l1\.x1/);
   assert.throws(() => checkSoloFlash(strobingRgb(), { seconds: 10 }), /l2\.x1/);
   checkSoloFlash(colourDrift(), { seconds: 10 });
+});
+
+test('checkSoloFlash: a scene that only flickers in colour (teal and amber at one lightness, 4 Hz) fails through rule C and no other rule (DRIFT-8 C4)', () => {
+  assert.throws(() => checkSoloFlash(colourFlickerRgb(), { seconds: 10 }), (e) => /fails c 100\.0%/.test(e.message) && !/l[123]\.x|r\.x/.test(e.message));
 });
 
 test('checkSoloFlash: a palette scene keeps the changed-cells path (its message is about flashes, not meter rules)', () => {

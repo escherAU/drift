@@ -125,7 +125,7 @@ for (const [cols, rows] of SIZES) {
         for (const name of names) {
           const { rep } = walkReport(cols, rows, SCHEDULES[name](), { art, withFoil, seconds: 9 });
           assert.ok(passes1x(rep), `${cols}x${rows} ${art} foil ${withFoil} ${name}: ${showRep(rep)}`);
-          assert.equal(rep.l1.x1.pass && rep.l2.x1.pass && rep.l3.pass && rep.r.x1.pass, true);
+          assert.equal(rep.c.pass, true, `${cols}x${rows} ${art} foil ${withFoil} ${name}: the colour rule`);
           const cur = worst[kind];
           if (!cur || rep.l2.x1.worstFraction + rep.l1.x1.worstFraction + rep.l3.worstFraction > cur.s) worst[kind] = { s: rep.l2.x1.worstFraction + rep.l1.x1.worstFraction + rep.l3.worstFraction, rep, tag: `${art} ${withFoil ? 'foil' : 'none'} ${name}` };
         }

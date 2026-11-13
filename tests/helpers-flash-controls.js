@@ -240,6 +240,13 @@ export function flashRig(scenes, cols, rows, { seed = 1, mode = 'truecolor' } = 
   return { cc, mode, reduce, show: (f) => (reduce ? reduce(f, null) : { frame: f, palette: undefined }) };
 }
 
+// DRIFT-8 C4: the colour clock the runtime would hold when a replay stands at scene time t with the speed key at `speed` all along. src/shell/runtime.js advances the scene
+// clock by dt * speed and the colour clock by dt * min(speed, 1) (so hue turns at its 1x rate at every speed: C3), hence tc = t * min(speed, 1) / speed. Every flash
+// replay at a speed above 1x drives its frames through frameAtSpeed (one helper, so no test can forget the clock, which is the bug the 4x replays had before C4:
+// they passed tc = nothing, the scene read its hue off the fast scene clock, and Rosette at 4x turned hue four times too fast for rule C).
+export const colourClockAt = (t, speed = 1) => (t * Math.min(speed, 1)) / speed;
+export function frameAtSpeed(cc, st, t, speed = 1) { return cc.frame(st, t, colourClockAt(t, speed)); }
+
 // Feeds `seconds` of the generator (frame k at t = k / fps) into a fresh meter and returns report().
 export function runControl(gen, { cols = CONTROL_COLS, rows = CONTROL_ROWS, fps = CONTROL_FPS, seconds = CONTROL_SECONDS, palette = null, reduce256 = false } = {}) {
   const meter = createFlashMeter(cols, rows, fps);

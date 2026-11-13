@@ -10,7 +10,7 @@ import { createShell } from '../src/shell/shell.js';
 import { MENU_RAMP_SECONDS } from '../src/shell/runtime.js';
 import { driftmanSkin } from '../src/shell/driftman.js';
 import { RGB_CELL, makeGlow, makePlain, sameCell } from './helpers-fullcolour.js';
-import { FLASH_FRACTION } from './helpers-flash.js';
+import { FLASH_FRACTION, failedRules, ruleOf } from './helpers-flash.js';
 import { shownMeter } from './helpers-flash-modes.js';
 import { boot, grab, DT, ESC, SIX } from './helpers-night-drive-shell.js';
 import { mkShell, runCartridge } from './helpers-shell.js';
@@ -166,7 +166,7 @@ const METER_SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [78, 24], [40, 10
 const p = (r) => pct(r.worstFraction);
 const bad = (rep, tag) => {
   const out = [];
-  for (const [name, r] of [['l1.x1', rep.l1.x1], ['l1.x4', rep.l1.x4], ['l2.x1', rep.l2.x1], ['l2.x4', rep.l2.x4], ['l3', rep.l3], ['r.x1', rep.r.x1], ['r.x4', rep.r.x4]]) if (!r.pass) out.push(`${tag} ${name} ${p(r)}`);
+  for (const name of failedRules(rep)) out.push(`${tag} ${name} ${p(ruleOf(rep, name))}`); // the shared list (helpers-flash.js): brightness, red and the colour rule C (DRIFT-8 C4)
   return out;
 };
 
@@ -178,7 +178,7 @@ test('flash meter over h open, 1 s, h close at 1x and 4x runtime speed, six size
     for (const speed of [1, 4]) {
       const rep = await meterRun(cols, rows, speed, false, mode);
       const ctl = await meterRun(cols, rows, speed, true, mode);
-      lines.push(`${cols}x${rows} ${speed}x: L1 ${p(rep.l1.x1)}/${p(rep.l1.x4)}, L2 ${p(rep.l2.x1)}/${p(rep.l2.x4)}, L3 ${p(rep.l3)}, R ${p(rep.r.x1)}/${p(rep.r.x4)}  | hard cut: L2 ${p(ctl.l2.x1)}/${p(ctl.l2.x4)}, L3 ${p(ctl.l3)}`);
+      lines.push(`${cols}x${rows} ${speed}x: L1 ${p(rep.l1.x1)}/${p(rep.l1.x4)}, L2 ${p(rep.l2.x1)}/${p(rep.l2.x4)}, L3 ${p(rep.l3)}, R ${p(rep.r.x1)}/${p(rep.r.x4)}, C ${p(rep.c)}  | hard cut: L2 ${p(ctl.l2.x1)}/${p(ctl.l2.x4)}, L3 ${p(ctl.l3)}`);
       failed.push(...bad(rep, `${cols}x${rows} ${speed}x`));
       if (ctl.l3.pass) controlPasses.push(`${cols}x${rows} ${speed}x ${p(ctl.l3)}`);
       assert.ok(rep.l3.worstFraction <= FLASH_FRACTION);

@@ -8,14 +8,14 @@ import assert from 'node:assert/strict';
 import { field } from '../cartridges/driftman-9000/lib/huefield.js';
 import { newFrame } from './helpers-flash-controls.js';
 import { shownMeter } from './helpers-flash-modes.js';
-import { RULE_IDS, ruleOf } from './helpers-flash-halves.js';
+import { RULE_IDS, ruleOf, failedRules } from './helpers-flash-halves.js';
 
 const FPS = 18;
 const UPPER = 0x2580;
 const pc = (x) => (x * 100).toFixed(1);
-const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
 const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
-const failed = (rep) => RULE_IDS.filter((r) => !ruleOf(rep, r).pass);
+const failed = (rep) => failedRules(rep);
 
 function run(cols, rows, mode, { L = 0.66, seed = 1, seconds = 12, lAt = null } = {}) {
   const meter = shownMeter(cols, rows, FPS, mode);

@@ -16,12 +16,12 @@ import {
 } from './helpers-flash.js';
 import { newFrame } from './helpers-flash-controls.js';
 import {
-  halvesSwap, halvesSwapPalette, SWAP_PALETTE, topFlicker, TEAL, AMBER, TEAL_AMBER_DY, runAt, RULE_IDS, ruleOf,
+  halvesSwap, halvesSwapPalette, SWAP_PALETTE, topFlicker, TEAL, AMBER, TEAL_AMBER_DY, runAt, RULE_IDS, ruleOf, failedRules,
 } from './helpers-flash-halves.js';
 
 const pct = (x) => (x * 100).toFixed(1);
 const readout = (rep) => RULE_IDS.map((r) => `${r}=${pct(ruleOf(rep, r).worstFraction)}`).join(' ');
-const failedOf = (rep) => RULE_IDS.filter((r) => !ruleOf(rep, r).pass);
+const failedOf = (rep) => failedRules(rep);
 const TABLE = [];
 
 // ---- T2.1 the glyph half table
@@ -144,9 +144,9 @@ test('T2.3 worse-of: a top-pixel swing that is under the 0.10 swing once average
 
 test('T2.3 report shape: rep.cell and rep.pixel carry the same rule set as the report; the report is their worse', () => {
   const rep = runAt(topFlicker(120, 40, { w: 24, h: 6 }), 120, 40, { seconds: 4 });
-  assert.deepEqual(Object.keys(rep).sort(), ['cell', 'cols', 'field', 'fps', 'frames', 'l1', 'l2', 'l3', 'pass', 'pixel', 'r', 'rows'].sort());
+  assert.deepEqual(Object.keys(rep).sort(), ['c', 'cell', 'cols', 'field', 'fps', 'frames', 'l1', 'l2', 'l3', 'pass', 'pixel', 'r', 'rows'].sort());
   for (const sub of [rep.cell, rep.pixel]) {
-    assert.deepEqual(Object.keys(sub).sort(), ['field', 'frames', 'l1', 'l2', 'l3', 'pass', 'r'].sort());
+    assert.deepEqual(Object.keys(sub).sort(), ['c', 'field', 'frames', 'l1', 'l2', 'l3', 'pass', 'r'].sort());
     assert.equal(sub.frames, rep.frames);
   }
   for (const id of RULE_IDS) {
@@ -192,14 +192,18 @@ test('T2.4 must-fail: the same swap through palette cells, and through 256-colou
   }
 });
 
-test('T2.4 colour-only: halves swapping teal/amber (the same lightness) read 0 on every rule today. KNOWN GAP, closed by C4 (the colour-flicker rule), not by C2', () => {
+test('T2.4 colour-only: halves swapping teal/amber (the same lightness) read 0 on every brightness and red rule; rule C (DRIFT-8 C4) fails it, on the pixel grid only (the cell grid blends the halves)', () => {
   assert.ok(TEAL_AMBER_DY < 0.02, `teal and amber differ by ${TEAL_AMBER_DY.toFixed(4)} in luminance`);
   for (const [cols, rows] of [[120, 40], [61, 21]]) {
     const rep = runAt(halvesSwap(cols, rows, { hz: 9, a: TEAL, b: AMBER }), cols, rows);
-    TABLE.push(`T2.4 ${cols}x${rows} teal/amber 9 Hz`.padEnd(30) + readout(rep.cell) + ' | pixel ' + readout(rep.pixel) + ' (colour-only: not measured until C4)');
-    assert.deepEqual(failedOf(rep), [], 'the brightness and red rules do not see a change of hue at one lightness');
-    assert.equal(rep.pass, true);
-    for (const id of RULE_IDS) assert.equal(ruleOf(rep.pixel, id).worstFraction, 0, id);
+    TABLE.push(`T2.4 ${cols}x${rows} teal/amber 9 Hz`.padEnd(30) + readout(rep.cell) + ' | pixel ' + readout(rep.pixel) + ' (colour-only: rule C)');
+    assert.deepEqual(failedRules(rep, { not: ['c'] }), [], 'the brightness and red rules do not see a change of hue at one lightness');
+    for (const id of RULE_IDS.filter((r) => r !== 'c')) assert.equal(ruleOf(rep.pixel, id).worstFraction, 0, id);
+    assert.deepEqual(failedOf(rep), ['c'], 'the colour rule sees it (this was the KNOWN GAP of C2)');
+    assert.ok(rep.pixel.c.worstFraction > 0.99, `pixel grid ${pct(rep.pixel.c.worstFraction)}`);
+    assert.equal(rep.cell.c.worstFraction, 0, 'the cell grid blends the two halves of every cell into one colour that never changes');
+    assert.equal(rep.c.details.grid, 'pixel');
+    assert.equal(rep.pass, false);
   }
 });
 

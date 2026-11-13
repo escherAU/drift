@@ -9,14 +9,14 @@ import assert from 'node:assert/strict';
 import { discoverCartridges, loadScenes, INSTALL_DIR } from '../src/cartridge/loader.js';
 import { createCellComposer } from '../src/cells.js';
 import { Scheduler } from '../src/compose.js';
-import { createFlashMeter } from './helpers-flash.js';
-import { flashRig } from './helpers-flash-controls.js';
+import { createFlashMeter, failedRules, X1_RULE_IDS } from './helpers-flash.js';
+import { flashRig, frameAtSpeed } from './helpers-flash-controls.js';
 
 const FPS = 18, FADE = 2, LEAD = 4, TAIL = 4;
 const pc = (x) => (x * 100).toFixed(1);
-const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
-const X1 = ['l1.x1', 'l2.x1', 'l3', 'r.x1'];
-const failed = (rep) => [['l1.x1', rep.l1.x1], ['l1.x4', rep.l1.x4], ['l2.x1', rep.l2.x1], ['l2.x4', rep.l2.x4], ['l3', rep.l3], ['r.x1', rep.r.x1], ['r.x4', rep.r.x4]].filter(([, r]) => !r.pass).map(([id]) => id);
+const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
+const X1 = X1_RULE_IDS; // DRIFT-8 C4: with the colour rule C, which is judged at the playback speed
+const failed = (rep) => failedRules(rep);
 
 const cart = discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] }).cartridges.find((c) => c.id === 'driftman-9000');
 assert.ok(cart, 'the 9000 is on the shelf');
@@ -43,7 +43,7 @@ function pairRun(idA, idB, cols, rows, { speed = 1, reduce256 = false, seed = 1,
   let t = Math.ceil(t0 / step - 1e-9) * step;
   for (; t <= t1; t += step) {
     sched.advance(step);
-    const f = cc.frame(sched.state(), t);
+    const f = frameAtSpeed(cc, sched.state(), t, speed); // the colour clock runs at min(speed, 1) of real time, as the runtime drives it (C3, C4)
     const s = rig.show(f);
     meter.push(s.frame, s.palette);
   }

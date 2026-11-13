@@ -129,12 +129,13 @@ export function brightnessJumps(a, b, cols) {
 //         l3            worst single frame step: the share of ALL cells whose Y moved >= 0.10 since the frame
 //                       before; passes when <= STEP_FRACTION (0.30). Hue changes at steady brightness are free.
 //         r.x1, r.x4    cells with >= 2 red transitions in 1 s, at 1x and 4x.
+//         c             DRIFT-8 C4, a house rule beyond WCAG: pixels with >= 7 colour swings (OKLab, four axes) in 1 s; see "Rule C" below. One view.
 //
 // report() -> {
 //   cols, rows, fps, frames, field: { w, h },
-//   l1: { x1: RULE, x4: RULE }, l2: { x1: RULE, x4: RULE }, l3: STEP, r: { x1: RULE, x4: RULE },
+//   l1: { x1: RULE, x4: RULE }, l2: { x1: RULE, x4: RULE }, l3: STEP, r: { x1: RULE, x4: RULE }, c: RULE,
 //   pass,        // every rule passes, on both grids
-//   cell, pixel, // { field, frames, l1, l2, l3, r, pass } each: the two readings the above are the worse of
+//   cell, pixel, // { field, frames, l1, l2, l3, r, c, pass } each: the two readings the above are the worse of
 // }
 // (meter.cellY(i) is the cell's Y; meter.pixelY(i, half) the top (0) or bottom (1) pixel's.)
 // RULE = { worstFraction, limit, pass, details: { frame, timeS, field: { x, y, w, h }, hotCells } }
@@ -142,6 +143,29 @@ export function brightnessJumps(a, b, cols) {
 //         the worst field; hotCells = hot cells in it)
 // STEP = { worstFraction, limit, pass, details: { frame, timeS, cells } }  (the step INTO `frame`)
 // Nothing pushed yet: all fractions 0, details frame -1.
+//
+// Rule C, colour flicker (DRIFT-8 C4). A HOUSE RULE, beyond WCAG: WCAG 2.x counts brightness (and saturated red) and calls a change of hue at steady
+// brightness free, but a whole screen turning hue several times a second is the thing that made the owner's kaleidoscope uncomfortable, and at 4x
+// (before the colour clock) about half of Rosette's field did exactly that.
+//   Each pixel's colour is converted to OKLab (a, b; L is brightness and is judged by the rules above). FOUR axes are tracked per pixel: a, b and the
+//   two diagonals (a + b) / sqrt 2 and (a - b) / sqrt 2. A colour pair that differs by (da, db) = (0.09, 0.09) moves a and b by 0.09 each (under the
+//   swing) and moves the diagonal by 0.127: a meter that follows a and b alone is blind to it, and to any hue wobble that runs along a diagonal.
+//   A SWING is a change of COLOUR_SWING (0.10) or more between successive turning points of one axis (the same tracker as the brightness swings, no dark
+//   side gate). A pixel is HOT at frame k when ANY axis has completed C_COUNT (7) swings in the last second; the rule FAILS when hot pixels exceed
+//   FIELD_FRACTION (25%) of any field (the same field as L2). 7 swings a second on one axis is a hue turning 3.5 cycles a second (two swings a cycle);
+//   that limit, and the 0.10 swing, are never loosened.
+//   C is judged at the speed the viewer sees: frames are pushed at the playback rate (18 fps), so a 4x key press is frames computed 4x further apart
+//   (and the colour clock, tc, keeps hue at its 1x rate); there is no "x4 view" of C, which would say nothing about the colour clock.
+//   Read per grid like the other rules (the cell grid on the cell's colour, the coverage-weighted mean of its fg and bg in OKLab; the pixel grid on each half), rep.c = the worse,
+//   rep.pixel.c the pixels. Report shape: rep.c is a RULE like l1.x1 (single: no x1/x4 views), judged at 18 fps frames whatever speed the key gave them.
+//   BLIND SPOTS (rule C is not a promise of comfort): (1) a change of colour that stays under the swing on every axis (a grey <-> teal at equal lightness
+//   moves a and b by less than 0.10 up to about safeHue's chroma) passes; (2) a pattern that moves fast while each pixel changes slowly passes; (3) the
+//   consequence: fine colour detail rotated fast FAILS (it changes each pixel's colour many times a second), which is why the owner's kaleidoscope
+//   probe (hue 0.15 cycles/s, rotation 0.08 turns/s) fails and the Rosette (ten times slower rotation) passes. (The owner's remembered benchmark "1.5 cycles/s" was a
+//   misreading of that probe's 0.15.)
+export const COLOUR_SWING = 0.10;
+export const C_COUNT = 7;
+export const COLOUR_AXES = 4;
 export const FIELD_FRACTION = 0.25;
 export const STEP_FRACTION = 0.30;
 export const TRANSITION_SWING = 0.10;
@@ -296,6 +320,31 @@ export function createWindowCounter(cols, rows, fw, fh) {
   };
 }
 
+// ---- OKLab a and b of a colour (rule C)
+//
+// This file's own conversion (it imports nothing from src, like the rest of the meter). A colour that is exactly an 8-bit RGB (a half block's fg or bg, a space) goes through a
+// direct-mapped cache, because a full-colour scene draws a few hundred distinct colours in a frame and the conversion (three cube roots) would otherwise be most of the meter's
+// cost; a blend (a glyph that covers part of a half) is converted from its linear light. The cache is a pure memo: it never changes a result.
+const LAB_BITS = 13, LAB_SIZE = 1 << LAB_BITS;
+const LAB_KEYS = new Int32Array(LAB_SIZE).fill(-1), LAB_A = new Float64Array(LAB_SIZE), LAB_B = new Float64Array(LAB_SIZE);
+const LAB_OUT = new Float64Array(2); // a, b of the last labOfLinear
+function labOfLinear(r, g, b) {
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  LAB_OUT[0] = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+  LAB_OUT[1] = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+}
+// the cache slot holding the OKLab a and b of 0xRRGGBB (read LAB_A[slot], LAB_B[slot])
+function labSlot(rgb) {
+  const h = Math.imul(rgb, 0x9e3779b1) >>> (32 - LAB_BITS);
+  if (LAB_KEYS[h] !== rgb) {
+    labOfLinear(SRGB_LIN[(rgb >>> 16) & 255], SRGB_LIN[(rgb >>> 8) & 255], SRGB_LIN[rgb & 255]);
+    LAB_KEYS[h] = rgb; LAB_A[h] = LAB_OUT[0]; LAB_B[h] = LAB_OUT[1];
+  }
+  return h;
+}
+
 // A grid of values (one per pixel or one per cell) with the whole rule set on it: swing trackers, transition logs,
 // hot grids and a field window. The meter runs two of these side by side (see createFlashMeter).
 //   put(i, y, rv, rs, k)   the next luminance, red value and red flag of item i at frame k (call only for items whose
@@ -316,9 +365,33 @@ function createGrid(w, h, fw, fh, win1, win4) {
     mk('l2.x1', lumLog, L2_COUNT, win1, 1), mk('l2.x4', lumLog, L2_COUNT, win4, FAST_SPEED),
     mk('r.x1', redLog, R_COUNT, win1, 1), mk('r.x4', redLog, R_COUNT, win4, FAST_SPEED),
   ];
+  // rule C (DRIFT-8 C4): four axes per item (a, b, (a+b)/sqrt2, (a-b)/sqrt2), one tracker and one ring of swings per axis; an item is hot when any axis is
+  const NAX = COLOUR_AXES;
+  // One swing tracker per axis, the same rule as createSwingTracker (no dark side, no gate, a swing reaches COLOUR_SWING), written out for speed: every changed pixel steps four of
+  // them every frame and they were most of the meter's cost. A pixel is hot while its latest swing is within a second of the oldest of its last C_COUNT swings on an axis; that
+  // is known when the swing is logged (hot until oldest + window - 1), so no ring is read at the end of the frame.
+  const cDir = new Int8Array(n * NAX).fill(2); // 2 = not seen yet, 0 = seen and not yet turned, 1 = rising, -1 = falling
+  // one record of 8 doubles per item (one cache line): the last (a, b) it was given, and the extreme each axis has reached in its direction
+  const CS = new Float64Array(n * 8);
+  for (let i = 0; i < n; i++) { CS[i * 8] = NaN; CS[i * 8 + 1] = NaN; }
+  const cLo = new Float64Array(n * NAX), cHi = new Float64Array(n * NAX); // only read before an axis has turned once
+  const cTs = new Int32Array(n * NAX * C_COUNT).fill(-1000000000), cHead = new Uint8Array(n * NAX);
+  const hotUntil = new Int32Array(n).fill(-1000000000);
+  const cMin = COLOUR_SWING - EPS;
+  const colLog = { hot(i, count, frame) { return frame <= hotUntil[i]; } };
+  const BRIGHTNESS_SPECS = specs.length;
+  specs.push(mk('c', colLog, C_COUNT, win1, 1));
+  // an axis completed a swing at frame k: log it, and the item is hot until the oldest of its last C_COUNT swings on that axis is a second old
+  function swung(i, j, k) {
+    const h = cHead[j], nh = h + 1 === C_COUNT ? 0 : h + 1;
+    cTs[j * C_COUNT + h] = k; cHead[j] = nh;
+    const until = cTs[j * C_COUNT + nh] + win1 - 1; // the slot to be written next holds the oldest of the last C_COUNT swings
+    if (until > hotUntil[i]) hotUntil[i] = until;
+  }
   const step = { count: 0, frame: -1 };
   let moved = 0;
   const swingMin = TRANSITION_SWING - EPS;
+  const colV = new Float64Array(4);
   return {
     Y, field: { w: fw, h: fh },
     put(i, y, rv, rs, k) {
@@ -327,10 +400,34 @@ function createGrid(w, h, fw, fh, win1, win4) {
       if (lumTracker.step(i, y, 0)) { lumLog.add(i, k); lastT[i] = k; }
       if (redTracker.step(i, rv, rs)) { redLog.add(i, k); lastT[i] = k; }
     },
+    // the item's colour as OKLab a and b, onto the four axes
+    putColour(i, a, bb, k) {
+      const r8 = i * 8;
+      if (a === CS[r8] && bb === CS[r8 + 1]) return; // an unchanged (a, b) cannot complete a swing
+      CS[r8] = a; CS[r8 + 1] = bb;
+      colV[0] = a; colV[1] = bb; colV[2] = (a + bb) * Math.SQRT1_2; colV[3] = (a - bb) * Math.SQRT1_2;
+      const j0 = i * NAX, x0 = r8 + 2;
+      for (let ax = 0; ax < NAX; ax++) {
+        const v = colV[ax], j = j0 + ax, x = x0 + ax, d = cDir[j];
+        if (d === 1) {
+          const e = CS[x];
+          if (v > e) CS[x] = v; else if (e - v >= cMin) { cDir[j] = -1; CS[x] = v; swung(i, j, k); }
+        } else if (d === -1) {
+          const e = CS[x];
+          if (v < e) CS[x] = v; else if (v - e >= cMin) { cDir[j] = 1; CS[x] = v; swung(i, j, k); }
+        } else if (d === 2) {
+          cDir[j] = 0; cLo[j] = v; cHi[j] = v; CS[x] = v;
+        } else {
+          if (v < cLo[j]) cLo[j] = v;
+          if (v > cHi[j]) cHi[j] = v;
+          if (v - cLo[j] >= cMin) { cDir[j] = 1; CS[x] = v; swung(i, j, k); } else if (cHi[j] - v >= cMin) { cDir[j] = -1; CS[x] = v; swung(i, j, k); }
+        }
+      }
+    },
     end(k) {
       if (moved > step.count) { step.count = moved; step.frame = k; }
       moved = 0;
-      const ns = specs.length;
+      const ns = BRIGHTNESS_SPECS; // the six brightness and red rules; rule C has its own pass below (a pixel's colour swings must not keep it in this loop)
       for (let i = 0; i < n; i++) {
         if (k - lastT[i] >= win4) {
           if (live[i]) { live[i] = 0; for (let s = 0; s < ns; s++) { const sp = specs[s]; if (sp.hot[i]) { sp.hot[i] = 0; sp.total--; } } }
@@ -342,6 +439,11 @@ function createGrid(w, h, fw, fh, win1, win4) {
           const hv = sp.log.hot(i, sp.count, k, sp.window) ? 1 : 0;
           if (hv !== sp.hot[i]) { sp.total += hv - sp.hot[i]; sp.hot[i] = hv; }
         }
+      }
+      const cs = specs[BRIGHTNESS_SPECS];
+      for (let i = 0; i < n; i++) {
+        const hv = k <= hotUntil[i] ? 1 : 0;
+        if (hv !== cs.hot[i]) { cs.total += hv - cs.hot[i]; cs.hot[i] = hv; }
       }
       for (const sp of specs) {
         if (sp.total > sp.best.count) { // a field cannot hold more than the screen does; only look when it could beat the best
@@ -362,14 +464,14 @@ function createGrid(w, h, fw, fh, win1, win4) {
           },
         };
       };
-      const [l1x1, l1x4, l2x1, l2x4, rx1, rx4] = specs.map(ruleOf);
+      const [l1x1, l1x4, l2x1, l2x4, rx1, rx4, cr] = specs.map(ruleOf);
       const frac = step.count / n;
       const l3 = {
         worstFraction: frac, limit: STEP_FRACTION, pass: frac <= STEP_FRACTION,
         details: { frame: step.frame, timeS: step.frame < 0 ? 0 : step.frame / fps, cells: step.count },
       };
-      const all = [l1x1, l1x4, l2x1, l2x4, l3, rx1, rx4];
-      return { field: { w: fw, h: fh }, l1: { x1: l1x1, x4: l1x4 }, l2: { x1: l2x1, x4: l2x4 }, l3, r: { x1: rx1, x4: rx4 }, pass: all.every((r) => r.pass) };
+      const all = [l1x1, l1x4, l2x1, l2x4, l3, rx1, rx4, cr];
+      return { field: { w: fw, h: fh }, l1: { x1: l1x1, x4: l1x4 }, l2: { x1: l2x1, x4: l2x4 }, l3, r: { x1: rx1, x4: rx4 }, c: cr, pass: all.every((r) => r.pass) };
     },
   };
 }
@@ -426,15 +528,21 @@ export function createFlashMeter(cols, rows, fps) {
         let r = c * fr + d * br, gr = c * fgn + d * bgn, bl = c * fb + d * bb;
         let sum = r + gr + bl, red = r - gr - bl;
         cellGrid.put(i, 0.2126 * r + 0.7152 * gr + 0.0722 * bl, red > 0 ? red * RED_SCALE : 0, sum > 0 && r / sum >= RED_SATURATION ? 1 : 0, k);
+        // rule C: the cell's colour is the coverage-weighted mean of its fg and bg in OKLab (a and b); a pixel with no ink is bg, a pixel full of ink is fg, otherwise its linear blend
+        const sf = labSlot(f), sb = labSlot(b);
+        const fa = LAB_A[sf], fb2 = LAB_B[sf], ba = LAB_A[sb], bb2 = LAB_B[sb];
+        cellGrid.putColour(i, c * fa + d * ba, c * fb2 + d * bb2, k);
         // the two pixels of the cell: the top half's and the bottom half's coverage
         c = TOP[g]; d = 1 - c;
         r = c * fr + d * br; gr = c * fgn + d * bgn; bl = c * fb + d * bb;
         sum = r + gr + bl; red = r - gr - bl;
         pixGrid.put(2 * y * cols + x, 0.2126 * r + 0.7152 * gr + 0.0722 * bl, red > 0 ? red * RED_SCALE : 0, sum > 0 && r / sum >= RED_SATURATION ? 1 : 0, k);
+        if (c === 1) pixGrid.putColour(2 * y * cols + x, fa, fb2, k); else if (c === 0) pixGrid.putColour(2 * y * cols + x, ba, bb2, k); else { labOfLinear(r, gr, bl); pixGrid.putColour(2 * y * cols + x, LAB_OUT[0], LAB_OUT[1], k); }
         c = BOT[g]; d = 1 - c;
         r = c * fr + d * br; gr = c * fgn + d * bgn; bl = c * fb + d * bb;
         sum = r + gr + bl; red = r - gr - bl;
         pixGrid.put((2 * y + 1) * cols + x, 0.2126 * r + 0.7152 * gr + 0.0722 * bl, red > 0 ? red * RED_SCALE : 0, sum > 0 && r / sum >= RED_SATURATION ? 1 : 0, k);
+        if (c === 1) pixGrid.putColour((2 * y + 1) * cols + x, fa, fb2, k); else if (c === 0) pixGrid.putColour((2 * y + 1) * cols + x, ba, bb2, k); else { labOfLinear(r, gr, bl); pixGrid.putColour((2 * y + 1) * cols + x, LAB_OUT[0], LAB_OUT[1], k); }
       }
     }
     cellGrid.end(k);
@@ -444,10 +552,10 @@ export function createFlashMeter(cols, rows, fps) {
   function report() {
     const cell = cellGrid.report(fps), pixel = pixGrid.report(fps);
     const both = (a, b) => ({ x1: worseOf(a.x1, b.x1), x4: worseOf(a.x4, b.x4) });
-    const l1 = both(cell.l1, pixel.l1), l2 = both(cell.l2, pixel.l2), r = both(cell.r, pixel.r), l3 = worseOf(cell.l3, pixel.l3);
+    const l1 = both(cell.l1, pixel.l1), l2 = both(cell.l2, pixel.l2), r = both(cell.r, pixel.r), l3 = worseOf(cell.l3, pixel.l3), c = worseOf(cell.c, pixel.c);
     return {
       cols, rows, fps, frames: k + 1, field: { ...cf },
-      l1, l2, l3, r,
+      l1, l2, l3, r, c,
       pass: cell.pass && pixel.pass,
       cell: { ...cell, frames: k + 1 }, pixel: { ...pixel, frames: k + 1 },
     };
@@ -456,3 +564,16 @@ export function createFlashMeter(cols, rows, fps) {
   // cellY: the Y of the whole cell (the glyph's total coverage); pixelY: the Y of the top (half 0) or bottom (half 1) pixel
   return { push, report, field: cf, pixelField, cellY: (i) => cellGrid.Y[i], pixelY: (i, half) => pixGrid.Y[2 * Math.floor(i / cols) * cols + (i % cols) + half * cols] };
 }
+
+// ---- the rule list every flash test shares (DRIFT-8 C4)
+//
+// One list of rule ids, one lookup, one "which rules failed". A flash test judges with failedRules(rep) so that a rule added here (rule C was) reaches every test at once;
+// a test that must leave a rule out says so by name (failedRules(rep, { not: [...] })) and prints why. 'c' is a single rule (judged at the speed the viewer sees, see the Rule C
+// block above); the others are { x1, x4 } or single.
+export const RULE_IDS = ['l1.x1', 'l1.x4', 'l2.x1', 'l2.x4', 'l3', 'r.x1', 'r.x4', 'c'];
+export const ruleOf = (rep, id) => { const [a, b] = id.split('.'); return b ? rep[a][b] : rep[a]; };
+export function failedRules(rep, { only = RULE_IDS, not = [] } = {}) {
+  return only.filter((id) => !not.includes(id) && !ruleOf(rep, id).pass);
+}
+// the rules a 1x-pace frame sequence is judged on when its meter x4 view is not a real speed: the x1 view of every rule (L3 and C have one view)
+export const X1_RULE_IDS = ['l1.x1', 'l2.x1', 'l3', 'r.x1', 'c'];

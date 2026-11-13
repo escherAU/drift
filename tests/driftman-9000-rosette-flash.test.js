@@ -10,7 +10,7 @@
 // hue turn is what gives the line its contrast. The per-pixel brightness range of both modes is pinned in driftman-9000-rosette-range.test.js.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createFlashMeter } from './helpers-flash.js';
+import { createFlashMeter, failedRules } from './helpers-flash.js';
 import { flashRig, composerFor } from './helpers-flash-controls.js';
 import {
   STEADY_CEILING, WORST_SECOND_CEILING, CPU_MEAN_CEILING_MS, BUDGET_RUN, limitFromMeasured, measureBytes, checkBudget, measureCpu, checkCpu,
@@ -22,10 +22,10 @@ import rosette, { makeRosette } from '../cartridges/driftman-9000/scenes/rosette
 const FPS = 18;
 const SECONDS = 66;
 const pc = (x) => (x * 100).toFixed(1);
-const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
 // the cell grid (the old reading) and the pixel grid (DRIFT-8 C2)
 const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
-const failed = (rep) => [['l1.x1', rep.l1.x1], ['l1.x4', rep.l1.x4], ['l2.x1', rep.l2.x1], ['l2.x4', rep.l2.x4], ['l3', rep.l3], ['r.x1', rep.r.x1], ['r.x4', rep.r.x4]].filter(([, r]) => !r.pass).map(([id]) => id);
+const failed = (rep) => failedRules(rep);
 
 // One solo run through the composer. reduce256: the frames as 256-colour output would show them.
 function run(scene, cols, rows, { phase = 0, seed = 1, seconds = SECONDS, reduce256 = false } = {}) {

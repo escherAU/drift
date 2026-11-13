@@ -9,6 +9,7 @@
 // The control: the same flow with the brightness of every console cell flipped between black and white on alternate frames must fail the meter.
 // A load-proof CPU budget for the hook at 240x67 (a ratio to a calibration loop, with a 3x-slower control) closes the file. TABLE lines print every measured value.
 import test from 'node:test';
+import { RULE_IDS, ruleOf } from './helpers-flash.js';
 import assert from 'node:assert/strict';
 import { shownMeter, FLASH_MODE, MODE_NOTE } from './helpers-flash-modes.js';
 import { createShell } from '../src/shell/shell.js';
@@ -18,9 +19,9 @@ import { sizeTier, newFrame } from '../src/shell/ui.js';
 import { flush, DT, FPS, SIZES, hook, RGB_CELL } from './helpers-driftman-console.js';
 import { measureRelativeCost } from './helpers-budget.js';
 
-const RULES = [['l1.x1', (r) => r.l1.x1], ['l1.x4', (r) => r.l1.x4], ['l2.x1', (r) => r.l2.x1], ['l2.x4', (r) => r.l2.x4], ['l3', (r) => r.l3], ['r.x1', (r) => r.r.x1], ['r.x4', (r) => r.r.x4]];
+const RULES = RULE_IDS.map((id) => [id, (r) => ruleOf(r, id)]); // the shared list (helpers-flash.js): the brightness and red rules and C (DRIFT-8 C4)
 const pc = (x) => (x * 100).toFixed(2);
-const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
 // the cell grid (the old reading) and the pixel grid (DRIFT-8 C2)
 const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
 const PHASES = [0, 0.25, 0.5, 0.75];

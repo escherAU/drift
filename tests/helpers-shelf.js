@@ -1,7 +1,7 @@
 // Helpers for the shelf scrub suites (DRIFT-7 item 2b): press schedules and a driver that plays them against a library shell the
 // way the app does (one tick and one frame per 1/18 s; the presses that fall in an interval arrive before its frame, with no tick
 // between them).
-import { createFlashMeter } from './helpers-flash.js';
+import { createFlashMeter, X1_RULE_IDS, ruleOf } from './helpers-flash.js';
 import { foilRoot, foilShell, copyOf, DT, FPS } from './helpers-foil.js';
 
 export { DT, FPS, foilRoot, foilShell, copyOf };
@@ -49,8 +49,9 @@ export function walkReport(cols, rows, presses, { art = 'dense', withFoil = true
 }
 
 export const pc = (x) => (x * 100).toFixed(2);
-export const showRep = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}`;
-export const passes1x = (rep) => rep.l1.x1.pass && rep.l2.x1.pass && rep.l3.pass && rep.r.x1.pass;
+export const showRep = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)} C ${pc(rep.c.worstFraction)}`;
+// the rules at the viewer's 1x: L1, L2, L3, R and the colour rule C (DRIFT-8 C4), from the shared list
+export const passes1x = (rep) => X1_RULE_IDS.every((id) => ruleOf(rep, id).pass);
 
 // ---- lone presses: the frames must be exactly what 4d2f8da drew (tests/fixtures/shelf-lone-press-4d2f8da.json)
 //

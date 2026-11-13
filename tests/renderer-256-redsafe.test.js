@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { nearest256 } from '../src/renderer.js';
+import { failedRules as failedAll } from './helpers-flash.js';
 import { rgbOf256, runControl, strobe, redPulse, safeKaleidoscope, CONTROL_COLS, CONTROL_ROWS } from './helpers-flash-controls.js';
 
 const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
@@ -47,7 +48,9 @@ test('red-safe 256: neutrals are untouched (black, white, mid grey, a cyan keep 
   assert.equal(rgbOf256(nearest256(0x3fe8ff)), 0xafd7ff);
 });
 
-const failedRules = (rep) => ['l1.x1', 'l1.x4', 'l2.x1', 'l2.x4', 'l3', 'r.x1', 'r.x4'].filter((r) => { const [a, b] = r.split('.'); return !(b ? rep[a][b] : rep[a]).pass; });
+// the brightness and red rules: this file is about the red-safety of the 256-colour lookup. The colour-flicker rule C (DRIFT-8 C4) is judged by tests/flash-colour.test.js
+// (this kaleidoscope turns hue at 1.5 cycles a second over fast detail, which rule C refuses by design), so it is left out here BY NAME, not by omission.
+const failedRules = (rep) => failedAll(rep, { not: ['c'] });
 
 test('red-safe 256: the safeHue kaleidoscope passes every rule at 1x and 4x on 256 colours, at three sizes', () => {
   for (const [cols, rows] of [[CONTROL_COLS, CONTROL_ROWS], [80, 24], [240, 67]]) {

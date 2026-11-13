@@ -3,6 +3,7 @@
 // tests/helpers-scene-checks.js; each "bad" one breaks exactly one rule and a test asserts that check throws.
 import { safeKaleidoscope, hueOnly, pack } from './helpers-flash-controls.js';
 import { PALETTE_BG } from '../src/renderer.js';
+import { TEAL, AMBER } from './helpers-flash-halves.js';
 
 const X = 88; // 'X'
 
@@ -25,7 +26,9 @@ export function sceneFromGenerator(id, gen) {
 }
 
 // ---- good scenes
-export const kaleidoscope = () => sceneFromGenerator('rgb-kaleidoscope', safeKaleidoscope);
+// DRIFT-8 C4: a good full-colour scene must pass the colour rule C too, so this kaleidoscope turns its hue at 0.15 cycles a second and rotates at 0.008 turns a second (the
+// Rosette's speed): the default safeKaleidoscope (hue 1.5, rotation 0.3) fails rule C by design (tests/flash-colour.test.js)
+export const kaleidoscope = () => sceneFromGenerator('rgb-kaleidoscope', (c, r) => safeKaleidoscope(c, r, { rotHz: 0.008, hueHz: 0.15 }));
 export const hueSweep = () => sceneFromGenerator('rgb-hue-sweep', hueOnly);
 
 // A sparse fixed glyph pattern every scene below shares: 1 cell in 3 draws an X, the rest are blank.
@@ -67,6 +70,14 @@ export function strobingRgb() {
   return make('rgb-strobe', (t, w, h, params) => {
     const n = w * h, lit = Math.floor(t * 8) % 2 === 0;
     for (let i = 0; i < n; i++) { params.glyphs[i] = inked(i, w) ? X : 32; params.fg[i] = 0x808080; params.bg[i] = lit ? 0xe0e0e0 : 0x101010; }
+  });
+}
+
+// DRIFT-8 C4: the whole field alternates between teal and amber (one lightness) four times a second: no brightness or red rule can see it, rule C does.
+export function colourFlickerRgb() {
+  return make('rgb-colour-flicker', (t, w, h, params) => {
+    const n = w * h, a = Math.floor(t * 8) % 2 === 0;
+    for (let i = 0; i < n; i++) { params.glyphs[i] = 32; params.fg[i] = a ? TEAL : AMBER; params.bg[i] = a ? TEAL : AMBER; }
   });
 }
 

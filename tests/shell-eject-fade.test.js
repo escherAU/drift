@@ -254,9 +254,9 @@ test('flash meter over the whole eject at 1x and 4x on a lit full-colour fixture
     for (let k = 0; k < Math.round((EJECT_SECONDS + 1) * FPS); k++) { sh.tick(1 / FPS); meter.push(sh.frame()); }
     const rep = meter.report();
     const p = (r) => `${(r.worstFraction * 100).toFixed(2)}%`;
-    const show = (r) => `L1 ${p(r.l1.x1)}/${p(r.l1.x4)}, L2 ${p(r.l2.x1)}/${p(r.l2.x4)}, L3 ${p(r.l3)}, R ${p(r.r.x1)}/${p(r.r.x4)}`;
+    const show = (r) => `L1 ${p(r.l1.x1)}/${p(r.l1.x4)}, L2 ${p(r.l2.x1)}/${p(r.l2.x4)}, L3 ${p(r.l3)}, R ${p(r.r.x1)}/${p(r.r.x4)}, C ${p(r.c)}`;
     lines.push(`${cols}x${rows}: ${show(rep.cell)} (x1/x4) | pixel ${show(rep.pixel)}`);
-    for (const [name, r] of [['l1.x1', rep.l1.x1], ['l1.x4', rep.l1.x4], ['l3', rep.l3], ['r.x1', rep.r.x1], ['r.x4', rep.r.x4]]) if (!r.pass) bad.push(`${cols}x${rows} ${name} ${p(r)}`);
+    for (const [name, r] of [['l1.x1', rep.l1.x1], ['l1.x4', rep.l1.x4], ['l3', rep.l3], ['r.x1', rep.r.x1], ['r.x4', rep.r.x4], ['c', rep.c]]) if (!r.pass) bad.push(`${cols}x${rows} ${name} ${p(r)}`);
     if (!rep.l2.x1.pass) bad.push(`${cols}x${rows} l2.x1 ${p(rep.l2.x1)} is over the rule`);
     if (mode === 'truecolor' && rep.cell.l2.x1.worstFraction > L2_CEIL_X1[`${cols}x${rows}`]) bad.push(`${cols}x${rows} l2.x1 ${p(rep.cell.l2.x1)} > ${(L2_CEIL_X1[`${cols}x${rows}`] * 100).toFixed(1)}%`);
   }

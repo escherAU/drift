@@ -14,6 +14,7 @@
 //          a test-only post-filter on the frames the shell drew): the meter must flag it.
 // Sizes: the three usual ones and the size just above each layout breakpoint (full 88x39, extra-large 176x58, compact 78x24).
 import test from 'node:test';
+import { RULE_IDS, ruleOf } from './helpers-flash.js';
 import assert from 'node:assert/strict';
 import { shownMeter, FLASH_MODE, MODE_NOTE } from './helpers-flash-modes.js';
 import { shelfLayout, LABEL_W, LABEL_H } from '../src/shell/library.js';
@@ -22,7 +23,7 @@ import { foilRoot, foilShell, copyOf, DT, FPS } from './helpers-foil.js';
 import { flush } from './helpers-console-hook.js';
 
 const SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [176, 58], [78, 24]];
-const RULES = [['l1.x1', (r) => r.l1.x1], ['l1.x4', (r) => r.l1.x4], ['l2.x1', (r) => r.l2.x1], ['l2.x4', (r) => r.l2.x4], ['l3', (r) => r.l3], ['r.x1', (r) => r.r.x1], ['r.x4', (r) => r.r.x4]];
+const RULES = RULE_IDS.map((id) => [id, (r) => ruleOf(r, id)]); // the shared list (helpers-flash.js): the brightness and red rules and C (DRIFT-8 C4)
 const pc = (x) => (x * 100).toFixed(2);
 // Insert + boot and eject of a foil cartridge are held to ABSOLUTE limits (DRIFT-7 item 1: insert step 3 is a dissolve now, so these flows no longer
 // sit over a rule): every rule at its own limit, and a ceiling on L2 per size, the measured value (Delza's art) plus a hair, to the next tenth of a
@@ -46,7 +47,7 @@ const PIXEL_WALK_L2 = { '120x40': 0.071, '80x24': 0.001, '240x67': 0.028, '88x39
 const PIXEL_CEIL_L2 = {
   '120x40': [0.048, 0.195, 0.009], '80x24': [0.107, 0.204, 0.029], '240x67': [0.030, 0.071, 0.005], '88x39': [0.101, 0.25, 0.030], '176x58': [0.049, 0.112, 0.006], '78x24': [0.085, 0.186, 0.030],
 };
-const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
 // the cell grid (the old reading) and the pixel grid (DRIFT-8 C2)
 const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
 const TRUECOLOR = FLASH_MODE === 'truecolor'; // the ceilings are measured on truecolor; in 256 colours every rule is held at its own limit and the numbers are printed

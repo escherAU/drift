@@ -8,7 +8,7 @@ import { renderScene, sceneKind, createCellComposer } from '../src/cells.js';
 import { Scheduler, createComposer } from '../src/compose.js';
 import { isAllowedGlyph } from '../src/glyphs.js';
 import { isWide, isInvisible } from './helpers-width.js';
-import { flashTimesOf, snap, createFlashMeter } from './helpers-flash.js';
+import { flashTimesOf, snap, createFlashMeter, RULE_IDS, ruleOf } from './helpers-flash.js';
 import { RGB_CELL, PALETTE_BG } from '../src/renderer.js';
 import { makePalette } from '../src/color.js';
 
@@ -190,7 +190,7 @@ function assertMeterPasses(frames, W, H, palette, what) {
   const meter = createFlashMeter(W, H, FPS);
   for (const f of frames) meter.push(f, palette);
   const rep = meter.report();
-  const rules = [['l1.x1', rep.l1.x1], ['l1.x4', rep.l1.x4], ['l2.x1', rep.l2.x1], ['l2.x4', rep.l2.x4], ['l3', rep.l3], ['r.x1', rep.r.x1], ['r.x4', rep.r.x4]];
+  const rules = RULE_IDS.map((id) => [id, ruleOf(rep, id)]); // the shared list, rule C (colour flicker, DRIFT-8 C4) included
   const bad = rules.filter(([, r]) => !r.pass).map(([id, r]) => `${id} ${(r.worstFraction * 100).toFixed(1)}% > ${(r.limit * 100).toFixed(0)}% (frame ${r.details.frame})`);
   assert.ok(rep.pass && bad.length === 0, `${what}: flash meter fails ${bad.join('; ')}`);
 }

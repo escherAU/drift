@@ -8,7 +8,7 @@ import {
   FIELD_FRACTION, STEP_FRACTION, TRANSITION_SWING, DARK_SIDE_MAX, RED_SATURATION, RED_SWING, RED_SCALE,
   L1_COUNT, L2_COUNT, R_COUNT, METER_RGB_CELL, METER_PALETTE_BG, FLASH_FRACTION, SHADE_STEP_LSTAR,
   glyphCoverage, DEFAULT_COVERAGE, luminanceOf, fieldSize, createSwingTracker, createTransitionLog,
-  createWindowCounter, createFlashMeter,
+  createWindowCounter, createFlashMeter, RULE_IDS, ruleOf, failedRules,
 } from './helpers-flash.js';
 import {
   CONTROL_COLS as C, CONTROL_ROWS as R, CONTROL_FPS as FPS, newFrame, runControl, rgbOf256, makeReducer256,
@@ -19,10 +19,12 @@ import { rgbTo256 } from '../src/color.js';
 
 // ---- helpers
 
-const RULES = ['l1.x1', 'l1.x4', 'l2.x1', 'l2.x4', 'l3', 'r.x1', 'r.x4'];
-const cell = (rep, rule) => { const [a, b] = rule.split('.'); return b ? rep[a][b] : rep[a]; };
-// the rules a report fails (every one of the seven; all are binding)
-const failed = (rep) => RULES.filter((r) => !cell(rep, r).pass);
+const RULES = RULE_IDS; // DRIFT-8 C4: the shared list (the seven brightness and red rules, and C)
+const cell = ruleOf;
+// the rules a report fails (every one of the eight; all are binding)
+const failed = (rep) => failedRules(rep);
+// the brightness and red rules only: for the controls that are about those, whose colour verdict is rule C's (tests/flash-colour.test.js)
+const failedBright = (rep) => failedRules(rep, { not: ['c'] });
 const pct = (rep, rule) => (cell(rep, rule).worstFraction * 100).toFixed(1) + '%';
 const table = [];
 const record = (name, rep) => table.push(`${name.padEnd(34)} ` + RULES.map((r) => `${r}=${pct(rep, r)}`).join(' ') + ` | fails: ${failed(rep).join(',') || 'none'}`);
@@ -256,13 +258,16 @@ test('control 5: HSV kaleidoscope (brightness moves with hue) fails L2', () => {
 
 test('control 6a: same-brightness kaleidoscope WITHOUT safeHue passes L1-L3 and fails R', () => {
   const rep = control('6a iso kaleidoscope (no safeHue)', isoKaleidoscope);
-  assert.deepEqual(failed(rep), ['r.x1', 'r.x4']);
-  });
+  assert.deepEqual(failedBright(rep), ['r.x1', 'r.x4']);
+  assert.deepEqual(failed(rep), ['r.x1', 'r.x4', 'c'], 'and rule C (DRIFT-8 C4) fails it too: the same fast hue');
+});
 
 test('control 6b: the same pattern WITH safeHue passes everything at 1x and 4x', () => {
   const rep = control('6b safeHue kaleidoscope', safeKaleidoscope);
-  assert.deepEqual(failed(rep), []);
-  assert.equal(rep.pass, true);
+  assert.deepEqual(failedBright(rep), [], 'every brightness and red rule, 1x and 4x');
+  // DRIFT-8 C4: its colour is another matter. Hue 1.5 cycles a second over fine detail rotating at 0.3 turns a second changes every pixel's colour far more than 7 times a
+  // second: rule C fails it (the colour-flicker rule, a house rule beyond WCAG: tests/flash-colour.test.js)
+  assert.deepEqual(failed(rep), ['c']);
 });
 
 test('control 7: gradient passes at 1x; at 4x R is the rule that moves', () => {
@@ -306,7 +311,7 @@ test('control 10: L3 - a step that moves over 30% of cells fails L3 alone; hue c
 
 test('control 11: on 256-colour output the safeHue kaleidoscope still passes and the strobe still fails', () => {
   const safe = control('11a safeHue kaleidoscope, 256', safeKaleidoscope, { reduce256: true });
-  assert.deepEqual(failed(safe), []);
+  assert.deepEqual(failedBright(safe), []);
   const bad = control('11b strobe, 256', strobe, { reduce256: true });
   assert.ok(failed(bad).includes('l1.x1'));
   assert.ok(failed(bad).includes('l2.x1'));
@@ -346,7 +351,7 @@ test('sizes and rates the controls were not tuned on: 41x11 at 12 fps, 80x24 at 
     const tag = `${cols}x${rows}@${fps}`;
     assert.ok(failed(control(`u strobe ${tag}`, strobe, o)).includes('l1.x1'), `strobe ${tag}`);
     assert.equal(control(`u bloom 2 s ${tag}`, (c, r) => bloom(c, r, { period: 2 }), o).l2.x1.pass, true, `bloom 2 s ${tag}`);
-    assert.deepEqual(failed(control(`u safeHue ${tag}`, safeKaleidoscope, o)), [], `safeHue kaleidoscope ${tag}`);
+    assert.deepEqual(failedBright(control(`u safeHue ${tag}`, safeKaleidoscope, o)), [], `safeHue kaleidoscope ${tag}`);
     assert.deepEqual(failed(control(`u hue only ${tag}`, hueOnly, o)), [], `hue only ${tag}`);
     assert.ok(failed(control(`u iso ${tag}`, isoKaleidoscope, o)).includes('r.x1'), `iso kaleidoscope ${tag}`);
     assert.ok(!control(`u red ${tag}`, redPulse, o).r.x1.pass, `red pulse ${tag}`);
@@ -368,7 +373,7 @@ test('report shape and meter edge cases', () => {
     assert.equal('binding' in c, false);
     assert.ok(c.details && 'frame' in c.details && 'timeS' in c.details);
   }
-  assert.deepEqual(Object.keys(rep).sort(), ['cell', 'cols', 'field', 'fps', 'frames', 'l1', 'l2', 'l3', 'pass', 'pixel', 'r', 'rows'].sort()); // DRIFT-8 C2: cell and pixel are the two readings, l1 ... r the worse of them (tests/flash-halves.test.js)
+  assert.deepEqual(Object.keys(rep).sort(), ['c', 'cell', 'cols', 'field', 'fps', 'frames', 'l1', 'l2', 'l3', 'pass', 'pixel', 'r', 'rows'].sort()); // DRIFT-8 C2: cell and pixel are the two readings, l1 ... r the worse of them (tests/flash-halves.test.js)
   assert.throws(() => m.push(newFrame(40, 11)), /size/);
   // no allocation per push after warm-up: heap growth over 300 pushes stays small
   const mm = createFlashMeter(120, 40, 18), fr = strobe(120, 40);

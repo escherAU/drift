@@ -6,8 +6,8 @@
 // focus lap 32 s), at 120x40, 80x24, 240x67, 61x21, 60x20 and the size just above each layout breakpoint (compact 78x24, full 88x39, extra-large 176x58).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createFlashMeter } from './helpers-flash.js';
-import { flashRig } from './helpers-flash-controls.js';
+import { createFlashMeter, failedRules, X1_RULE_IDS } from './helpers-flash.js';
+import { frameAtSpeed, flashRig } from './helpers-flash-controls.js';
 import {
   STEADY_CEILING, WORST_SECOND_CEILING, CPU_MEAN_CEILING_MS, BUDGET_RUN, limitFromMeasured, measureBytes, checkBudget, measureCpu, checkCpu,
 } from './helpers-budget.js';
@@ -18,11 +18,11 @@ import cortex, * as cx from '../cartridges/driftman-9000/scenes/cortex.js';
 const FPS = 18;
 const SECONDS = 130;
 const pc = (x) => (x * 100).toFixed(1);
-const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
 // speeds above 1x: the shell's frames step speed/18 s and the viewer sees them at 18 fps, which is the meter's 1x playback; the meter's own 4x view is a stress on the 1x
 // frames (it equals the shell at 4x, up to sampling), so it is judged at 1x only (a 2x shell viewed at the meter's 4x is 8x, outside the shell's speeds)
-const X1 = ['l1.x1', 'l2.x1', 'l3', 'r.x1'];
-const failed = (rep) => [['l1.x1', rep.l1.x1], ['l1.x4', rep.l1.x4], ['l2.x1', rep.l2.x1], ['l2.x4', rep.l2.x4], ['l3', rep.l3], ['r.x1', rep.r.x1], ['r.x4', rep.r.x4]].filter(([, r]) => !r.pass).map(([id]) => id);
+const X1 = X1_RULE_IDS; // l1, l2, l3, r at x1, and the colour rule C (DRIFT-8 C4: judged at the playback speed, so the 4x runs are judged on it too)
+const failed = (rep) => failedRules(rep);
 
 // One solo run through the composer. `step` is the frame step in seconds (1/18 at the shell's 1x; speed/18 at 2x to 4x). reduce256: as 256-colour output shows it.
 function run(scene, cols, rows, { phase = 0, seed = 1, seconds = SECONDS, reduce256 = false, speed = 1, start = 0 } = {}) {
@@ -30,7 +30,7 @@ function run(scene, cols, rows, { phase = 0, seed = 1, seconds = SECONDS, reduce
   const meter = createFlashMeter(cols, rows, FPS);
   const N = Math.round((seconds * FPS) / speed);
   for (let k = 0; k < N; k++) {
-    const s = rig.show(rig.cc.frame({ a: 0, b: 0, p: 0 }, start + ((k + phase) * speed) / FPS));
+    const s = rig.show(frameAtSpeed(rig.cc, { a: 0, b: 0, p: 0 }, start + ((k + phase) * speed) / FPS, speed));
     meter.push(s.frame, s.palette);
   }
   return meter.report();

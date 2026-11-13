@@ -43,5 +43,5 @@ export const TEAL_AMBER_DY = Math.abs(luminanceOf(TEAL) - luminanceOf(AMBER));
 // 30 s (or `seconds`) of a generator through a fresh meter: the report.
 export const runAt = (gen, cols, rows, { fps = 18, seconds = 10, palette = null, reduce256 = false } = {}) => runControl(gen, { cols, rows, fps, seconds, palette, reduce256 });
 
-export const RULE_IDS = ['l1.x1', 'l1.x4', 'l2.x1', 'l2.x4', 'l3', 'r.x1', 'r.x4'];
-export const ruleOf = (rep, id) => { const [a, b] = id.split('.'); return b ? rep[a][b] : rep[a]; };
+// the rule list is shared by every flash test (DRIFT-8 C4): it lives in helpers-flash.js
+export { RULE_IDS, ruleOf, failedRules } from './helpers-flash.js';

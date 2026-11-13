@@ -16,6 +16,7 @@
 // The standard flow (the same cartridge with no hook) is still measured: it is the control the strobe is compared with.
 // TABLE lines print every measured value.
 import test from 'node:test';
+import { RULE_IDS, ruleOf } from './helpers-flash.js';
 import assert from 'node:assert/strict';
 import { shownMeter, FLASH_MODE, MODE_NOTE } from './helpers-flash-modes.js';
 import { loadScenes as realLoadScenes } from '../src/cartridge/loader.js';
@@ -25,13 +26,13 @@ import { insertedShell, calmHookSource, harshHookSource, strobeHookSource, recor
 
 const FPS = 18;
 const noHook = async (cart) => { const r = await realLoadScenes(cart); const { console: _c, ...rest } = r; return rest; };
-const RULES = [['l1.x1', (r) => r.l1.x1], ['l1.x4', (r) => r.l1.x4], ['l2.x1', (r) => r.l2.x1], ['l2.x4', (r) => r.l2.x4], ['l3', (r) => r.l3], ['r.x1', (r) => r.r.x1], ['r.x4', (r) => r.r.x4]];
+const RULES = RULE_IDS.map((id) => [id, (r) => ruleOf(r, id)]); // the shared list (helpers-flash.js): the brightness and red rules and C (DRIFT-8 C4)
 const pc = (x) => (x * 100).toFixed(2);
 // L2 ceilings (fractions) per size: [insert+boot 1x, insert+boot 4x, eject 1x]
 const CEIL_L2 = { // percentages / 100; the largest measured (standard, calm, harsh) plus a hair, to the next tenth of a point
   '120x40': [0.012, 0.081, 0.006], '80x24': [0.006, 0.121, 0.006], '240x67': [0.004, 0.020, 0.003], '88x39': [0.016, 0.106, 0.014], '176x58': [0.006, 0.031, 0.003], '78x24': [0.006, 0.131, 0.006],
 };
-const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
 // the cell grid (the old reading) and the pixel grid (DRIFT-8 C2)
 const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
 const TRUECOLOR = FLASH_MODE === 'truecolor'; // the L2 ceilings and the fixtures' luminance pins are truecolor facts; in 256 colours every rule is held at its own limit and the numbers are printed
