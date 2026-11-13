@@ -13,6 +13,14 @@
 //                  means "this cell's colours are in fg/bg"; the scene may still write a palette index into any cell.
 //                  DRIFT-8: params.cmode is the colour mode the frame will be shown in, 'truecolor' or '256' (the names of
 //                  detectColorMode in color.js), so a scene can pick colours that stay safe once snapped to the 256-colour cube.
+//                  DRIFT-8 C3, the colour clock: the scene is pure in t and tc. params.tc is the colour clock, a second clock the shell's runtime
+//                  keeps that runs at min(speed, 1) of real time (it stops with t when paused or when help is open), and params.tc0 is its
+//                  value when this scene became active, just as t0 is for t, so a vision entered mid-program starts its colour time at 0 in
+//                  its own frame. Every GLOBAL hue drift (a hue turning with the clock, whatever carries it) reads colourTime(t, params) from
+//                  the cartridge's lib/clock.js (tc - tc0, or the scene time when no tc is given); motion (geometry, positions, rotation) keeps
+//                  sceneTime. At 1x tc equals t, so a 1x frame is the same bytes with or without tc. The reason: at 4x a hue that turns with the
+//                  scene clock turns four times as fast, a colour-only flicker the flash rules do not see. A caller that has no colour clock
+//                  (a capture tool, a test) omits tc and params.tc is undefined. renderScene takes tc as its last argument.
 //                  A palette scene gets the same buffers but no pre-fill, and its colours never reach the renderer's rgb branch.
 //   kind 'sim'     { id, kind: 'sim', init(w, h, seed) -> state, step(state), draw(state, params) }
 //                  step runs at a fixed 1/30 s. Same seed + same step count gives the same frame.
@@ -38,7 +46,7 @@ function dims(w, h) {
 
 // One frame of a scene from a fresh state (used by captures and the shared tests).
 // Sims are stepped round(t * 30) times from init. Pass glyphs/colours/fg/bg to reuse buffers.
-export function renderScene(scene, t, w, h, seed = 1, glyphs = null, colours = null, fg = null, bg = null, cmode = 'truecolor') {
+export function renderScene(scene, t, w, h, seed = 1, glyphs = null, colours = null, fg = null, bg = null, cmode = 'truecolor', tc) {
   const [W, H] = dims(w, h);
   const n = W * H;
   const g = glyphs && glyphs.length === n ? glyphs : new Uint16Array(n);
@@ -47,6 +55,7 @@ export function renderScene(scene, t, w, h, seed = 1, glyphs = null, colours = n
   const B = bg && bg.length === n ? bg : new Uint32Array(n);
   if (scene && scene.rgb === true) c.fill(RGB_CELL);
   const params = { seed, glyphs: g, colours: c, fg: F, bg: B, cmode: cmode === '256' ? '256' : 'truecolor' };
+  if (Number.isFinite(tc)) params.tc = tc; // the colour clock (DRIFT-8 C3); no tc0, like no t0: it counts from 0
   const T = Number.isFinite(t) ? t : 0;
   if (sceneKind(scene) === 'sim') {
     const state = scene.init(W, H, seed);
@@ -69,8 +78,10 @@ export function createCellComposer({ scenes, cols, rows, seed = 1, cmode = 'true
   let gA, cA, gB, cB, fA, bA, fB, bB, thr;
   let states = scenes.map(() => null);
   let since = scenes.map(() => null); // clock value when each scene became active (its visit started)
+  let sinceC = scenes.map(() => null); // the colour clock's value at the same moment (DRIFT-8 C3), so a vision's colour time is scene-local too
   let acc = 0, lastT = null;
-  const params = { seed, glyphs: null, colours: null, fg: null, bg: null, cmode: c.cmode };
+  const params = { seed, glyphs: null, colours: null, fg: null, bg: null, cmode: c.cmode, tc: undefined, tc0: undefined };
+  let TC = null; // the colour clock of the frame being drawn, or null when the caller gave none
 
   function resize(w, h) {
     const [W, H] = dims(w, h);
@@ -85,12 +96,14 @@ export function createCellComposer({ scenes, cols, rows, seed = 1, cmode = 'true
     for (let i = 0; i < n; i++) thr[i] += 0.01;
     states = scenes.map(() => null);
     since = scenes.map(() => null);
+    sinceC = scenes.map(() => null);
     acc = 0;
   }
 
   function reset(t) {
     states = scenes.map(() => null);
     since = scenes.map(() => null);
+    sinceC = scenes.map(() => null);
     acc = 0;
     lastT = Number.isFinite(t) ? t : null;
   }
@@ -105,19 +118,23 @@ export function createCellComposer({ scenes, cols, rows, seed = 1, cmode = 'true
     params.glyphs = g; params.colours = col; params.fg = fg; params.bg = bg;
     if (scene.rgb === true) col.fill(RGB_CELL); // full-colour cells say so by default; the scene may overwrite any with a palette index
     params.t0 = since[idx] === null ? t : since[idx]; // scene-local time: cells scenes may use t - t0
+    params.tc = TC === null ? undefined : TC; // the colour clock and its scene-local zero (colourTime in a cartridge's lib/clock.js)
+    params.tc0 = TC === null ? undefined : (sinceC[idx] === null ? TC : sinceC[idx]);
     if (sceneKind(scene) === 'sim') scene.draw(stateOf(idx), params);
     else scene(t, c.cols, c.rows, params);
   }
 
-  // st = {a, b, p}; t = scene seconds. Returns c ({cols, rows, glyphs, shades, fg, bg}).
-  function frame(st, t) {
+  // st = {a, b, p}; t = scene seconds; tc = colour seconds (optional: at 1x it is t, and a caller that gives none draws as if it were).
+  // Returns c ({cols, rows, glyphs, shades, fg, bg}).
+  function frame(st, t, tc) {
     const T = Number.isFinite(t) ? t : 0;
+    TC = Number.isFinite(tc) ? tc : null;
     const dissolving = st.p > 0 && st.b !== st.a;
     for (let i = 0; i < states.length; i++) {
-      if (i !== st.a && !(dissolving && i === st.b)) { states[i] = null; since[i] = null; } // inactive scenes start fresh next time
+      if (i !== st.a && !(dissolving && i === st.b)) { states[i] = null; since[i] = null; sinceC[i] = null; } // inactive scenes start fresh next time
     }
-    if (since[st.a] === null) since[st.a] = T;
-    if (dissolving && since[st.b] === null) since[st.b] = T;
+    if (since[st.a] === null) { since[st.a] = T; sinceC[st.a] = TC === null ? T : TC; }
+    if (dissolving && since[st.b] === null) { since[st.b] = T; sinceC[st.b] = TC === null ? T : TC; }
     // time -> fixed steps, capped
     if (lastT === null) lastT = T;
     let dt = T - lastT;

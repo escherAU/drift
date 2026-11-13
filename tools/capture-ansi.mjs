@@ -6,6 +6,9 @@
 // frame (clear the screen, then every cell with its 24-bit foreground and background; the app wraps it in the synchronized-output markers, which a file
 // does not need). There is no second serialiser here. The one thing added is a tail: reset the colours and put the cursor on the last row.
 //
+// DRIFT-8 C3, the colour clock: every frame here comes through the real app and its runtime, which hands the cell composer tc along with t; at the shipped
+// speed (1x) tc is t, so no file changes. This tool draws no scene directly.
+//
 // View one in a truecolor terminal of at least the size in its name (the file clears the screen and addresses cells absolutely, so it must not scroll):
 //   cat captures-ansi/menu-grid-120x40.ansi        (Git Bash, WSL, macOS, Linux; `clear` afterwards)
 //   type captures-ansi\menu-grid-120x40.ansi       (cmd.exe in Windows Terminal, after `chcp 65001`; `cls` afterwards)

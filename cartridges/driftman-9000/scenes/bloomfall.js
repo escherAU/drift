@@ -20,12 +20,16 @@
 //
 // Menu order will be Rosette, Cortex, Bloomfall; Cortex arrives in a later stage and goes in between the two.
 //
-// Pure in (seed, T) with T = t - t0. The only state is caches that are functions of their keys and never mutated by a frame: the spawn plan
+// The colour clock (DRIFT-8 C3): the field's hue (huefield at TC) and each bloom's hue turn (turn x (TC - start), the turn since the bloom's birth in
+// colour time) read TC = colourTime(t, params); the petals, the radius, the envelope, the pollen and the pops keep scene time T. The 60 degrees of hue across a
+// bloom's disc is geometry, so it still sweeps as a bloom grows and fades (at most 35 degrees per scene second, measured in tests/colour-clock.test.js).
+//
+// Pure in (seed, T, TC) with T = t - t0 and TC = tc - tc0. The only state is caches that are functions of their keys and never mutated by a frame: the spawn plan
 // (a memo of the fixed seeded sequence, extended as T grows) and the buffers that depend on the size. No allocation per frame.
 //
 // Any size: 0x0 and 1x1 draw nothing that throws, and below 60 x 20 it draws one centred dim line, "This vision needs 60 x 20.".
 import { safeHue, pixelsToCells } from '../../../src/pixels.js';
-import { sceneTime, seedOf } from '../lib/clock.js';
+import { sceneTime, colourTime, seedOf } from '../lib/clock.js';
 import { hueAt, cos, sin } from '../lib/huefield.js';
 
 export const MIN_W = 60, MIN_H = 20;
@@ -219,7 +223,7 @@ const POP_SCR = new Float64Array(5);
 function bloomfall(t, w, h, params) {
   if (!(w > 0 && h > 0)) return;
   if (w < MIN_W || h < MIN_H) { message(w, h, params); return; }
-  const T = sceneTime(t, params), seed = seedOf(params);
+  const T = sceneTime(t, params), TC = colourTime(t, params), seed = seedOf(params);
   const c = cacheFor(w, h);
   const { pixels, hue, lum, hPx } = c;
   const M = plan(seed, w, h, T);
@@ -229,7 +233,7 @@ function bloomfall(t, w, h, params) {
     const yf = (py + 0.5) * 0.5, row = py * w;
     for (let px = 0; px < w; px++) {
       const i = row + px;
-      const hh = hueAt(px + 0.5, yf, T, seed);
+      const hh = hueAt(px + 0.5, yf, TC, seed); // the field's hue turns on colour time
       hue[i] = hh - 360 * Math.floor(hh / 360);
       lum[i] = FIELD_L;
       pixels[i] = safeHue(hh, FIELD_L);
@@ -250,7 +254,7 @@ function bloomfall(t, w, h, params) {
     const cxp = b.cx + 0.5, cyp = 2 * b.cy + 1;
     const x0 = Math.max(0, Math.floor(cxp - Rpx)), x1 = Math.min(w - 1, Math.ceil(cxp + Rpx));
     const y0 = Math.max(0, Math.floor(cyp - Rpx)), y1 = Math.min(hPx - 1, Math.ceil(cyp + Rpx));
-    const rot = 0.3 * tau, hueTurn = b.turn * tau, k = b.k, Rsq = Rpx * Rpx;
+    const rot = 0.3 * tau, hueTurn = b.turn * (TC - b.start), k = b.k, Rsq = Rpx * Rpx; // the petals turn on scene time, the hue on colour time
     for (let py = y0; py <= y1; py++) {
       const dy = py + 0.5 - cyp, row = py * w;
       for (let px = x0; px <= x1; px++) {

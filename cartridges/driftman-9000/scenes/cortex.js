@@ -17,10 +17,13 @@
 // whole edge never changes in a single frame).
 //
 // Layout: the composition is at most 132 x 44 cells, centred; below 60 x 20 it is the dim centred message "This vision needs 60 x 20.".
-// Pure in (seed, T) with T = t - t0. The only state is caches that are functions of their keys (the layout and buffers for a size, the caption
+// The colour clock (DRIFT-8 C3): the 4 degrees a second the icosahedron's edge hues drift reads TC = colourTime(t, params); the turning, the panes, the trace,
+// the ring and the captions keep scene time T.
+//
+// Pure in (seed, T, TC) with T = t - t0 and TC = tc - tc0. The only state is caches that are functions of their keys (the layout and buffers for a size, the caption
 // shuffle for a round) and are never mutated by a frame in a way it can see. No allocation per frame.
 import { safeHue } from '../../../src/pixels.js';
-import { sceneTime, seedOf } from '../lib/clock.js';
+import { sceneTime, colourTime, seedOf } from '../lib/clock.js';
 import { hash1 } from '../lib/huefield.js';
 
 export const MIN_W = 60, MIN_H = 20;
@@ -371,7 +374,7 @@ function flushBraille(params, W, H, bits, cols, dw, dh, ix, iy) {
   }
 }
 
-function drawIcosa(params, c, W, H, x, y, iw, ih, T, seed) {
+function drawIcosa(params, c, W, H, x, y, iw, ih, T, TC, seed) {
   if (iw < 4 || ih < 2) return;
   const dw = 2 * iw, dh = 4 * ih, bits = c.icoBits, cols = c.icoCol;
   const R = Math.min(0.34 * Math.min(dw, dh), 20), cx = dw / 2 - 0.5, cy = dh / 2 - 0.5;
@@ -390,7 +393,7 @@ function drawIcosa(params, c, W, H, x, y, iw, ih, T, seed) {
   for (let q = 0; q < 30; q++) {
     const e = ord[q], d = dep[e];
     const L = edgeLightness(d);
-    dotLine(bits, cols, dw, dh, px[ICO_E[e][0]], py[ICO_E[e][0]], px[ICO_E[e][1]], py[ICO_E[e][1]], safeHue(edgeHue(seed, e, T), L));
+    dotLine(bits, cols, dw, dh, px[ICO_E[e][0]], py[ICO_E[e][0]], px[ICO_E[e][1]], py[ICO_E[e][1]], safeHue(edgeHue(seed, e, TC), L)); // the edges turn on scene time, their hue drifts on colour time
   }
   flushBraille(params, W, H, bits, cols, dw, dh, x, y);
 }
@@ -475,7 +478,7 @@ const LINKS = [ // connector c: geometric pane a (left or upper) and b, horizont
 function cortex(t, w, h, params) {
   if (!(w > 0 && h > 0)) return;
   if (w < MIN_W || h < MIN_H) { message(w, h, params); return; }
-  const T = sceneTime(t, params), seed = seedOf(params);
+  const T = sceneTime(t, params), TC = colourTime(t, params), seed = seedOf(params);
   const c = cacheFor(w, h);
   const { glyphs, fg, bg, colours } = params;
   const n = w * h;
@@ -506,7 +509,7 @@ function cortex(t, w, h, params) {
     const x = c.rx[i], y = c.ry[i], pw = c.rw[i], ph = c.rh[i];
     drawGlass(params, w, h, x, y, pw, ph, role, foc.tau, i, T);
     const k = c.layout.content[i];
-    if (i === 0) drawIcosa(params, c, w, h, k.x, k.y, k.w, k.h, T, seed);
+    if (i === 0) drawIcosa(params, c, w, h, k.x, k.y, k.w, k.h, T, TC, seed);
     else if (i === 1) drawTrace(params, c, w, h, k.x, k.y, k.w, k.h, T, seed);
     else if (i === 2) drawRing(params, c, w, h, k.x, k.y, k.w, k.h, T, seed);
     else drawCaption(params, c, w, h, k.x, k.y, k.w, k.h, T, seed);

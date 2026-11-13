@@ -71,7 +71,10 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
   }
 
   let cur = m.start;
-  let t = 0, speedIdx = 3, paused = false, helpOpen = false;
+  let t = 0, tc = 0, speedIdx = 3, paused = false, helpOpen = false;
+  // t is the scene clock (real time x speed). tc is the colour clock (DRIFT-8 C3): it runs at min(speed, 1) of real time, so every hue
+  // that drifts with it turns at its 1x rate at every speed. Both stop when paused and when help is open, and both start at 0; the
+  // cell composer makes each vision's own zero for them (params.t0 and params.tc0).
   const menu = { open: false, index: 0, idle: 0, p: 0 };
   let helpP = 0; // how far the help panel has ramped in (0 = not drawn, 1 = fully drawn); the shell draws the panel while it is above 0
   let auto = null; // seconds left on the menu's start-by-itself countdown (skin.menu.autostartSeconds), or null
@@ -196,6 +199,7 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
     if (!paused) {
       const d = dt * SPEEDS[speedIdx];
       t += d;
+      tc += dt * Math.min(SPEEDS[speedIdx], 1);
       programs.get(cur).sched.advance(d);
     }
   }
@@ -204,7 +208,7 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
     const prog = programs.get(cur);
     const st = prog.sched.state();
     const mapped = { a: prog.indexes[st.a], b: prog.indexes[st.b], p: st.p };
-    return prog.family === 'field' ? fieldComp.frame(mapped, t) : cellComp.frame(mapped, t);
+    return prog.family === 'field' ? fieldComp.frame(mapped, t) : cellComp.frame(mapped, t, tc);
   }
 
   // Fill out ({ glyphs, shades, fg, bg, cols, rows }) with the scene, the dissolve after a program switch, and
@@ -260,7 +264,7 @@ const chapters = new Map((m.chapters || []).map((c) => [c.id, c]));
       const prog = programs.get(cur);
       const st = prog.sched.state();
       const sc = prog.list[prog.indexes[st.a]];
-      return { program: cur, sceneId: sc ? sc.id : null, menu: menu.open, help: helpOpen, paused, speed: SPEEDS[speedIdx], season, t };
+      return { program: cur, sceneId: sc ? sc.id : null, menu: menu.open, help: helpOpen, paused, speed: SPEEDS[speedIdx], season, t, tc };
     },
     get helpOpen() { return helpOpen; },
     get helpP() { return helpP; },

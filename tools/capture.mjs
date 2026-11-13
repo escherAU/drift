@@ -1,3 +1,5 @@
+// DRIFT-8 C3, the colour clock: wherever this tool draws a cells scene it passes tc = t (at 1x the colour clock is the scene clock, so no file
+// changes); the Driftman 9000 frames in captures-ansi come from the real app and runtime, whose tc is t at the shipped speed.
 // Headless frame capture: node tools/capture.mjs [--out captures] [--cartridges]   (--cartridges: only the cartridge console files,
 // which include Delza's cart-delza-* set and Night Drive's cart-night-drive-* set; see the DRIFT-4 and DRIFT-5 blocks below)
 // Writes, for each of the 5 scenes and a cross-fade, at 120x40 and 240x67:
@@ -53,7 +55,7 @@ export function runCapture({ outDir, sizes = SIZES, times = TIMES, seed = 1 }) {
         const st = name === 'crossfade'
           ? { a: 0, b: 1, p: smoothstep(sec / FADE_SEC) }
           : { a: CAPTURE_NAMES.indexOf(name), b: CAPTURE_NAMES.indexOf(name), p: 0 };
-        const f = comp.frame(st, sec);
+        const f = comp.frame(st, sec, sec);
         const frame = { cols, rows, glyphs: f.glyphs, shades: f.shades, palette };
         const head = `=== t=${sec}s ${cols}x${rows} ${name}${name === 'crossfade' ? ` progress=${st.p.toFixed(3)}` : ''}`;
         txt += `${head}\n${frameToText(frame)}\n`;
@@ -114,7 +116,7 @@ export function runCaptureModes({ outDir, seed = 1 }) {
   for (const mode of NON_CALM) {
     for (const scene of PLAYLISTS[mode]) {
       MODE_TIMES.forEach((sec, k) => {
-        const f = renderScene(scene, sec, MODE_COLS, MODE_ROWS, seed);
+        const f = renderScene(scene, sec, MODE_COLS, MODE_ROWS, seed, null, null, null, null, 'truecolor', sec);
         const head = `=== t=${sec}s ${MODE_COLS}x${MODE_ROWS} ${mode}/${scene.id}`;
         put(`${mode}-${scene.id}-${k + 1}.txt`, `${head}\n${frameToText({ cols: MODE_COLS, rows: MODE_ROWS, glyphs: f.glyphs })}\n`);
       });
@@ -131,10 +133,10 @@ export function runCaptureModes({ outDir, seed = 1 }) {
     const B = list.length > 1 ? list[1] : PLAYLISTS[NON_CALM[(mi + 1) % NON_CALM.length]][0];
     const cc = createCellComposer({ scenes: [A, B], cols: MODE_COLS, rows: MODE_ROWS, seed });
     const T = 3;
-    for (let k = 0; k <= T * 18; k++) cc.frame({ a: 0, b: 1, p: 0 }, k / 18); // let sims run to t = 3 s
+    for (let k = 0; k <= T * 18; k++) cc.frame({ a: 0, b: 1, p: 0 }, k / 18, k / 18); // let sims run to t = 3 s
     let txt = '';
     for (const p of DISSOLVE_POINTS) {
-      const f = cc.frame({ a: 0, b: 1, p }, T);
+      const f = cc.frame({ a: 0, b: 1, p }, T, T);
       txt += `=== p=${p} ${MODE_COLS}x${MODE_ROWS} ${A.id} -> ${B.id} (${DISSOLVE_SECONDS} s dissolve)\n${frameToText({ cols: MODE_COLS, rows: MODE_ROWS, glyphs: f.glyphs })}\n`;
     }
     put(`dissolve-${mode}.txt`, txt);

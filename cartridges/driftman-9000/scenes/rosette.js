@@ -4,7 +4,7 @@
 // units, give r = 2 |(u, v)| / H_px and theta = atan2(v, u). The picture is folded N ways round the centre:
 //   theta' = | ((theta + 0.05 T) mod (2 pi / N)) - pi / N |
 //   f = sin(5 r - 0.7 T + 3 cos(N theta' / 2)) + 0.6 sin(11 r cos theta' + 0.4 T + phi1) + 0.4 sin(17 r sin theta' - 0.3 T + phi2)
-// (phi1, phi2 from the seed). Colour = safeHue(200 + 120 f + 40 r + HUE_RATE T, FILL_L): the hue wheel passes every cell at ONE
+// (phi1, phi2 from the seed). Colour = safeHue(200 + 120 f + 40 r + HUE_RATE TC, FILL_L) (TC: colour time, below): the hue wheel passes every cell at ONE
 // lightness, and space shifts it 120 degrees per unit of f, so neighbouring petals always differ. HUE_RATE is 200 degrees a second,
 // not the designer's 90: with 90 the drift is cancelled by the field's own movement in many places (120 df/dt reaches -127 deg/s), so
 // 16.5 % of cells (median 9.3 %) kept their colour from one frame to the next at its worst frame; the brief asks for 95 % to change.
@@ -25,13 +25,19 @@
 // at hash(px, py) * 3 s, a 3 s dissolve spread across the whole screen, so no frame has more than a small share of pixels
 // changing fold.
 //
-// Pure in (seed, T) with T = t - t0. The only state is a cache of what depends on the size alone (r and theta per pixel, the
+// The colour clock (DRIFT-8 C3). T is scene time (the geometry: fold, rotation, the field that decides where the contours are). TC is colour time,
+// colourTime(t, params), which runs at min(speed, 1) of real time and is T at 1x. Everything that moves the HUE reads it: HUE_RATE x TC and the
+// 120 f term, where f is the same field evaluated at TC (the colour the pattern carries must not turn four times as fast at 4x: Desmond found the
+// colour followed the pattern). Where TC equals T (every 1x frame) f is used as it is, so a 1x frame is byte for byte the old one; where it does
+// not, the field is evaluated a second time, at TC, for the colour only. The contour test |f| < CONTOUR_BAND stays on scene time.
+//
+// Pure in (seed, T, TC) with T = t - t0 and TC = tc - tc0. The only state is a cache of what depends on the size alone (r and theta per pixel, the
 // 4096-entry sine table, a pixel buffer) and on the seed (the switch time per pixel); it is rebuilt when the size or seed
 // changes and is never mutated by a frame, so a call is a function of its arguments. No allocation per frame.
 //
 // Any size: 0x0 and 1x1 draw nothing that throws, and below 60 x 20 it draws one centred dim line, "This vision needs 60 x 20.".
 import { safeHue, pixelsToCells } from '../../../src/pixels.js';
-import { sceneTime, seedOf } from '../lib/clock.js';
+import { sceneTime, colourTime, seedOf } from '../lib/clock.js';
 
 export const MIN_W = 60, MIN_H = 20;
 export const MESSAGE = 'This vision needs 60 x 20.';
@@ -141,12 +147,13 @@ export function makeRosette(contourL, contourTurn = CONTOUR_TURN, contourL256) {
   function rosette(t, w, h, params) {
     if (!(w > 0 && h > 0)) return;
     if (w < MIN_W || h < MIN_H) { message(w, h, params); return; }
-    const T = sceneTime(t, params), seed = seedOf(params);
+    const T = sceneTime(t, params), TC = colourTime(t, params), seed = seedOf(params);
     const c = cacheFor(w, h, seed);
     const [p1, p2] = phiOf(seed);
     const { prev, cur, local } = foldsAt(T);
     const melting = local < MELT_SECONDS;
-    const rot = 0.05 * T, hueT = 200 + HUE_RATE * T;
+    const rot = 0.05 * T, hueT = 200 + HUE_RATE * TC;
+    const rotC = 0.05 * TC, split = TC !== T; // at 1x the colour clock is the scene clock and the picture's colour field is the picture itself
     const { r, ang, delay, pixels, n } = c;
     const cL = params.cmode === '256' ? contourL256 : contourL;
     const segC = TAU / cur, segP = TAU / prev;
@@ -158,7 +165,12 @@ export function makeRosette(contourL, contourTurn = CONTOUR_TURN, contourL256) {
       const th = Math.abs(q - seg * Math.floor(q / seg) - seg / 2);
       const cth = COS(th), sth = SIN(th);
       const f = SIN(5 * ri - 0.7 * T + 3 * COS((N * th) / 2)) + 0.6 * SIN(11 * ri * cth + 0.4 * T + p1) + 0.4 * SIN(17 * ri * sth - 0.3 * T + p2);
-      const hue = hueT + 120 * f + 40 * ri;
+      let fc = f; // the field the colour reads: the same field at colour time, so the hue the pattern carries turns at its 1x rate at every speed
+      if (split) {
+        const qc = ang[i] + rotC, thc = Math.abs(qc - seg * Math.floor(qc / seg) - seg / 2);
+        fc = SIN(5 * ri - 0.7 * TC + 3 * COS((N * thc) / 2)) + 0.6 * SIN(11 * ri * COS(thc) + 0.4 * TC + p1) + 0.4 * SIN(17 * ri * SIN(thc) - 0.3 * TC + p2);
+      }
+      const hue = hueT + 120 * fc + 40 * ri;
       pixels[i] = f > -CONTOUR_BAND && f < CONTOUR_BAND ? safeHue(hue + contourTurn, cL) : safeHue(hue, FILL_L);
     }
     pixelsToCells(params, w, h, pixels, w, 2 * h);
