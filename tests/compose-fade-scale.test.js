@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Scheduler } from '../src/compose.js';
+import { SPEEDS } from '../src/app.js';
 
 const mk = () => new Scheduler({ count: 3, durationSec: 10, fadeSec: 2, start: 0 });
 const close = (a, b, m) => assert.ok(Math.abs(a - b) < 1e-9, `${m}: ${a} vs ${b}`);
@@ -58,4 +59,57 @@ test('the dissolve spans 36 frames at 18 fps at any speed from 1x up, as the run
   let frames = 0;
   for (let k = 0; k < 18 * 400 && s.cur === 0; k++) { s.advance((1 / 18) * 0.5, 1); if (s.fading) frames++; }
   assert.ok(Math.abs(frames - 72) <= 1, `0.5x: ${frames} frames`);
+});
+
+// DRIFT-8 r4: the dissolve never gains more fade than the real time it is given. The runtime hands the Scheduler d = dt x speed with the scale min(speed, 1) / speed, so the fade
+// gains dt (from 1x up) or dt x speed (below 1x): never more than dt, whatever the speed, a speed change mid-fade, a skip queued mid-fade, or a stalled loop's dt of 0.25 s.
+
+// total fade progress in seconds: fades completed x fade length + the running fade's fadeT (cur only moves forward by one when a fade ends)
+function driveFade(speedAt, scaleOf, dts, { skipAt = [] } = {}) {
+  const s = new Scheduler({ count: 3, durationSec: 4, fadeSec: 2, start: 0 });
+  let done = 0, prevCur = s.cur, prev = 0, worst = -Infinity, worstAt = null, started = false;
+  for (let k = 0; k < dts.length; k++) {
+    const dt = dts[k], speed = speedAt(k);
+    if (skipAt.includes(k)) s.skip();
+    s.advance(dt * speed, scaleOf(speed));
+    if (s.cur !== prevCur) { done += 1; prevCur = s.cur; }
+    const p = done * s.fade + (s.fading ? s.fadeT : 0);
+    if (s.fading || done) started = true;
+    if (p - prev > worst) { worst = p - prev; worstAt = { k, dt, speed }; }
+    assert.ok(p - prev >= -1e-9 || !started, 'fade progress only moves forward');
+    prev = p;
+  }
+  return { worst, worstAt, done };
+}
+const real = (speed) => Math.min(speed, 1) / speed; // what the runtime passes
+const overDt = (r, dts) => r.worst - Math.max(...dts) > 1e-9;
+
+test('the fade never gains more than the real dt it is given: every speed, a speed change mid-fade, a queued skip, dt 0.25 (a stalled loop); a fade scaled by speed does', () => {
+  const dts = [];
+  for (let i = 0; i < 18 * 60; i++) dts.push(i % 11 === 5 ? 0.25 : i % 7 === 3 ? 0.01 : 1 / 18);
+  const gain = (r, speed, dt) => assert.ok(r.worst <= dt + 1e-9, `speed ${speed}: a frame gained ${r.worst} s of fade from a real dt of ${dt} s (${JSON.stringify(r.worstAt)})`);
+  for (const speed of SPEEDS) {
+    const r = driveFade(() => speed, real, dts);
+    gain(r, speed, Math.max(...dts));
+    assert.ok(r.done >= 1, `speed ${speed}: at least one dissolve ran`);
+    // per frame, against that frame's own dt, not only the largest
+    const s = new Scheduler({ count: 3, durationSec: 4, fadeSec: 2, start: 0 });
+    let done = 0, cur = s.cur, prev = 0;
+    for (const dt of dts) {
+      s.advance(dt * speed, real(speed));
+      if (s.cur !== cur) { done++; cur = s.cur; }
+      const p = done * s.fade + (s.fading ? s.fadeT : 0);
+      assert.ok(p - prev <= dt + 1e-9, `speed ${speed}: ${p - prev} s of fade from dt ${dt}`);
+      prev = p;
+    }
+  }
+  // speed changes while a fade runs: through every speed and back, every 5 frames, with space pressed twice mid-run
+  const sweep = (k) => SPEEDS[Math.floor(k / 5) % SPEEDS.length];
+  const rs = driveFade(sweep, real, dts, { skipAt: [100, 103, 400] });
+  gain(rs, 'sweep', Math.max(...dts));
+  // the control: the fade scaled by the speed (the old behaviour at 4x was a fade worth 4 x real time) is caught
+  const bad = driveFade(() => 4, (speed) => speed, dts);
+  assert.ok(overDt(bad, dts), `control: a fade scaled by the speed gained ${bad.worst} s from a dt of at most ${Math.max(...dts)} s`);
+  const bad2 = driveFade(() => 4, () => 1, dts);
+  assert.ok(overDt(bad2, dts), 'control: no scale at all (a fade on the scene clock) is caught too');
 });

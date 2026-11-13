@@ -102,3 +102,49 @@ export async function runAppDissolves({ cols = 80, rows = 24, mode = 'truecolor'
 function finish(o) {
   return { from: o.from, to: o.to, switchFrame: o.switchFrame, sinceLast: o.sinceLast, frames: o.frames, leadFrames: o.leadFrames, dissolveFrames: o.dissolveFrames, sigBefore: o.sigBefore, sigAt: o.sigAt, sigAfter: o.sigAfter, report: o.meter.report() };
 }
+
+// DRIFT-8 r4: the same app, but a window around a moment you choose instead of around a dissolve. `keys` are { atRunning, key } presses (seconds into the running program,
+// as in `plan`); the window is [pickAt - before, pickAt + after] seconds into the running program; the scene shown is read every frame (ids[k] is the sceneId at frame k since
+// running began, null while there is none). Used for the menu jump, where the dissolve is the program-switch one and does not show up as a scene change on its own schedule.
+export async function runAppWindow({ cols = 80, rows = 24, mode = 'truecolor', seed = 1, keys = [], pickAt, before = 6, after = 4 } = {}) {
+  const stdout = fakeStdout({ columns: cols, rows });
+  const stdin = fakeStdin(), stderr = fakeStderr(), proc = fakeProc();
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-flash-app-'));
+  const env = mode === 'truecolor' ? { COLORTERM: 'truecolor' } : {};
+  const app = realCreateApp({
+    stdin, stdout, stderr, proc, env, configPath: path.join(tmp, 'config.json'), dirs: [{ dir: REAL_INSTALL_DIR, trusted: true }],
+    autoLoop: false, seed, startScreen: { screen: 'cartridge', cartridge: 'driftman-9000', skipBoot: false },
+  });
+  const ids = [];
+  try {
+    app.start();
+    const screen = createScreen(cols, rows);
+    const n = cols * rows;
+    const total = Math.round((pickAt + after) * APP_FPS) + 1;
+    const lo = Math.round((pickAt - before) * APP_FPS);
+    let runningAt = null, meter = null, shown = 0;
+    for (let k = 0; k < 1e6 && !proc.exits.length; k++) {
+      const rel = runningAt === null ? -1 : k - runningAt;
+      if (rel >= 0) for (const p of keys) if (rel === Math.round(p.atRunning * APP_FPS)) stdin.emit('data', p.key);
+      app.tick(DT);
+      for (const w of stdout.writes.splice(0)) screen.feed(w);
+      if (k % 8 === 0) await new Promise((r) => setImmediate(r));
+      const sh = app.getState().shell;
+      if (!sh || sh.screen !== 'running') continue;
+      if (runningAt === null) runningAt = k;
+      const j = k - runningAt;
+      ids[j] = sh.sceneId || null;
+      if (j >= lo) {
+        if (!meter) meter = createFlashMeter(cols, rows, APP_FPS);
+        const f = { cols, rows, glyphs: new Uint32Array(n), fg: new Uint32Array(n), bg: new Uint32Array(n) };
+        for (let q = 0; q < n; q++) { f.glyphs[q] = screen.glyphs[q]; f.fg[q] = rgbOf(screen.fg[q], DEF_FG); f.bg[q] = rgbOf(screen.bg[q], DEF_BG); }
+        meter.push(f, undefined); shown++;
+      }
+      if (j + 1 >= total) break;
+    }
+    return { report: meter.report(), frames: shown, ids, runningAt };
+  } finally {
+    try { proc.emit('exit'); } catch { /* ignore */ }
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}

@@ -47,9 +47,9 @@ const PIXEL_WALK_L2 = { '120x40': 0.071, '80x24': 0.001, '240x67': 0.028, '88x39
 const PIXEL_CEIL_L2 = {
   '120x40': [0.048, 0.195, 0.009], '80x24': [0.107, 0.204, 0.029], '240x67': [0.030, 0.071, 0.005], '88x39': [0.101, 0.25, 0.030], '176x58': [0.049, 0.112, 0.006], '78x24': [0.085, 0.186, 0.030],
 };
-const showOne = (rep, l2x4 = true) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}${l2x4 ? `/${pc(rep.l2.x4.worstFraction)}` : ""} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
+const showOne = (rep, x4 = true) => `L1 ${pc(rep.l1.x1.worstFraction)}${x4 ? `/${pc(rep.l1.x4.worstFraction)}` : ""} L2 ${pc(rep.l2.x1.worstFraction)}${x4 ? `/${pc(rep.l2.x4.worstFraction)}` : ""} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}${x4 ? `/${pc(rep.r.x4.worstFraction)}` : ""} C ${pc(rep.c.worstFraction)}`;
 // the cell grid (the old reading) and the pixel grid (DRIFT-8 C2)
-const show = (rep, l2x4 = true) => `${showOne(rep.cell, l2x4)} | pixel ${showOne(rep.pixel, l2x4)}`;
+const show = (rep, x4 = true) => `${showOne(rep.cell, x4)} | pixel ${showOne(rep.pixel, x4)}`;
 const TRUECOLOR = FLASH_MODE === 'truecolor'; // the ceilings are measured on truecolor; in 256 colours every rule is held at its own limit and the numbers are printed
 
 // the 30 s at rest: wait for nothing, the library is the start screen

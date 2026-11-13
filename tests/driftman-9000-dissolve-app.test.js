@@ -5,10 +5,12 @@
 //
 // What is driven: the program is the manifest's (rosette, cortex, bloomfall, hold 60 s, dissolve 2 s). In an 82 s run at 4x the app dissolves four times
 // (rosette>cortex while the opening menu is still up, cortex>bloomfall, bloomfall>rosette, rosette>cortex with the menu gone); each is metered from 4 real seconds before it starts to 4 real seconds after it
-// ends. ASSERTED, at both 4x and 1x: the rules judged at the playback speed (X1_RULE_IDS: L1, L2, L3, R and C at the 18 fps the viewer sees). NOT ASSERTED here: the meter's 4x
-// view of the same frames (l1.x4, l2.x4, r.x4); see the known gap below.
-// The other three ordered pairs (cortex>rosette, bloomfall>cortex, rosette>bloomfall) cannot occur in the app (a program only ever moves to its next scene, the menu starts
-// it at a scene, and there are no palette scenes in this cartridge); the replay test still covers them.
+// ends. ASSERTED, at both 4x and 1x: the rules judged at the playback speed (X1_RULE_IDS: L1, L2, L3, R and C at the 18 fps the viewer sees).
+// The meter's 4x view (l1.x4, l2.x4, r.x4) is neither judged nor printed here. It models the same frames shown four times as fast: the 2 s dissolve squeezed into 0.5 s with the
+// colour clock at 4x. Since DRIFT-8 r2 nothing in the app does that. The speed key reaches only the scene clock; the dissolve and the colour clock run on real time from 1x up.
+// The loop's dt is the real time since the last frame, cut to 0.25 s after a stall, never more. A viewer who speeds up is the real 4x runs below.
+// tests/driftman-9000-dissolve-app-mutation.test.js keeps the 0.5 s version failing L2.
+// The other three ordered pairs never occur as a scene-to-scene dissolve. The menu reaches them through the program-switch dissolve (tests/driftman-9000-dissolve-app-paths.test.js).
 //
 // Seeds and sizes. 80x24: all 16 seeds, truecolor and (tests/flash-256-9000-dissolve-app.test.js) 256 colours. The other sizes cost more per run in proportion to their
 // cells (120x40 is 2.5 times 80x24, 61x21 is two thirds), so they get fewer seeds, fixed lists: 3 at 120x40 and 8 at 61x21. 1x: 2 seeds at 80x24, 205 s runs.
@@ -22,7 +24,7 @@ import { failedRules, X1_RULE_IDS } from './helpers-flash.js';
 import { FLASH_MODE, MODE_NOTE } from './helpers-flash-modes.js';
 
 const pc = (x) => (100 * x).toFixed(1);
-const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
+const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)} C ${pc(rep.c.worstFraction)}`;
 const SEEDS_16 = Array.from({ length: 16 }, (_, i) => i + 1);
 const SEEDS_120 = [1, 12, 16];
 const SEEDS_61 = [1, 8, 12, 16, 2, 3, 5, 7];
@@ -49,10 +51,7 @@ function judge(res, { cols, rows, seed, speed }) {
     assert.equal(d.report.frames, d.leadFrames + d.dissolveFrames + 4 * APP_FPS, `${tag}: ${d.from}>${d.to} the window is lead + dissolve + tail`);
     // not vacuous: the picture changed from the old scene to the new one over the window
     assert.ok(d.sigAfter && dist(d.sigBefore, d.sigAfter) > 15, `${tag}: ${d.from}>${d.to} the field's mean colour ${d.sigBefore} -> ${d.sigAfter} did not change`);
-    // the rules judged at the playback speed (L1, L2, L3, R, C at the 18 fps the viewer sees). A 1x run is also printed with its x4 view (the same frames judged over a 72-frame
-    // window, the proxy for a viewer who speeds up) but that view is PRINTED, NOT ASSERTED, here. KNOWN GAP: that 4x view of Bloomfall>Rosette at 1x runtime reads about 34-35 %
-    // (limit 25 %) at seeds 8, 12 and 16 and is open. The replay test (tests/driftman-9000-dissolve.test.js) does assert its own 4x view of this pair, but from a fresh composer at
-    // seed 1, which does not reproduce the app's state (the header above), so it does not cover this reading either. The 4x runs here do assert the real 4x playback.
+    // the rules judged at the playback speed (L1, L2, L3, R, C at the 18 fps the viewer sees), at 1x and real 4x; nothing else is printed (see the header)
     const f = failedRules(d.report, { only: X1_RULE_IDS });
     lines.push(`${tag} ${d.from}>${d.to} ${show(d.report)}`);
     if (f.length) bad.push(`${tag} ${d.from}>${d.to}: ${f.join(',')} ${show(d.report)}`);

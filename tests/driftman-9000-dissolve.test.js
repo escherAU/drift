@@ -14,7 +14,8 @@ import { flashRig, frameAtSpeed } from './helpers-flash-controls.js';
 
 const FPS = 18, FADE = 2, LEAD = 4, TAIL = 4;
 const pc = (x) => (x * 100).toFixed(1);
-const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}`;
+// the meter's 4x views are printed only at shell speed 1x; at 4x only the 1x views are judged (and printed), see tests/driftman-9000-dissolve-app.test.js
+const show = (rep, speed = 1) => (speed === 1 ? `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)} C ${pc(rep.c.worstFraction)}` : `L1 ${pc(rep.l1.x1.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)} C ${pc(rep.c.worstFraction)}`);
 const X1 = X1_RULE_IDS; // DRIFT-8 C4: with the colour rule C, which is judged at the playback speed
 const failed = (rep) => failedRules(rep);
 
@@ -67,9 +68,9 @@ test('9000 dissolves: every ordered pair, 5 sizes, shell speeds 1x (meter 1x and
     for (const [cols, rows] of SIZES) {
       for (const speed of [1, 4]) {
         const rep = pairRun(a, b, cols, rows, { speed });
-        lines.push(`${a}>${b} ${cols}x${rows} ${speed}x ${show(rep)}`);
+        lines.push(`${a}>${b} ${cols}x${rows} ${speed}x ${show(rep, speed)}`);
         const f = failed(rep).filter((id) => speed === 1 || X1.includes(id));
-        if (f.length) bad.push(`${a}>${b} ${cols}x${rows} ${speed}x: ${f.join(',')} ${show(rep)}`);
+        if (f.length) bad.push(`${a}>${b} ${cols}x${rows} ${speed}x: ${f.join(',')} ${show(rep, speed)}`);
       }
     }
   }
@@ -83,9 +84,9 @@ test('9000 dissolves: every ordered pair on 256-colour output (nearest256) at 12
     for (const [cols, rows] of [[120, 40], [80, 24], [61, 21]]) {
       for (const speed of [1, 4]) {
         const rep = pairRun(a, b, cols, rows, { speed, reduce256: true });
-        lines.push(`${a}>${b} ${cols}x${rows} ${speed}x 256-colour ${show(rep)}`);
+        lines.push(`${a}>${b} ${cols}x${rows} ${speed}x 256-colour ${show(rep, speed)}`);
         const f = failed(rep).filter((id) => speed === 1 || X1.includes(id));
-        if (f.length) bad.push(`${a}>${b} ${cols}x${rows} ${speed}x: ${f.join(',')} ${show(rep)}`);
+        if (f.length) bad.push(`${a}>${b} ${cols}x${rows} ${speed}x: ${f.join(',')} ${show(rep, speed)}`);
       }
     }
   }
