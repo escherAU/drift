@@ -5,13 +5,15 @@
 // Every rule at its own limit, no per-size exceptions, except that the meter's 4x view of L2 is printed and not judged (see NOT_JUDGED). The control: the same flow with each ramp stepped over in one tick (the old hard cut) must be flagged.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createFlashMeter } from './helpers-flash.js';
+import { shownMeter, FLASH_MODE, MODE_NOTE } from './helpers-flash-modes.js';
 import { arrive9000, stepFrames, stepSeconds, pickVision, VISIONS, FPS } from './helpers-driftman-panels.js';
 
 const SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [176, 58], [78, 24]];
 const RULES = [['l1.x1', (r) => r.l1.x1], ['l1.x4', (r) => r.l1.x4], ['l2.x1', (r) => r.l2.x1], ['l2.x4', (r) => r.l2.x4], ['l3', (r) => r.l3], ['r.x1', (r) => r.r.x1], ['r.x4', (r) => r.r.x4]];
 const pc = (x) => (x * 100).toFixed(1);
-const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+// the cell grid (the old reading) and the pixel grid (DRIFT-8 C2)
+const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
 // The shell's flows are held at 1x for L2 (the speed key reaches only the scene clock, so the meter's own 4x view of a menu or help ramp is a stress outside the
 // shell's speeds; the foil walk and the shelf are held the same way): l2.x4 is measured and printed but not judged. Every other rule is judged at its own limit.
 const NOT_JUDGED = new Set(['l2.x4']);
@@ -19,7 +21,7 @@ const failing = (rep) => RULES.filter(([n, get]) => !NOT_JUDGED.has(n) && !get(r
 const TABLE = [];
 
 async function run(cols, rows, id, speed, { hard = false, offset = 0 } = {}) {
-  const sh = await arrive9000(cols, rows, { speed });
+  const sh = await arrive9000(cols, rows, { speed, cmode: FLASH_MODE });
   const rt = sh.runtime();
   if (id !== 'rosette') pickVision(sh, id); else sh.key('esc');
   stepSeconds(sh, 0.6);
@@ -27,7 +29,7 @@ async function run(cols, rows, id, speed, { hard = false, offset = 0 } = {}) {
   while (rt.state().t < from + 20) stepFrames(sh, 9);
   assert.equal(sh.state().sceneId, id);
   if (offset > 0) sh.tick(offset / FPS); // offset is a fraction of a frame (0, 1/4, 1/2, 3/4): the clock phase against the scene's own steps
-  const meter = createFlashMeter(cols, rows, FPS);
+  const meter = shownMeter(cols, rows, FPS);
   const push = (f) => meter.push(f);
   const rest = (s) => stepSeconds(sh, s, push);
   const press = (key) => {
@@ -44,7 +46,7 @@ async function run(cols, rows, id, speed, { hard = false, offset = 0 } = {}) {
 }
 
 for (const [cols, rows] of SIZES) {
-  test(`panels flash ${cols}x${rows}: menu open/close and help open/close over Rosette, Cortex and Bloomfall at 1x and 4x pass L1, L2, L3 and R`, async () => {
+  test(`panels flash${MODE_NOTE} ${cols}x${rows}: menu open/close and help open/close over Rosette, Cortex and Bloomfall at 1x and 4x pass L1, L2, L3 and R`, async () => {
     const bad = [];
     for (const id of VISIONS) {
       for (const speed of [1, 4]) {
@@ -57,7 +59,7 @@ for (const [cols, rows] of SIZES) {
   });
 }
 
-test('panels flash control: each panel cut in at once (the ramp stepped in one tick) over the Rosette is flagged where the panel is a large part of the screen (80x24, 78x24)', async () => {
+test(`panels flash control${MODE_NOTE}: each panel cut in at once (the ramp stepped in one tick) over the Rosette is flagged where the panel is a large part of the screen (80x24, 78x24)`, async () => {
   const lines = [], unflagged = [];
   for (const [cols, rows] of SIZES) {
     const rep = await run(cols, rows, 'rosette', 1, { hard: true });
@@ -69,7 +71,7 @@ test('panels flash control: each panel cut in at once (the ramp stepped in one t
 });
 
 
-test('panels flash: the clock phase (the first tick lands 0, 1/4, 1/2 and 3/4 of a frame into the step) at 120x40 and 80x24, runtime 4x, over every vision: all judged rules pass', async () => {
+test(`panels flash${MODE_NOTE}: the clock phase (the first tick lands 0, 1/4, 1/2 and 3/4 of a frame into the step) at 120x40 and 80x24, runtime 4x, over every vision: all judged rules pass`, async () => {
   const bad = [];
   for (const [cols, rows] of [[120, 40], [80, 24]]) {
     for (const id of VISIONS) {
@@ -83,7 +85,7 @@ test('panels flash: the clock phase (the first tick lands 0, 1/4, 1/2 and 3/4 of
   assert.deepEqual(bad, []);
 });
 
-test('panels flash TABLE: every measured value', () => {
-  console.log(['TABLE panels flash meter (x1/x4 views; limits L1 25, L2 25, L3 30, R 25)', ...TABLE.map((l) => '  ' + l)].join('\n'));
+test(`panels flash TABLE${MODE_NOTE}: every measured value`, () => {
+  console.log([`TABLE panels flash meter${MODE_NOTE} (x1/x4 views; limits L1 25, L2 25, L3 30, R 25; cell grid | pixel grid)`, ...TABLE.map((l) => '  ' + l)].join('\n'));
   assert.ok(TABLE.length > 0);
 });

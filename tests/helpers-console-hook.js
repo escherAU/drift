@@ -140,13 +140,13 @@ export const SHELL_SKIN = { ...driftmanSkin, frame: { ...driftmanSkin.frame, sho
 const HOST = { persist() {}, quit() {}, leaveToClassic() {} };
 
 // A shell with one console cartridge (install-folder, through the real loader) already inserted: screen 'insert' at t = 0. -> { sh, cart }
-export function insertedShell(cols, rows, { source, manifest = {}, skin = CART_SKIN, loadScenes = realLoadScenes, start = true, seed = 1 } = {}) {
+export function insertedShell(cols, rows, { source, manifest = {}, skin = CART_SKIN, loadScenes = realLoadScenes, start = true, seed = 1, cmode = 'truecolor' } = {}) {
   const root = tmpRoot('drift-hook-sh-');
   writeConsoleCart(root, 'fx', { source, manifest, skin });
   const d = discoverCartridges({ dirs: [{ dir: root, trusted: true }] });
   if (d.errors.length) throw new Error('fixture cartridge refused: ' + JSON.stringify(d.errors));
   const sh = createShell({
-    cols, rows, cartridges: d.cartridges, seed, cmode: 'truecolor', loadScenes, host: HOST,
+    cols, rows, cartridges: d.cartridges, seed, cmode, loadScenes, host: HOST,
     consts: { SPEEDS, DISSOLVE_SECONDS: 2, DEFAULT_FADE_SECONDS: 15 },
     ...(start ? { start: { cartridge: 'fx' } } : {}),
   });

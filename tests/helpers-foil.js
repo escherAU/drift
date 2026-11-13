@@ -48,11 +48,11 @@ export function foilRoot({ withFoil = true, hues = SAM_HUES, art = 'dense' } = {
 export const HOST = { persist() {}, quit() {}, leaveToClassic() {} };
 
 // -> { sh, carts } a library shell on the foil shelf, with the cursor on `select` (default foil-a), idle clock at 0
-export function foilShell(cols, rows, { root = foilRoot(), select = 'foil-a', seed = 1, start = null, shellOpts = {} } = {}) {
+export function foilShell(cols, rows, { root = foilRoot(), select = 'foil-a', seed = 1, start = null, shellOpts = {}, cmode = 'truecolor' } = {}) {
   const d = discoverCartridges({ dirs: [{ dir: root, trusted: true }] });
   if (d.errors.length) throw new Error('fixture cartridge refused: ' + JSON.stringify(d.errors));
   const sh = createShell({
-    cols, rows, cartridges: d.cartridges, seed, cmode: 'truecolor', host: HOST, lastCartridge: select,
+    cols, rows, cartridges: d.cartridges, seed, cmode, host: HOST, lastCartridge: select,
     consts: { SPEEDS: [1, 2, 3, 4], DISSOLVE_SECONDS: 2, DEFAULT_FADE_SECONDS: 15 },
     ...(start ? { start } : {}),
     ...shellOpts,

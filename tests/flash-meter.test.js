@@ -368,7 +368,7 @@ test('report shape and meter edge cases', () => {
     assert.equal('binding' in c, false);
     assert.ok(c.details && 'frame' in c.details && 'timeS' in c.details);
   }
-  assert.deepEqual(Object.keys(rep).sort(), ['cols', 'field', 'fps', 'frames', 'l1', 'l2', 'l3', 'pass', 'r', 'rows'].sort());
+  assert.deepEqual(Object.keys(rep).sort(), ['cell', 'cols', 'field', 'fps', 'frames', 'l1', 'l2', 'l3', 'pass', 'pixel', 'r', 'rows'].sort()); // DRIFT-8 C2: cell and pixel are the two readings, l1 ... r the worse of them (tests/flash-halves.test.js)
   assert.throws(() => m.push(newFrame(40, 11)), /size/);
   // no allocation per push after warm-up: heap growth over 300 pushes stays small
   const mm = createFlashMeter(120, 40, 18), fr = strobe(120, 40);

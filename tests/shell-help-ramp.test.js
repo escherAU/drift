@@ -10,7 +10,8 @@ import { createShell } from '../src/shell/shell.js';
 import { MENU_RAMP_SECONDS } from '../src/shell/runtime.js';
 import { driftmanSkin } from '../src/shell/driftman.js';
 import { RGB_CELL, makeGlow, makePlain, sameCell } from './helpers-fullcolour.js';
-import { createFlashMeter, FLASH_FRACTION } from './helpers-flash.js';
+import { FLASH_FRACTION } from './helpers-flash.js';
+import { shownMeter } from './helpers-flash-modes.js';
 import { boot, grab, DT, ESC, SIX } from './helpers-night-drive-shell.js';
 import { mkShell, runCartridge } from './helpers-shell.js';
 
@@ -20,14 +21,14 @@ const FPS = 18;
 const HARD_CEILING = 0.4;
 const flush = async () => { for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0)); };
 
-async function running(cols, rows, { plain = false, speed = 4 } = {}) {
+async function running(cols, rows, { plain = false, speed = 4, cmode = 'truecolor' } = {}) {
   const scene = plain ? makePlain() : makeGlow();
   const progs = [{ id: 'main', title: 'Main', transition: 'dissolve', scenes: [scene.id], sceneSeconds: 20 }];
   const manifest = { id: 'fx', title: 'Fixture', blurb: 'b', facts: [], programs: progs, start: 'main', scenes: [], labelHue: '#7FB069' };
   const cart = { id: 'fx', title: 'Fixture', manifest, locked: false, runtime: 'cartridge', label: ['+----+', '| FX |', '+----+'], labelInk: null, skin: SKIN, boot: null, trusted: true };
   const scenes = [{ id: scene.id, kind: 'cells', family: 'cells', scene }];
   const sh = createShell({
-    cols, rows, cartridges: [cart], seed: 1, cmode: 'truecolor', loadScenes: async () => ({ scenes, errors: [] }),
+    cols, rows, cartridges: [cart], seed: 1, cmode, loadScenes: async () => ({ scenes, errors: [] }),
     host: { persist() {}, quit() {}, leaveToClassic() {} },
     consts: { SPEEDS, DISSOLVE_SECONDS: 2, DEFAULT_FADE_SECONDS: 15 },
     start: { cartridge: 'fx', skipBoot: true },
@@ -149,9 +150,9 @@ test('key frame: the first step after h changes 40% or less of the cells at seve
 
 // The flash meter over: the scene, h (the panel ramps in), 1 s of rest, h (the panel ramps out), 1 s of rest.
 // `hard` is the control: the same sequence with the ramp stepped over in one tick (the old hard cut).
-async function meterRun(cols, rows, speed, hard) {
-  const sh = await running(cols, rows, { speed });
-  const meter = createFlashMeter(cols, rows, FPS);
+async function meterRun(cols, rows, speed, hard, mode = 'truecolor') {
+  const sh = await running(cols, rows, { speed, cmode: mode });
+  const meter = shownMeter(cols, rows, FPS, mode);
   for (let k = 0; k < 6; k++) { meter.push(sh.frame()); sh.tick(1 / FPS); }
   for (let pass = 0; pass < 2; pass++) {
     sh.key('h');
@@ -169,25 +170,28 @@ const bad = (rep, tag) => {
   return out;
 };
 
-test('flash meter over h open, 1 s, h close at 1x and 4x runtime speed, six sizes: L1, L2, L3 and R pass; the hard cut fails L3', async () => {
+// DRIFT-8 C2: run in truecolor and again in 256 colours (the shell built with cmode '256', each frame shown to the meter through the 256-colour reducer); the meter reads the cell and the pixel grid
+for (const mode of ['truecolor', '256']) {
+test('flash meter over h open, 1 s, h close at 1x and 4x runtime speed, six sizes: L1, L2, L3 and R pass; the hard cut fails L3' + (mode === '256' ? ' [256 colours]' : ''), async () => {
   const lines = [], failed = [], controlPasses = [];
   for (const [cols, rows] of METER_SIZES) {
     for (const speed of [1, 4]) {
-      const rep = await meterRun(cols, rows, speed, false);
-      const ctl = await meterRun(cols, rows, speed, true);
+      const rep = await meterRun(cols, rows, speed, false, mode);
+      const ctl = await meterRun(cols, rows, speed, true, mode);
       lines.push(`${cols}x${rows} ${speed}x: L1 ${p(rep.l1.x1)}/${p(rep.l1.x4)}, L2 ${p(rep.l2.x1)}/${p(rep.l2.x4)}, L3 ${p(rep.l3)}, R ${p(rep.r.x1)}/${p(rep.r.x4)}  | hard cut: L2 ${p(ctl.l2.x1)}/${p(ctl.l2.x4)}, L3 ${p(ctl.l3)}`);
       failed.push(...bad(rep, `${cols}x${rows} ${speed}x`));
       if (ctl.l3.pass) controlPasses.push(`${cols}x${rows} ${speed}x ${p(ctl.l3)}`);
       assert.ok(rep.l3.worstFraction <= FLASH_FRACTION);
     }
   }
-  console.log(['TABLE help ramp flash meter (x1/x4 windows)', ...lines.map((l) => '  ' + l)].join('\n'));
+  console.log([`TABLE help ramp flash meter (${mode}; x1/x4 windows; worse of the cell and the pixel grid)`, ...lines.map((l) => '  ' + l)].join('\n'));
   assert.deepEqual(failed, []);
   // the control: the old hard cut breaks L3 wherever the panel covers more than about a third of the screen (the three small layouts);
   // on the large ones the box is a small part of the screen and the cut passed by itself
   const stillPass = controlPasses.filter((x) => /^(80x24|78x24|40x10) /.test(x));
   assert.deepEqual(stillPass, [], 'the hard cut fails L3 at 80x24, 78x24 and 40x10');
 });
+}
 
 test('1x to 4x runtime speed and four clock phases: the ramp is real time, so every speed draws the same frames; and the scene stays frozen while the panel is open', async () => {
   const ref = new Map();

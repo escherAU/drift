@@ -69,11 +69,11 @@ const HOST = { persist() {}, quit() {}, leaveToClassic() {} };
 const SPEEDS = [1, 2, 3, 4];
 // speed: when given, the runtime plays at that speed from the start (every SPEEDS slot holds it; the runtime starts at slot 3), so a
 // test can ask for the scene clock at 1x, 2x or 4x without a key press (a key would cancel the menu's start-by-itself countdown).
-export function shell9000(cols, rows, { withHook = true, speed = null } = {}) {
+export function shell9000(cols, rows, { withHook = true, speed = null, cmode = 'truecolor' } = {}) {
   const d = discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] });
   if (d.errors.length) throw new Error('install cartridges refused: ' + JSON.stringify(d.errors));
   const sh = createShell({
-    cols, rows, cartridges: d.cartridges, seed: 1, cmode: 'truecolor', host: HOST,
+    cols, rows, cartridges: d.cartridges, seed: 1, cmode, host: HOST,
     consts: { SPEEDS: speed === null ? SPEEDS : [speed, speed, speed, speed], DISSOLVE_SECONDS: 2, DEFAULT_FADE_SECONDS: 15 },
     start: { cartridge: 'driftman-9000' },
     ...(withHook ? {} : { loadScenes: async (cart) => { const { loadScenes } = await import('../src/cartridge/loader.js'); const r = await loadScenes(cart); const { console: _c, ...rest } = r; return rest; } }),

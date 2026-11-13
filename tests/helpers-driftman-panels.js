@@ -24,7 +24,7 @@ const SENTINEL_GLYPH = 1, SENTINEL_SHADE = 200;
 
 // A shell with the 9000 run through insert and boot to the running screen (menu open, countdown just started). speed: the runtime's speed from the start.
 export async function arrive9000(cols, rows, opts = {}) {
-  const sh = shell9000(cols, rows, opts);
+  const sh = shell9000(cols, rows, opts); // opts: { speed, cmode, withHook }
   await flush();
   for (let k = 0; k < 900 && sh.state().screen !== 'running'; k++) { sh.frame(); sh.tick(DT); if (k % 10 === 0) await flush(); }
   assert.equal(sh.state().screen, 'running', `${cols}x${rows}: the 9000 reached the running screen`);

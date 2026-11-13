@@ -22,7 +22,9 @@ import rosette, { makeRosette } from '../cartridges/driftman-9000/scenes/rosette
 const FPS = 18;
 const SECONDS = 66;
 const pc = (x) => (x * 100).toFixed(1);
-const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+// the cell grid (the old reading) and the pixel grid (DRIFT-8 C2)
+const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
 const failed = (rep) => [['l1.x1', rep.l1.x1], ['l1.x4', rep.l1.x4], ['l2.x1', rep.l2.x1], ['l2.x4', rep.l2.x4], ['l3', rep.l3], ['r.x1', rep.r.x1], ['r.x4', rep.r.x4]].filter(([, r]) => !r.pass).map(([id]) => id);
 
 // One solo run through the composer. reduce256: the frames as 256-colour output would show them.
@@ -82,7 +84,7 @@ test('rosette 256 colours: the output is not garbage, at least 16 distinct 256-c
 
 // ---- 3. the controls: the meter bites on this path
 
-test('rosette controls: the designer\'s contour (L 0.82, no hue turn) fails the meter at 120x40 and 80x24; stage A\'s 0.78 passes in truecolor and fails in 256 colours; the shipped contour passes both', () => {
+test('rosette controls: the designer\'s contour (L 0.82, no hue turn) fails the meter at 120x40 and 80x24; stage A\'s 0.78 passes in truecolor on the cell grid (the reading DRIFT-7 had) but fails on the pixel grid and in 256 colours; the shipped contour passes both', () => {
   for (const sz of ['120x40', '80x24']) {
     const [cols, rows] = sz.split('x').map(Number);
     const sams = run(makeRosette(0.82, 0), cols, rows, { seconds: 30 });
@@ -90,7 +92,9 @@ test('rosette controls: the designer\'s contour (L 0.82, no hue turn) fails the 
     assert.ok(failed(sams).includes('l2.x1') && failed(sams).includes('l2.x4'), `${sz}: ${failed(sams)}`);
     const a = makeRosette(0.78, 0);
     const aTrue = run(a, cols, rows, { seconds: 30 }), a256 = run(a, cols, rows, { seconds: 30, reduce256: true });
-    assert.deepEqual(failed(aTrue), [], `${sz}: L 0.78 in truecolor: ${show(aTrue)}`);
+    // DRIFT-8 C2: on the old cell grid 0.78 passes truecolor (that was the DRIFT-7 reading); per pixel it fails L2 at 4x, as the DRIFT-7 challenge measured (any step of 0.10 or more counts the same)
+    assert.deepEqual(failed(aTrue.cell), [], `${sz}: L 0.78 in truecolor, cell grid: ${show(aTrue)}`);
+    assert.deepEqual(failed(aTrue.pixel), ['l2.x4'], `${sz}: L 0.78 in truecolor, pixel grid: ${show(aTrue)}`);
     assert.ok(failed(a256).includes('l2.x4'), `${sz}: L 0.78 in 256 colours must fail L2 at 4x: ${show(a256)}`);
     console.log(`CONTROL ${sz} L 0.82 truecolor ${show(sams)} | L 0.78 truecolor ${show(aTrue)} | L 0.78 256 ${show(a256)}`);
     const shipped = run(rosette, cols, rows, { seconds: 30 }), shipped256 = run(rosette, cols, rows, { seconds: 30, reduce256: true });

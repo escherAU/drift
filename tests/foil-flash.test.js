@@ -15,7 +15,7 @@
 // Sizes: the three usual ones and the size just above each layout breakpoint (full 88x39, extra-large 176x58, compact 78x24).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createFlashMeter } from './helpers-flash.js';
+import { shownMeter, FLASH_MODE, MODE_NOTE } from './helpers-flash-modes.js';
 import { shelfLayout, LABEL_W, LABEL_H } from '../src/shell/library.js';
 import { sizeTier } from '../src/shell/ui.js';
 import { foilRoot, foilShell, copyOf, DT, FPS } from './helpers-foil.js';
@@ -36,12 +36,25 @@ const WALK_RULES = RULES.filter(([name]) => !name.endsWith('.x4'));
 // Re-measured for the scrub (DRIFT-7 item 2b): the walk's last two presses used to be a queued step; now they scrub, and the console text and dots (the
 // answer to the press) add a few hot cells. Measured 6.429, 0, 2.500, 9.231, 3.475, 0 percent; the 25% limit itself is untouched.
 const WALK_L2 = { '120x40': 0.065, '80x24': 0.001, '240x67': 0.026, '88x39': 0.093, '176x58': 0.035, '78x24': 0.001 };
-const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+// The same ceilings on the PIXEL grid (DRIFT-8 C2): the largest pixel-grid value measured (both arts, foil on and off for the walk; foil and no foil for the flows) x 1.10,
+// rounded up to the next tenth of a point, capped at the rule's own 25 % (a ceiling above the limit would say nothing). The measured values (%), in the table this test prints:
+//   walk l2.x1     120x40 6.43, 80x24 0.00, 240x67 2.50, 88x39 9.23, 176x58 3.47, 78x24 0.00 (0.1 as a hair where it measures nothing)
+//   insert+boot l2.x1 / l2.x4 / eject l2.x1
+//                  120x40 4.29 / 17.68 / 0.80   80x24 9.72 / 18.52 / 2.55   240x67 2.64 / 6.41 / 0.38   88x39 9.10 / 23.85 / 2.69   176x58 4.45 / 10.13 / 0.47   78x24 7.69 / 16.83 / 2.64
+// (88x39 insert at 4x is 23.85 % of 25 on the pixel grid and 21.54 % on the cell grid, with the foil and without it: the standard insert flow at a speed the shell never plays it at.)
+const PIXEL_WALK_L2 = { '120x40': 0.071, '80x24': 0.001, '240x67': 0.028, '88x39': 0.102, '176x58': 0.039, '78x24': 0.001 };
+const PIXEL_CEIL_L2 = {
+  '120x40': [0.048, 0.195, 0.009], '80x24': [0.107, 0.204, 0.029], '240x67': [0.030, 0.071, 0.005], '88x39': [0.101, 0.25, 0.030], '176x58': [0.049, 0.112, 0.006], '78x24': [0.085, 0.186, 0.030],
+};
+const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+// the cell grid (the old reading) and the pixel grid (DRIFT-8 C2)
+const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
+const TRUECOLOR = FLASH_MODE === 'truecolor'; // the ceilings are measured on truecolor; in 256 colours every rule is held at its own limit and the numbers are printed
 
 // the 30 s at rest: wait for nothing, the library is the start screen
 function rest(cols, rows, { withFoil = true, seconds = 30, offset = 0, filter = null, art = 'dense' } = {}) {
-  const { sh } = foilShell(cols, rows, { root: foilRoot({ withFoil, art }) });
-  const meter = createFlashMeter(cols, rows, FPS);
+  const { sh } = foilShell(cols, rows, { root: foilRoot({ withFoil, art }), cmode: FLASH_MODE });
+  const meter = shownMeter(cols, rows, FPS);
   if (offset > 0) sh.tick(offset);
   for (let k = 0; k < seconds * FPS; k++) {
     const f = sh.frame();
@@ -54,8 +67,8 @@ function rest(cols, rows, { withFoil = true, seconds = 30, offset = 0, filter = 
 // the walk
 const WALK = [[8, 'libNext'], [13, 'libPrev'], [18, 'libPrev'], [22, 'libNext'], [26, 'libNext'], [26.3, 'libPrev']];
 function walk(cols, rows, { withFoil = true, offset = 0, art = 'dense' } = {}) {
-  const { sh } = foilShell(cols, rows, { root: foilRoot({ withFoil, art }) });
-  const meter = createFlashMeter(cols, rows, FPS);
+  const { sh } = foilShell(cols, rows, { root: foilRoot({ withFoil, art }), cmode: FLASH_MODE });
+  const meter = shownMeter(cols, rows, FPS);
   if (offset > 0) sh.tick(offset);
   let clock = 0, next = 0;
   const path = [sh.state().cartridge];
@@ -87,9 +100,9 @@ function wobble(cols, rows) {
 
 // insert + boot until the cartridge runs (plus a second of it), then the eject; the foil is frozen at t = 0 for all of it
 async function insertFlow(cols, rows, withFoil) {
-  const { sh } = foilShell(cols, rows, { root: foilRoot({ withFoil, art: 'delza' }), start: { cartridge: 'foil-a' } });
+  const { sh } = foilShell(cols, rows, { root: foilRoot({ withFoil, art: 'delza' }), start: { cartridge: 'foil-a' }, cmode: FLASH_MODE });
   await flush();
-  const ins = createFlashMeter(cols, rows, FPS);
+  const ins = shownMeter(cols, rows, FPS);
   let sawFoil = false;
   for (let n = 0; sh.state().screen !== 'running' && n < 900; n++) {
     const f = sh.frame();
@@ -101,7 +114,7 @@ async function insertFlow(cols, rows, withFoil) {
   assert.equal(sh.state().screen, 'running', `${cols}x${rows} reached the running screen`);
   for (let k = 0; k < FPS; k++) { ins.push(sh.frame()); sh.tick(DT); }
   sh.key('e');
-  const eje = createFlashMeter(cols, rows, FPS);
+  const eje = shownMeter(cols, rows, FPS);
   for (let n = 0; sh.state().screen === 'eject' && n < 600; n++) { eje.push(sh.frame()); sh.tick(DT); }
   for (let k = 0; k < 6; k++) { eje.push(sh.frame()); sh.tick(DT); }
   return { ins: ins.report(), eje: eje.report(), sawFoil };
@@ -109,7 +122,7 @@ async function insertFlow(cols, rows, withFoil) {
 
 const TABLE = [];
 for (const [cols, rows] of SIZES) {
-  test(`foil flash ${cols}x${rows}: 30 s of the shimmer at rest passes L1, L2, L3 and R at 1x and 4x; the walk over the shelf passes every 1x rule and sits under its absolute L2 ceiling (dense label and Delza's art, foil on and off); a brightness-modulating foil is flagged`, () => {
+  test(`foil flash${MODE_NOTE} ${cols}x${rows}: 30 s of the shimmer at rest passes L1, L2, L3 and R at 1x and 4x; the walk over the shelf passes every 1x rule and sits under its absolute L2 ceiling (dense label and Delza's art, foil on and off); a brightness-modulating foil is flagged`, () => {
     const at = `${cols}x${rows}`.padEnd(8);
     const r = rest(cols, rows);
     TABLE.push(at + 'rest   foil     ' + show(r));
@@ -126,8 +139,9 @@ for (const [cols, rows] of SIZES) {
       const bad = [];
       for (const [flow, x] of [['foil', w.rep], ['none', b.rep]]) {
         for (const [name, get] of WALK_RULES) { const r = get(x); if (!r.pass) bad.push(`${flow} ${name}: ${pc(r.worstFraction)}% is over ${pc(r.limit)}%`); }
-        const ceil = WALK_L2[`${cols}x${rows}`];
-        if (x.l2.x1.worstFraction > ceil) bad.push(`${flow} walk l2.x1: ${pc(x.l2.x1.worstFraction)}% is over its ceiling ${pc(ceil)}%`);
+        const ceil = WALK_L2[`${cols}x${rows}`], pceil = PIXEL_WALK_L2[`${cols}x${rows}`];
+        if (TRUECOLOR && x.cell.l2.x1.worstFraction > ceil) bad.push(`${flow} walk l2.x1: ${pc(x.cell.l2.x1.worstFraction)}% (cells) is over its ceiling ${pc(ceil)}%`);
+        if (TRUECOLOR && x.pixel.l2.x1.worstFraction > pceil) bad.push(`${flow} walk l2.x1: ${pc(x.pixel.l2.x1.worstFraction)}% (pixels) is over its ceiling ${pc(pceil)}%`);
       }
       assert.deepEqual(bad, [], `${cols}x${rows} ${art}`);
     }
@@ -152,25 +166,31 @@ for (const [cols, rows] of SIZES) {
 }
 
 for (const [cols, rows] of SIZES) {
-  test(`foil flash ${cols}x${rows}: insert + boot (1x and 4x) and eject (1x) of a foil cartridge (the foil frozen at t = 0) pass every rule and sit under the absolute L2 ceilings`, async () => {
+  test(`foil flash${MODE_NOTE} ${cols}x${rows}: insert + boot (1x and 4x) and eject (1x) of a foil cartridge (the foil frozen at t = 0) pass every rule and sit under the absolute L2 ceilings`, async () => {
     const a = await insertFlow(cols, rows, true), b = await insertFlow(cols, rows, false);
     TABLE.push(`${cols}x${rows}`.padEnd(8) + 'insert foil      ' + show(a.ins) + ' | eject ' + show(a.eje));
     TABLE.push(`${cols}x${rows}`.padEnd(8) + 'insert no foil   ' + show(b.ins) + ' | eject ' + show(b.eje));
     const tier = sizeTier(cols, rows);
     assert.equal(a.sawFoil, tier === 'full' || tier === 'compact', 'the insert draws the foil label (frozen) at the tiers that show it');
     const bad = [];
-    const [i1, i4, e1] = CEIL_L2[`${cols}x${rows}`];
+    const [i1, i4, e1] = CEIL_L2[`${cols}x${rows}`], [pi1, pi4, pe1] = PIXEL_CEIL_L2[`${cols}x${rows}`];
     for (const [flow, x] of [['insert+boot', a.ins], ['eject', a.eje]]) {
       for (const [name, get] of RULES) { const r = get(x); if (!r.pass) bad.push(`${flow} ${name}: ${pc(r.worstFraction)}% is over ${pc(r.limit)}%`); }
     }
-    for (const [name, r, ceil] of [['insert+boot l2.x1', a.ins.l2.x1, i1], ['insert+boot l2.x4', a.ins.l2.x4, i4], ['eject l2.x1', a.eje.l2.x1, e1]]) {
-      if (r.worstFraction > ceil) bad.push(`${name}: ${pc(r.worstFraction)}% is over its ceiling ${pc(ceil)}%`);
+    if (TRUECOLOR) {
+      // the ceilings are on the cell grid (the reading they were measured on) and, new in DRIFT-8 C2, on the pixel grid
+      for (const [name, r, ceil] of [['insert+boot l2.x1', a.ins.cell.l2.x1, i1], ['insert+boot l2.x4', a.ins.cell.l2.x4, i4], ['eject l2.x1', a.eje.cell.l2.x1, e1]]) {
+        if (r.worstFraction > ceil) bad.push(`${name}: ${pc(r.worstFraction)}% (cells) is over its ceiling ${pc(ceil)}%`);
+      }
+      for (const [name, r, ceil] of [['insert+boot l2.x1', a.ins.pixel.l2.x1, pi1], ['insert+boot l2.x4', a.ins.pixel.l2.x4, pi4], ['eject l2.x1', a.eje.pixel.l2.x1, pe1]]) {
+        if (r.worstFraction > ceil) bad.push(`${name}: ${pc(r.worstFraction)}% (pixels) is over its ceiling ${pc(ceil)}%`);
+      }
     }
     assert.deepEqual(bad, []);
   });
 }
 
-test('foil flash: the shimmer is clock-stepped, so run it at four phases of the frame clock (the first tick lands 0, 1/4, 1/2 and 3/4 of a frame into the step) and at both usual sizes: all rules pass', () => {
+test(`foil flash${MODE_NOTE}: the shimmer is clock-stepped, so run it at four phases of the frame clock (the first tick lands 0, 1/4, 1/2 and 3/4 of a frame into the step) and at both usual sizes: all rules pass`, () => {
   for (const [cols, rows] of [[120, 40], [80, 24]]) {
     for (const k of [0, 1, 2, 3]) {
       const r = rest(cols, rows, { seconds: 12, offset: (k / 4) * DT });
@@ -180,7 +200,7 @@ test('foil flash: the shimmer is clock-stepped, so run it at four phases of the 
   }
 });
 
-test('foil flash TABLE: every measured value at the six sizes', () => {
-  console.log(['TABLE foil flash meter (x1/x4; limits L1 25, L2 25, L3 30, R 25)', ...TABLE.map((l) => '  ' + l)].join('\n'));
+test(`foil flash TABLE${MODE_NOTE}: every measured value at the six sizes`, () => {
+  console.log([`TABLE foil flash meter${MODE_NOTE} (x1/x4; limits L1 25, L2 25, L3 30, R 25; cell grid | pixel grid)`, ...TABLE.map((l) => '  ' + l)].join('\n'));
   assert.ok(TABLE.length === 0 || TABLE.length >= SIZES.length * 4);
 });

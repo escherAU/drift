@@ -113,6 +113,16 @@ export function brightnessJumps(a, b, cols) {
 // fraction is the largest share of hot cells in any field at any frame (found with a summed-area table of the hot
 // grid). It passes when the worst fraction is <= FIELD_FRACTION (0.25).
 //
+// Two grids (DRIFT-8 C2). The scenes draw in half-block pixels, two to a cell, and a meter that blends the halves of a cell into
+// one value cannot see two halves swapping colour (the DRIFT-7 challenge, finding 2). So every frame is judged twice, and every rule
+// reports the WORSE of the two readings (the larger worstFraction, the cell grid's on a tie) and passes only when BOTH pass:
+//   the cell grid   cols x rows, the cell's Y from the whole glyph's coverage: what this meter has always read (bit-identical to before C2)
+//   the pixel grid  cols x 2 rows, the top and the bottom pixel of every cell, each from its half's coverage (glyphHalves), with a field of the
+//                   same area: ceil(cols/3) columns by 2 * ceil(rows/3) pixel rows
+// A straight switch to pixels would loosen a thin feature (a patch whose top halves flicker fills half the pixels it fills cells), which is why
+// the cell grid stays. rep.cell and rep.pixel are the two readings, each with the rule set below; rep.l1 ... rep.r are the worse of them, with
+// details.grid saying which grid the number comes from. The ceilings that tests measured on the cell grid stay on rep.cell; new per-pixel ceilings go on rep.pixel.
+//
 // Rules:  l1.x1, l1.x4  WCAG: cells with >= 7 transitions in 1 s, at 1x and 4x.
 //         l2.x1, l2.x4  in-house: >= 3 transitions in 1 s, at 1x and 4x. Both are binding: a scene must stay quiet
 //                       when the same frames are played four times as fast (a 2 s bloom fails l2.x4).
@@ -123,8 +133,10 @@ export function brightnessJumps(a, b, cols) {
 // report() -> {
 //   cols, rows, fps, frames, field: { w, h },
 //   l1: { x1: RULE, x4: RULE }, l2: { x1: RULE, x4: RULE }, l3: STEP, r: { x1: RULE, x4: RULE },
-//   pass,        // every rule passes
+//   pass,        // every rule passes, on both grids
+//   cell, pixel, // { field, frames, l1, l2, l3, r, pass } each: the two readings the above are the worse of
 // }
+// (meter.cellY(i) is the cell's Y; meter.pixelY(i, half) the top (0) or bottom (1) pixel's.)
 // RULE = { worstFraction, limit, pass, details: { frame, timeS, field: { x, y, w, h }, hotCells } }
 //        (frame = frame index of the worst reading; timeS = its time at that speed; field = top-left cell and size of
 //         the worst field; hotCells = hot cells in it)
@@ -174,6 +186,39 @@ function buildCoverage() {
 export function glyphCoverage(g) {
   if (!COVERAGE) COVERAGE = buildCoverage();
   return g >= 0 && g < 65536 ? COVERAGE[g] : DEFAULT_COVERAGE;
+}
+
+// ---- half-cell coverage (DRIFT-8 C2)
+//
+// Every cell is two pixels stacked, the way the scenes draw (a half block, or a space in one colour). Each glyph gets the share of
+// its TOP half and of its BOTTOM half that it inks, so that (top + bottom) / 2 is glyphCoverage for every glyph:
+//   upper half block U+2580: 1 / 0. Lower 1/8 .. 7/8 blocks U+2581-2587 fill the bottom first (the lower half block holds 4/8): bottom
+//   min(i, 4) / 4, top max(0, i - 4) / 4. Upper 1/8 block U+2594: top 1/4, bottom 0. Left and right blocks, the shades and the full
+//   block ink both halves alike. Quadrants U+2596-259F by their corners. Braille: the top four dots (rows 1-2, bits 0x1b) over the
+//   bottom four (rows 3-4, bits 0xe4), each out of 4. Every other glyph is the same in both halves (its glyphCoverage).
+const QUADRANTS = [[0, 0.5], [0, 0.5], [0.5, 0], [0.5, 1], [0.5, 0.5], [1, 0.5], [1, 0.5], [0.5, 0], [0.5, 0.5], [0.5, 1]]; // U+2596-259F [top, bottom]
+let HALVES = null;
+function buildHalves() {
+  if (!COVERAGE) COVERAGE = buildCoverage();
+  const top = Float64Array.from(COVERAGE), bot = Float64Array.from(COVERAGE);
+  top[0x2580] = 1; bot[0x2580] = 0;
+  for (let i = 1; i <= 7; i++) { bot[0x2580 + i] = Math.min(i, 4) / 4; top[0x2580 + i] = Math.max(0, i - 4) / 4; }
+  top[0x2594] = 0.25; bot[0x2594] = 0;
+  for (let i = 0; i < QUADRANTS.length; i++) { top[0x2596 + i] = QUADRANTS[i][0]; bot[0x2596 + i] = QUADRANTS[i][1]; }
+  const dots = (m) => { let c = 0; for (; m; m >>= 1) c += m & 1; return c; };
+  for (let m = 0; m < 256; m++) { top[0x2800 + m] = dots(m & 0x1b) / 4; bot[0x2800 + m] = dots(m & 0xe4) / 4; }
+  HALVES = { top, bot };
+}
+// [top, bottom] coverage of a glyph
+export function glyphHalves(g) {
+  if (!HALVES) buildHalves();
+  return g >= 0 && g < 65536 ? [HALVES.top[g], HALVES.bot[g]] : [DEFAULT_COVERAGE, DEFAULT_COVERAGE];
+}
+
+// The pixel field: a third of the columns by two pixel rows for each cell row of the cell field (the same area as the cell field).
+export function pixelFieldSize(cols, rows) {
+  const f = fieldSize(cols, rows);
+  return { w: f.w, h: 2 * f.h };
 }
 
 export function fieldSize(cols, rows) {
@@ -251,100 +296,163 @@ export function createWindowCounter(cols, rows, fw, fh) {
   };
 }
 
-export function createFlashMeter(cols, rows, fps) {
-  const n = cols * rows;
-  const field = fieldSize(cols, rows);
-  const fieldCells = field.w * field.h;
-  const win1 = Math.max(1, Math.round(fps)), win4 = win1 * FAST_SPEED;
-  const Y = new Float64Array(n), prevY = new Float64Array(n), RV = new Float64Array(n), RS = new Uint8Array(n);
+// A grid of values (one per pixel or one per cell) with the whole rule set on it: swing trackers, transition logs,
+// hot grids and a field window. The meter runs two of these side by side (see createFlashMeter).
+//   put(i, y, rv, rs, k)   the next luminance, red value and red flag of item i at frame k (call only for items whose
+//                          inputs changed since the previous frame: an identical input cannot complete a transition)
+//   end(k)                 close frame k: the L3 step count and the hot grids (a cell can only be hot while its
+//                          latest transition is under the 4x window old, so older cells are skipped)
+function createGrid(w, h, fw, fh, win1, win4) {
+  const n = w * h;
+  const Y = new Float64Array(n);
   const lumTracker = createSwingTracker(n, { swing: TRANSITION_SWING, darkSide: DARK_SIDE_MAX });
   const redTracker = createSwingTracker(n, { swing: RED_SWING, strict: true, gate: true });
   const lumLog = createTransitionLog(n, L1_COUNT), redLog = createTransitionLog(n, R_COUNT);
-  const counter = createWindowCounter(cols, rows, field.w, field.h);
-  const mk = (id, log, count, window, speed) => ({ id, log, count, window, speed, hot: new Uint8Array(n), best: { count: 0, x: 0, y: 0, frame: -1, hotCells: 0 } });
+  const counter = createWindowCounter(w, h, fw, fh);
+  const lastT = new Int32Array(n).fill(-1000000000), live = new Uint8Array(n);
+  const mk = (id, log, count, window, speed) => ({ id, log, count, window, speed, hot: new Uint8Array(n), total: 0, best: { count: 0, x: 0, y: 0, frame: -1, hotCells: 0 } });
   const specs = [
     mk('l1.x1', lumLog, L1_COUNT, win1, 1), mk('l1.x4', lumLog, L1_COUNT, win4, FAST_SPEED),
     mk('l2.x1', lumLog, L2_COUNT, win1, 1), mk('l2.x4', lumLog, L2_COUNT, win4, FAST_SPEED),
     mk('r.x1', redLog, R_COUNT, win1, 1), mk('r.x4', redLog, R_COUNT, win4, FAST_SPEED),
   ];
   const step = { count: 0, frame: -1 };
-  let k = -1;
+  let moved = 0;
+  const swingMin = TRANSITION_SWING - EPS;
+  return {
+    Y, field: { w: fw, h: fh },
+    put(i, y, rv, rs, k) {
+      if (k > 0) { const d = y - Y[i]; if ((d < 0 ? -d : d) >= swingMin) moved++; }
+      Y[i] = y;
+      if (lumTracker.step(i, y, 0)) { lumLog.add(i, k); lastT[i] = k; }
+      if (redTracker.step(i, rv, rs)) { redLog.add(i, k); lastT[i] = k; }
+    },
+    end(k) {
+      if (moved > step.count) { step.count = moved; step.frame = k; }
+      moved = 0;
+      const ns = specs.length;
+      for (let i = 0; i < n; i++) {
+        if (k - lastT[i] >= win4) {
+          if (live[i]) { live[i] = 0; for (let s = 0; s < ns; s++) { const sp = specs[s]; if (sp.hot[i]) { sp.hot[i] = 0; sp.total--; } } }
+          continue;
+        }
+        live[i] = 1;
+        for (let s = 0; s < ns; s++) {
+          const sp = specs[s];
+          const hv = sp.log.hot(i, sp.count, k, sp.window) ? 1 : 0;
+          if (hv !== sp.hot[i]) { sp.total += hv - sp.hot[i]; sp.hot[i] = hv; }
+        }
+      }
+      for (const sp of specs) {
+        if (sp.total > sp.best.count) { // a field cannot hold more than the screen does; only look when it could beat the best
+          const win = counter.best(sp.hot);
+          if (win.count > sp.best.count) sp.best = { count: win.count, x: win.x, y: win.y, frame: k, hotCells: win.count };
+        }
+      }
+    },
+    report(fps, frames) {
+      const fieldN = fw * fh;
+      const ruleOf = (sp) => {
+        const frac = sp.best.count / fieldN;
+        return {
+          worstFraction: frac, limit: FIELD_FRACTION, pass: frac <= FIELD_FRACTION,
+          details: {
+            frame: sp.best.frame, timeS: sp.best.frame < 0 ? 0 : sp.best.frame / (fps * sp.speed),
+            field: { x: sp.best.x, y: sp.best.y, w: fw, h: fh }, hotCells: sp.best.hotCells,
+          },
+        };
+      };
+      const [l1x1, l1x4, l2x1, l2x4, rx1, rx4] = specs.map(ruleOf);
+      const frac = step.count / n;
+      const l3 = {
+        worstFraction: frac, limit: STEP_FRACTION, pass: frac <= STEP_FRACTION,
+        details: { frame: step.frame, timeS: step.frame < 0 ? 0 : step.frame / fps, cells: step.count },
+      };
+      const all = [l1x1, l1x4, l2x1, l2x4, l3, rx1, rx4];
+      return { field: { w: fw, h: fh }, l1: { x1: l1x1, x4: l1x4 }, l2: { x1: l2x1, x4: l2x4 }, l3, r: { x1: rx1, x4: rx4 }, pass: all.every((r) => r.pass) };
+    },
+  };
+}
+
+// The worse of the cell and the pixel reading of one rule: the larger worstFraction (the cell's on a tie), and pass only
+// when both pass. details.grid names the grid the numbers come from.
+function worseOf(cell, pixel) {
+  const w = pixel.worstFraction > cell.worstFraction ? pixel : cell;
+  return { ...w, pass: cell.pass && pixel.pass, details: { ...w.details, grid: w === pixel ? 'pixel' : 'cell' } };
+}
+
+export function createFlashMeter(cols, rows, fps) {
+  const n = cols * rows;
+  const cf = fieldSize(cols, rows);
+  const pixelField = pixelFieldSize(cols, rows);
+  const win1 = Math.max(1, Math.round(fps)), win4 = win1 * FAST_SPEED;
+  const cellGrid = createGrid(cols, rows, cf.w, cf.h, win1, win4);
+  const pixGrid = createGrid(cols, 2 * rows, pixelField.w, pixelField.h, win1, win4);
+  // what each cell was made of last frame: an unchanged cell (same glyph, shade, fg, bg, same palette) is skipped
+  const pG = new Uint16Array(n), pS = new Uint8Array(n), pF = new Uint32Array(n), pB = new Uint32Array(n);
+  let prevPal, k = -1;
+  if (!COVERAGE) COVERAGE = buildCoverage();
+  if (!HALVES) buildHalves();
+  const TOP = HALVES.top, BOT = HALVES.bot;
 
   function push(frame, palette) {
     if (frame.cols !== cols || frame.rows !== rows) throw new Error(`flash meter size is ${cols}x${rows}, frame is ${frame.cols}x${frame.rows}`);
     const pal = palette || frame.palette;
     const { glyphs, shades, fg, bg } = frame;
     const fgT = pal && pal.fgRgb, bgT = pal && pal.bgRgb;
-    if (!COVERAGE) COVERAGE = buildCoverage();
     k++;
-    for (let i = 0; i < n; i++) {
-      const g = glyphs[i];
-      let s = shades ? shades[i] : METER_RGB_CELL;
-      let f, b;
-      if (s === METER_RGB_CELL) {
-        f = fg ? fg[i] : 0; b = bg ? bg[i] : 0;
-        if (b === METER_PALETTE_BG) b = bgT ? bgT[0] : 0;
-      } else {
-        if (g === 32) s = 0;
-        f = fgT ? fgT[s] : 0; b = bgT ? bgT[s] : 0;
-      }
-      const c = COVERAGE[g], d = 1 - c;
-      const r = c * SRGB_LIN[(f >>> 16) & 255] + d * SRGB_LIN[(b >>> 16) & 255];
-      const gr = c * SRGB_LIN[(f >>> 8) & 255] + d * SRGB_LIN[(b >>> 8) & 255];
-      const bl = c * SRGB_LIN[f & 255] + d * SRGB_LIN[b & 255];
-      Y[i] = 0.2126 * r + 0.7152 * gr + 0.0722 * bl;
-      const sum = r + gr + bl;
-      RS[i] = sum > 0 && r / sum >= RED_SATURATION ? 1 : 0;
-      const red = r - gr - bl;
-      RV[i] = red > 0 ? red * RED_SCALE : 0;
-    }
-    // L3: the share of all cells whose Y moved by the swing since the previous frame
-    if (k > 0) {
-      let moved = 0;
-      for (let i = 0; i < n; i++) if (Math.abs(Y[i] - prevY[i]) >= TRANSITION_SWING - EPS) moved++;
-      if (moved > step.count) { step.count = moved; step.frame = k; }
-    }
-    prevY.set(Y);
-    for (let i = 0; i < n; i++) {
-      if (lumTracker.step(i, Y[i], 0)) lumLog.add(i, k);
-      if (redTracker.step(i, RV[i], RS[i])) redLog.add(i, k);
-    }
-    for (const sp of specs) {
-      let total = 0;
-      const hot = sp.hot, log = sp.log, count = sp.count, window = sp.window;
-      for (let i = 0; i < n; i++) { const h = log.hot(i, count, k, window) ? 1 : 0; hot[i] = h; total += h; }
-      if (total > sp.best.count) { // a field cannot hold more than the screen does; only look when it could beat the best
-        const w = counter.best(hot);
-        if (w.count > sp.best.count) sp.best = { count: w.count, x: w.x, y: w.y, frame: k, hotCells: w.count };
+    const all = k === 0 || pal !== prevPal;
+    prevPal = pal;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const i = y * cols + x;
+        const g = glyphs[i];
+        const s0 = shades ? shades[i] : METER_RGB_CELL;
+        const fv = fg ? fg[i] : 0, bv = bg ? bg[i] : 0;
+        if (!all && g === pG[i] && s0 === pS[i] && fv === pF[i] && bv === pB[i]) continue;
+        pG[i] = g; pS[i] = s0; pF[i] = fv; pB[i] = bv;
+        let s = s0, f, b;
+        if (s === METER_RGB_CELL) {
+          f = fv; b = bv;
+          if (b === METER_PALETTE_BG) b = bgT ? bgT[0] : 0;
+        } else {
+          if (g === 32) s = 0;
+          f = fgT ? fgT[s] : 0; b = bgT ? bgT[s] : 0;
+        }
+        const fr = SRGB_LIN[(f >>> 16) & 255], fgn = SRGB_LIN[(f >>> 8) & 255], fb = SRGB_LIN[f & 255];
+        const br = SRGB_LIN[(b >>> 16) & 255], bgn = SRGB_LIN[(b >>> 8) & 255], bb = SRGB_LIN[b & 255];
+        // the cell: the whole glyph's coverage (what the meter has always read)
+        let c = COVERAGE[g], d = 1 - c;
+        let r = c * fr + d * br, gr = c * fgn + d * bgn, bl = c * fb + d * bb;
+        let sum = r + gr + bl, red = r - gr - bl;
+        cellGrid.put(i, 0.2126 * r + 0.7152 * gr + 0.0722 * bl, red > 0 ? red * RED_SCALE : 0, sum > 0 && r / sum >= RED_SATURATION ? 1 : 0, k);
+        // the two pixels of the cell: the top half's and the bottom half's coverage
+        c = TOP[g]; d = 1 - c;
+        r = c * fr + d * br; gr = c * fgn + d * bgn; bl = c * fb + d * bb;
+        sum = r + gr + bl; red = r - gr - bl;
+        pixGrid.put(2 * y * cols + x, 0.2126 * r + 0.7152 * gr + 0.0722 * bl, red > 0 ? red * RED_SCALE : 0, sum > 0 && r / sum >= RED_SATURATION ? 1 : 0, k);
+        c = BOT[g]; d = 1 - c;
+        r = c * fr + d * br; gr = c * fgn + d * bgn; bl = c * fb + d * bb;
+        sum = r + gr + bl; red = r - gr - bl;
+        pixGrid.put((2 * y + 1) * cols + x, 0.2126 * r + 0.7152 * gr + 0.0722 * bl, red > 0 ? red * RED_SCALE : 0, sum > 0 && r / sum >= RED_SATURATION ? 1 : 0, k);
       }
     }
-  }
-
-  function ruleOf(sp) {
-    const frac = sp.best.count / fieldCells;
-    return {
-      worstFraction: frac, limit: FIELD_FRACTION, pass: frac <= FIELD_FRACTION,
-      details: {
-        frame: sp.best.frame, timeS: sp.best.frame < 0 ? 0 : sp.best.frame / (fps * sp.speed),
-        field: { x: sp.best.x, y: sp.best.y, w: field.w, h: field.h }, hotCells: sp.best.hotCells,
-      },
-    };
+    cellGrid.end(k);
+    pixGrid.end(k);
   }
 
   function report() {
-    const [l1x1, l1x4, l2x1, l2x4, rx1, rx4] = specs.map(ruleOf);
-    const frac = step.count / n;
-    const l3 = {
-      worstFraction: frac, limit: STEP_FRACTION, pass: frac <= STEP_FRACTION,
-      details: { frame: step.frame, timeS: step.frame < 0 ? 0 : step.frame / fps, cells: step.count },
-    };
-    const all = [l1x1, l1x4, l2x1, l2x4, l3, rx1, rx4];
+    const cell = cellGrid.report(fps), pixel = pixGrid.report(fps);
+    const both = (a, b) => ({ x1: worseOf(a.x1, b.x1), x4: worseOf(a.x4, b.x4) });
+    const l1 = both(cell.l1, pixel.l1), l2 = both(cell.l2, pixel.l2), r = both(cell.r, pixel.r), l3 = worseOf(cell.l3, pixel.l3);
     return {
-      cols, rows, fps, frames: k + 1, field: { ...field },
-      l1: { x1: l1x1, x4: l1x4 }, l2: { x1: l2x1, x4: l2x4 }, l3, r: { x1: rx1, x4: rx4 },
-      pass: all.every((r) => r.pass),
+      cols, rows, fps, frames: k + 1, field: { ...cf },
+      l1, l2, l3, r,
+      pass: cell.pass && pixel.pass,
+      cell: { ...cell, frames: k + 1 }, pixel: { ...pixel, frames: k + 1 },
     };
   }
 
-  return { push, report, field, cellY: (i) => Y[i] };
+  // cellY: the Y of the whole cell (the glyph's total coverage); pixelY: the Y of the top (half 0) or bottom (half 1) pixel
+  return { push, report, field: cf, pixelField, cellY: (i) => cellGrid.Y[i], pixelY: (i, half) => pixGrid.Y[2 * Math.floor(i / cols) * cols + (i % cols) + half * cols] };
 }

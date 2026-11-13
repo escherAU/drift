@@ -10,7 +10,7 @@
 // A load-proof CPU budget for the hook at 240x67 (a ratio to a calibration loop, with a 3x-slower control) closes the file. TABLE lines print every measured value.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createFlashMeter } from './helpers-flash.js';
+import { shownMeter, FLASH_MODE, MODE_NOTE } from './helpers-flash-modes.js';
 import { createShell } from '../src/shell/shell.js';
 import { discoverCartridges, loadScenes as realLoadScenes, INSTALL_DIR } from '../src/cartridge/loader.js';
 import { shelfLayout } from '../src/shell/library.js';
@@ -20,7 +20,9 @@ import { measureRelativeCost } from './helpers-budget.js';
 
 const RULES = [['l1.x1', (r) => r.l1.x1], ['l1.x4', (r) => r.l1.x4], ['l2.x1', (r) => r.l2.x1], ['l2.x4', (r) => r.l2.x4], ['l3', (r) => r.l3], ['r.x1', (r) => r.r.x1], ['r.x4', (r) => r.r.x4]];
 const pc = (x) => (x * 100).toFixed(2);
-const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)}/${pc(rep.l2.x4.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)}/${pc(rep.r.x4.worstFraction)}`;
+// the cell grid (the old reading) and the pixel grid (DRIFT-8 C2)
+const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
 const PHASES = [0, 0.25, 0.5, 0.75];
 const HOST = { persist() {}, quit() {}, leaveToClassic() {} };
 
@@ -44,7 +46,7 @@ const darkLoader = (withHook) => async (cart) => {
 function shell9(cols, rows, withHook) {
   const d = discoverCartridges({ dirs: [{ dir: INSTALL_DIR, trusted: true }] });
   return createShell({
-    cols, rows, cartridges: d.cartridges, seed: 1, cmode: 'truecolor', host: HOST, loadScenes: darkLoader(withHook),
+    cols, rows, cartridges: d.cartridges, seed: 1, cmode: FLASH_MODE, host: HOST, loadScenes: darkLoader(withHook),
     consts: { SPEEDS: [1, 2, 3, 4], DISSOLVE_SECONDS: 2, DEFAULT_FADE_SECONDS: 15 },
     start: { cartridge: 'driftman-9000' },
   });
@@ -59,7 +61,7 @@ async function measure(cols, rows, phase, { withHook = true, filter = null } = {
   const full = sizeTier(cols, rows) === 'full';
   const rect = full ? { x: lay.consoleX, y: lay.consoleTop, w: 84, h: 18 } : { x: lay.miniX, y: lay.miniTop, w: 38, h: 4 };
   if (phase > 0) sh.tick(phase * DT);
-  const ins = createFlashMeter(cols, rows, FPS);
+  const ins = shownMeter(cols, rows, FPS);
   let k = 0;
   const push = (meter) => { const f = sh.frame(); meter.push(filter ? filter(f, k++, rect) : f); };
   let n = 0;
@@ -68,7 +70,7 @@ async function measure(cols, rows, phase, { withHook = true, filter = null } = {
   for (let j = 0; j < FPS; j++) { push(ins); sh.tick(DT); }
   const insRep = ins.report();
   sh.key('e');
-  const eje = createFlashMeter(cols, rows, FPS);
+  const eje = shownMeter(cols, rows, FPS);
   for (let m = 0; sh.state().screen === 'eject' && m < 600; m++) { push(eje); sh.tick(DT); }
   for (let j = 0; j < 6; j++) { push(eje); sh.tick(DT); }
   return { ins: insRep, eje: eje.report() };
@@ -78,7 +80,7 @@ const TABLE = [];
 const WORST = new Map(); // size -> [insert 1x, insert 4x, eject 1x] worst L2 fractions over the phases
 
 for (const [cols, rows] of SIZES) {
-  test(`9000 console flash ${cols}x${rows}: insert + boot (1x and 4x) and eject, at four clock phases, pass every rule (L1, L2, L3, R) and keep 10 % headroom on the L2 limit`, async () => {
+  test(`9000 console flash${MODE_NOTE} ${cols}x${rows}: insert + boot (1x and 4x) and eject, at four clock phases, pass every rule (L1, L2, L3, R) and keep 10 % headroom on the L2 limit`, async () => {
     const key = `${cols}x${rows}`;
     const bad = [];
     for (const phase of PHASES) {
@@ -106,15 +108,15 @@ for (const [cols, rows] of SIZES) {
   });
 }
 
-test('9000 console flash TABLE: every measured value, and the worst L2 per size over the four phases', () => {
-  console.log(['TABLE 9000 console flash meter (x1/x4; limits L1 25, L2 25, L3 30, R 25)', ...TABLE.map((l) => '  ' + l)].join('\n'));
+test(`9000 console flash TABLE${MODE_NOTE}: every measured value, and the worst L2 per size over the four phases`, () => {
+  console.log([`TABLE 9000 console flash meter${MODE_NOTE} (x1/x4; limits L1 25, L2 25, L3 30, R 25; cell grid | pixel grid)`, ...TABLE.map((l) => '  ' + l)].join('\n'));
   console.log('WORST L2 over four phases [insert+boot 1x, insert+boot 4x, eject 1x] (%): ' + [...WORST].map(([k, w]) => `${k} ${w.map((x) => pc(x)).join('/')}`).join(', '));
   assert.ok(TABLE.length === 0 || TABLE.length === SIZES.length * PHASES.length);
 });
 
 // ---- the control: the meter bites on this path
 
-test('9000 console flash control: the same flow with every console cell flipped between black and white on alternate frames fails the meter (120x40 and 80x24)', async () => {
+test(`9000 console flash control${MODE_NOTE}: the same flow with every console cell flipped between black and white on alternate frames fails the meter (120x40 and 80x24)`, async () => {
   const flip = (f, k, r) => {
     const g = { glyphs: f.glyphs.slice(), shades: f.shades.slice(), fg: f.fg ? f.fg.slice() : new Uint32Array(f.glyphs.length), bg: f.bg ? f.bg.slice() : new Uint32Array(f.glyphs.length), palette: f.palette, cols: f.cols, rows: f.rows };
     for (let y = r.y; y < r.y + r.h; y++) {
@@ -158,13 +160,13 @@ const cpuCase = (draw) => {
   return measureRelativeCost(() => { for (let k = 0; k < 8; k++) draw(f, ctxs[k]); }, { calls: 8 });
 };
 
-test('9000 console CPU: drawConsole at 240x67 costs under 2.25x a calibration loop timed in the same moment (quietest of 1500 batches of 8 calls)', () => {
+if (FLASH_MODE === 'truecolor') test('9000 console CPU: drawConsole at 240x67 costs under 2.25x a calibration loop timed in the same moment (quietest of 1500 batches of 8 calls)', () => {
   const m = cpuCase((f, c) => hook.drawConsole(f, c));
   console.log(`CPU drawConsole at 240x67: ${m.msPerCall.toFixed(4)} ms per call, calibration ${m.calibMs.toFixed(4)} ms, ratio ${m.ratio.toFixed(3)} (bound ${RATIO_BOUND})`);
   assert.ok(m.ratio < RATIO_BOUND, `ratio ${m.ratio.toFixed(3)} (${m.msPerCall} ms per call) is over ${RATIO_BOUND}`);
 });
 
-test('9000 console CPU control: a hook that does the same work three times per call (3x slower) FAILS the bound', () => {
+if (FLASH_MODE === 'truecolor') test('9000 console CPU control: a hook that does the same work three times per call (3x slower) FAILS the bound', () => {
   const m = cpuCase((f, c) => { hook.drawConsole(f, c); hook.drawConsole(f, c); hook.drawConsole(f, c); });
   console.log(`CPU control (3x): ratio ${m.ratio.toFixed(3)}`);
   assert.ok(m.ratio >= RATIO_BOUND, `the 3x hook reads ${m.ratio.toFixed(3)}, under the bound ${RATIO_BOUND}: the gate no longer bites`);
