@@ -38,9 +38,9 @@ test('T2.1 glyph halves: blocks, eighths, quadrants and braille by geometry', ()
   eq(0x2594, 0.25, 0, 'upper 1/8');
   // columns ink both halves alike
   eq(0x258c, 0.5, 0.5, 'left half'); eq(0x2590, 0.5, 0.5, 'right half'); eq(0x2595, 1 / 8, 1 / 8, 'right 1/8');
-  // NOTE (found in C2, not changed): glyphCoverage has U+2589-258F reversed (U+2589 "left 7/8" reads 1/8 and U+258F "left 1/8" reads 7/8). The halves keep
-  // glyphCoverage's value in both halves so that the cell reading is exactly what it has always been; the next test pins mean(top, bottom) = glyphCoverage.
-  eq(0x258d, glyphCoverage(0x258d), glyphCoverage(0x258d), 'left eighths ink both halves alike');
+  // (glyphCoverage had U+2589-258F reversed until DRIFT-8 C7; tests/glyph-coverage-geometry.test.js now checks every block element against its geometry.)
+  // The left eighths ink both halves alike; the next test pins mean(top, bottom) = glyphCoverage.
+  eq(0x258d, 3 / 8, 3 / 8, 'left 3/8'); eq(0x2589, 7 / 8, 7 / 8, 'left 7/8'); eq(0x258f, 1 / 8, 1 / 8, 'left 1/8');
   eq(0x2591, 0.25, 0.25, 'light shade'); eq(0x2592, 0.5, 0.5, 'medium shade'); eq(0x2593, 0.75, 0.75, 'dark shade');
   // quadrants U+2596-259F: [top, bottom]
   const quad = { 0x2596: [0, 0.5], 0x2597: [0, 0.5], 0x2598: [0.5, 0], 0x2599: [0.5, 1], 0x259a: [0.5, 0.5], 0x259b: [1, 0.5], 0x259c: [1, 0.5], 0x259d: [0.5, 0], 0x259e: [0.5, 0.5], 0x259f: [0.5, 1] };

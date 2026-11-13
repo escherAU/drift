@@ -198,7 +198,7 @@ function buildCoverage() {
   t[0] = 0; t[32] = 0; t[0xa0] = 0;
   for (let i = 1; i <= 7; i++) t[0x2580 + i] = i / 8;           // lower 1/8 .. 7/8 blocks (U+2581-2587)
   t[0x2580] = 0.5; t[0x2584] = 0.5; t[0x2588] = 1;              // upper half, lower half, full block
-  for (let i = 1; i <= 7; i++) t[0x2590 - i] = (8 - i) / 8;     // left 7/8 .. 1/8 blocks (U+2589-258F)
+  for (let i = 1; i <= 7; i++) t[0x2588 + i] = (8 - i) / 8;     // left 7/8 .. 1/8 blocks (U+2589-258F: U+2589 is 7/8, U+258F is 1/8; tests/glyph-coverage-geometry.test.js)
   t[0x258c] = 0.5; t[0x2590] = 0.5;                             // left half, right half
   t[0x2591] = 0.25; t[0x2592] = 0.5; t[0x2593] = 0.75;          // light, medium, dark shade
   t[0x2594] = 1 / 8; t[0x2595] = 1 / 8;                         // upper 1/8, right 1/8
