@@ -350,9 +350,15 @@ export function createApp(o) {
       held += dt;
       if (held < FULLCOLOUR_256_PERIOD - FULLCOLOUR_256_SLACK) return;
       dt = held;
-    }
-    held = 0;
+      held = 0;
+    } else dt = takeHeld(dt);
     step(dt);
+  }
+
+  // Held time is only ever given up by a step that actually advances time: a step with dt <= 0 leaves it pending, and a real step (gated or not) carries it, so time is never lost.
+  function takeHeld(dt) {
+    if (dt > 0 && held > 0) { dt += held; held = 0; }
+    return dt;
   }
 
   function step(dt) {
@@ -467,7 +473,7 @@ export function createApp(o) {
     let dt = (n - lastNow) / 1000;
     lastNow = n;
     if (dt > 0.25) dt = 0.25; // after a stall, do not leap
-    held = 0;
+    dt = takeHeld(dt);
     step(dt); // the loop's own schedule already honours the cap (below), so it does not go through the gate in tick()
     if (!running) return;
     const every = cmode === '256' && fullColourOn ? Math.max(interval, 1000 * FULLCOLOUR_256_PERIOD) : interval; // the cap, in the loop's own schedule

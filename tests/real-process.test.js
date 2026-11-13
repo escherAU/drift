@@ -10,6 +10,7 @@ import { INSERT_END } from '../src/shell/insert.js';
 import { bootPhases } from '../src/shell/boot.js';
 import { classicBootSkin } from '../src/shell/driftman.js';
 import { discoverCartridges } from '../src/cartridge/loader.js';
+import { readAnsi } from './helpers-ansi.js';
 
 const BIN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'drift.js');
 const CFG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-rp-'));
@@ -230,22 +231,43 @@ const SHELF_BLURBS = Object.fromEntries(SHELF.map((id) => [id, JSON.parse(fs.rea
 const PLAIN = /\x1b\[[0-9;?]*[A-Za-z]/g; // an escape sequence, to read the screen text without them
 const RIGHT = '\x1b[C', DOWN = '\x1b[B';
 
-// send `keys` (a list of [delay ms after the previous key, bytes]) after the deck is up; collects what is drawn after
-// the first key into `seen.after`
-function afterDeck(keys, seen) {
-  return (c) => {
+// Drive a list of steps { when?, send } against the screen the child has drawn so far (DRIFT_TEST_COLS x ROWS read back through the independent terminal reader, polled every
+// 100 ms): a step's bytes are sent as soon as its `when(ctx)` holds (no `when`: at once), then the next step is waited for. There is no fixed delay anywhere; the ceiling is the
+// run's kill timer (30 s), and a condition that is never met ends the run as timedOut, which assertRestored fails. ctx = { text (the screen), row (the line of the deck's cursor,
+// or -1), since (bytes written since the previous step was sent), after (everything written since the first step was sent) }. Collects what is drawn after the first key into
+// `seen.after` (the bytes) and, for each step, the screen it saw when it sent into `seen.shots`.
+const SCREEN_COLS = 60, SCREEN_ROWS = 20; // the DRIFT_TEST_COLS / ROWS run() gives the child
+const DECK_TITLE = 'TAPE DECK';  // the deck's frame title, on screen while the deck is open
+const DECK_READY = 'starts by itself'; // its countdown line: shown once the deck takes keys (the words of the deck arrive a moment before it does)
+function driveWhen(steps, seen) {
+  return (c, out) => {
     seen.after = '';
-    let at = 0;
-    keys.forEach(([delay, bytes], i) => {
-      at += delay;
-      setTimeout(() => {
-        if (i === 0) c.stdout.on('data', (d) => { seen.after += d.toString('utf8'); });
-        c.stdin.write(bytes);
-      }, at);
-    });
+    seen.log = [];
+    seen.shots = []; // the screen at the moment each step was sent
+    let i = 0, sentAt = null, started = null;
+    const poll = setInterval(() => {
+      if (i >= steps.length) { clearInterval(poll); return; }
+      const all = out();
+      const text = readAnsi(all, SCREEN_COLS, SCREEN_ROWS).text();
+      const ctx = { text, row: text.split('\n').findIndex((l) => l.includes('▶')), since: sentAt === null ? 0 : all.length - sentAt, after: seen.after };
+      const step = steps[i];
+      if (step.when && !step.when(ctx)) return;
+      if (started === null) { started = all.length; c.stdout.on('data', (d) => { seen.after += d.toString('utf8'); }); }
+      seen.log.push(step.name || `step ${i}`);
+      seen.shots.push(text);
+      c.stdin.write(step.send);
+      sentAt = all.length;
+      i++;
+      if (step.then) step.then(ctx);
+    }, 100);
+    c.on('close', () => clearInterval(poll));
   };
 }
-const NIGHT_RUN = (keys, seen, extraEnv = {}) => run({ args: ['--cartridge', 'night-drive'], env: { ...FORCE, ...freshConfig().env, ...extraEnv }, waitFor: NIGHT_PROMPT, timeoutMs: DELZA_TIMEOUT, drive: afterDeck(keys, seen) });
+const NIGHT_RUN = (steps, seen, extraEnv = {}) => run({ args: ['--cartridge', 'night-drive'], env: { ...FORCE, ...freshConfig().env, ...extraEnv }, waitFor: NIGHT_PROMPT, timeoutMs: 30000, drive: driveWhen(steps, seen) });
+// the steps every arm shares: Enter once the deck takes keys; then the tape is running when the deck has left the screen and it has drawn more than a frame's worth
+const deckUp = (c) => c.text.includes(DECK_READY);
+const tapeRunning = (c) => !c.text.includes(DECK_TITLE) && c.since > 1000;
+const deckOpenAgain = (c) => c.text.includes(DECK_TITLE) && c.row >= 0;
 
 test('real process (night-drive a): --library, Night Drive selected on the shelf, then q: exit 0; the other arms (not selected) also exit 0 and the output differs', async (t) => {
   assert.ok(NIGHT_SLOT > 0, `Night Drive is on the shelf: ${SHELF.join(', ')}`);
@@ -281,7 +303,10 @@ test('real process (night-drive a): --library, Night Drive selected on the shelf
 
 test('real process (night-drive b): --cartridge night-drive plays, then q from inside the running tape: exit 0', async (t) => {
   const seen = {};
-  const r = await NIGHT_RUN([[0, '\r'], [2000, 'q']], seen);
+  const r = await NIGHT_RUN([
+    { when: deckUp, send: '\r' },
+    { when: tapeRunning, send: 'q' }, // the deck has left the screen and the tape has drawn more than 1000 bytes since the Enter
+  ], seen);
   assertRestored(r, t, '(night-drive b) q');
   assert.equal(r.code, 0);
   assert.ok(r.stdout.includes(NIGHT_PROMPT), 'the tape deck was drawn before the Enter');
@@ -290,7 +315,10 @@ test('real process (night-drive b): --cartridge night-drive plays, then q from i
 
 test('real process (night-drive b2): --cartridge night-drive playing, then byte 0x03 from inside the running tape: same exit code as Delza (130)', async (t) => {
   const seen = {};
-  const r = await NIGHT_RUN([[0, '\r'], [2000, Buffer.from([0x03])]], seen);
+  const r = await NIGHT_RUN([
+    { when: deckUp, send: '\r' },
+    { when: tapeRunning, send: Buffer.from([0x03]) },
+  ], seen);
   assertRestored(r, t, '(night-drive b2) 0x03');
   assert.equal(r.code, 130);
   assert.ok(seen.after.length > 1000, `the tape ran after the Enter: ${seen.after.length} bytes drawn`);
@@ -298,20 +326,40 @@ test('real process (night-drive b2): --cartridge night-drive playing, then byte 
 
 test('real process (night-drive b3): q while the tape deck is open over the running scene: exit 0', async (t) => {
   const seen = {};
-  const r = await NIGHT_RUN([[0, '\r'], [1500, '\r'], [900, 'q']], seen); // play, open the deck over the scene, quit
+  const r = await NIGHT_RUN([ // play, open the deck over the scene, quit once the deck is on the screen again
+    { when: deckUp, send: '\r' },
+    { when: tapeRunning, send: '\r' },
+    { when: deckOpenAgain, send: 'q' },
+  ], seen);
   assertRestored(r, t, '(night-drive b3) q with the deck open');
   assert.equal(r.code, 0);
-  assert.ok(seen.after.includes('▶') && seen.after.includes('┏'), 'the deck (its cursor and box) was drawn again over the running scene before the q');
+  // read off the screen at the moment of the q (the diff stream need not repeat cells that are already right, so counting glyphs in the bytes is not the question)
+  const atQ = seen.shots[2];
+  assert.ok(atQ.includes('▶') && atQ.includes('┏') && atQ.includes(DECK_TITLE), 'the deck (its cursor, box and title) was on the screen again over the running scene when the q was sent');
+  assert.ok(!seen.shots[1].includes(DECK_TITLE), 'and it had left the screen while the tape ran (so it came back, it did not just stay)');
 });
 
 test('real process (night-drive b4): pick track B2 from the deck (Enter, down arrows, Enter), then q: exit 0', async (t) => {
   const seen = {};
-  // play A1, open the deck (its cursor starts on the next track, A2), four downs to B2, Enter, run a moment, quit
-  const keys = [[0, '\r'], [1500, '\r'], [900, DOWN], [200, DOWN], [200, DOWN], [200, DOWN], [600, '\r'], [2500, 'q']];
-  const r = await NIGHT_RUN(keys, seen);
+  // play A1, open the deck (its cursor starts on the next track, A2), four downs to B2, Enter, run until the tape has drawn on, quit. Each down is sent once the cursor has
+  // moved for the one before.
+  let lastRow = -1;
+  const moved = (c) => c.row >= 0 && c.row !== lastRow;
+  const note = (c) => { lastRow = c.row; };
+  const r = await NIGHT_RUN([
+    { when: deckUp, send: '\r' },
+    { when: tapeRunning, send: '\r' },
+    { when: (c) => { if (!deckOpenAgain(c)) return false; lastRow = c.row; return true; }, send: DOWN },
+    { when: moved, send: DOWN, then: note },
+    { when: moved, send: DOWN, then: note },
+    { when: moved, send: DOWN, then: note },
+    { when: moved, send: '\r' },
+    { when: (c) => !c.text.includes(DECK_TITLE) && c.since > 2000, send: 'q' },
+  ], seen);
   assertRestored(r, t, '(night-drive b4) B2 then q');
   assert.equal(r.code, 0);
   assert.ok(seen.after.length > 5000, `the tape kept drawing through the pick: ${seen.after.length} bytes`);
+  t.diagnostic(`(night-drive b4) steps sent: ${seen.log.length}, bytes after the first Enter: ${seen.after.length}`);
 });
 
 test.after(() => fs.rmSync(CFG_DIR, { recursive: true, force: true }));

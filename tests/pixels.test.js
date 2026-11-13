@@ -2,11 +2,17 @@
 // staggerTime, relY. The safeHue table is checked against an exact (table-free) computation at every entry.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   RGB_CELL as P_RGB_CELL, PALETTE_BG as P_PALETTE_BG, pixelsToCells, brailleToCells, safeHue, safeHueExact,
   safeHueLinear, staggerTime, relY, HUE_COLS, L_ROWS,
 } from '../src/pixels.js';
 import { RGB_CELL, PALETTE_BG } from '../src/renderer.js';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // independent luminance formula (not the one in pixels.js)
 function indepY(rgb) {
@@ -242,20 +248,49 @@ test('safeHue: hue wraps and rounds to whole degrees; L clamps to 0.05..0.92 and
   assert.equal(safeHue(Infinity, 0.5), safeHue(0, 0.5));
 });
 
-test('safeHue: 1,000,000 calls in under 150 ms once every row is built', () => {
-  for (let row = 0; row < L_ROWS; row++) safeHue(0, row / 63); // warm all rows
-  const run = () => {
+// Cost of a call, judged against the table-free computation measured in the same moment (so machine load cancels out), not against a wall-time budget (DRIFT-8 r6).
+// A table lookup is about 20 times cheaper than safeHueExact; the bound is 4 times cheaper (ratio < 0.25). A safeHue that rebuilt a row every call, or allocated per call,
+// is hundreds of times slower than a lookup, and fails by a wide margin (the mutation test below).
+function costRatio(mod) {
+  const { safeHue: hue, safeHueExact: exact, L_ROWS: rows } = mod;
+  for (let row = 0; row < rows; row++) hue(0, row / 63); // warm all rows
+  const per = (fn, n) => {
     let acc = 0;
     const t0 = process.hrtime.bigint();
-    for (let i = 0; i < 1000000; i++) acc ^= safeHue(i * 0.37, 0.05 + ((i * 7) % 900) / 1000);
-    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-    return { ms, acc };
+    for (let i = 0; i < n; i++) acc ^= fn(i * 0.37, 0.05 + ((i * 7) % 900) / 1000);
+    return { us: Number(process.hrtime.bigint() - t0) / 1e3 / n, acc };
   };
-  const times = [];
-  for (let k = 0; k < 3; k++) times.push(run().ms);
-  const best = Math.min(...times);
-  console.log(`# safeHue 1,000,000 calls: ${times.map((x) => x.toFixed(1)).join(' / ')} ms (best of 3 ${best.toFixed(1)})`);
-  assert.ok(best < 150, `best of 3 = ${best.toFixed(1)} ms`);
+  const ratios = [];
+  for (let k = 0; k < 3; k++) { // alternate the two so a load spike hits both
+    const e = per(exact, 4000), h = per(hue, 200000);
+    ratios.push(h.us / e.us);
+  }
+  return { ratios, best: Math.min(...ratios) };
+}
+
+test('safeHue: a call costs under a quarter of the table-free computation, measured in the same moment', () => {
+  const { ratios, best } = costRatio({ safeHue, safeHueExact, L_ROWS });
+  console.log(`safeHue cost / safeHueExact cost: ${ratios.map((x) => x.toFixed(4)).join(' / ')} (best of 3 ${best.toFixed(4)}; bound 0.25)`);
+  assert.ok(best < 0.25, `best of 3 ratio = ${best.toFixed(4)}`);
+});
+
+test('safeHue: the cost test fails for a safeHue that rebuilds its row on every call (control; the same output, hundreds of times the cost)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-pixels-mutant-'));
+  try {
+    fs.cpSync(path.join(HERE, '..', 'src'), path.join(dir, 'src'), { recursive: true });
+    fs.copyFileSync(path.join(HERE, '..', 'package.json'), path.join(dir, 'package.json'));
+    const f = path.join(dir, 'src', 'pixels.js');
+    const raw = fs.readFileSync(f, 'utf8');
+    const find = 'if (BUILT[row] === 0) buildRow(row);';
+    assert.equal(raw.split(find).length, 2, 'the lookup guard is where this test expects it');
+    fs.writeFileSync(f, raw.replace(find, () => 'buildRow(row);'));
+    const mod = await import(pathToFileURL(f).href);
+    assert.equal(mod.safeHue(10, 0.5), safeHue(10, 0.5), 'the mutant returns the same colours');
+    const { ratios, best } = costRatio(mod);
+    console.log(`safeHue MUTANT (row rebuilt every call) cost ratio: ${ratios.map((x) => x.toFixed(2)).join(' / ')} (best of 3 ${best.toFixed(2)})`);
+    assert.ok(best > 0.25, `the mutant is caught: best ratio ${best.toFixed(2)} would fail the bound 0.25`);
+    assert.ok(best > 5, `and by a wide margin: ${best.toFixed(2)} (the real tree is about 0.05)`);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('safeHue: deterministic - two fresh module instances build identical tables', async () => {
