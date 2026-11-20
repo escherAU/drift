@@ -101,7 +101,7 @@ test('library: a locked cartridge dips for 0.3 s and springs back (the label mov
   const c = mkShell({ startScreen: LIB, cols: 120, rows: 40 });
   c.app.start();
   assert.ok(c.goto('locker'));
-  c.tick(0.6);
+  c.tick(1.6); // the scrub (goto presses 0.4 s apart) brings the answers back SCRUB_GATE_SECONDS after their last cut to dim (DRIFT-9 item 3), then the dissolve
   const rowOf = () => c.text().split('\n').findIndex((l) => l.includes('LOCKER') || l.includes('Locked locker') || l.includes('FIXTURE'));
   const before = c.text().split('\n');
   c.key('\r');

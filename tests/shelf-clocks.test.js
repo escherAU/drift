@@ -6,12 +6,10 @@
 //   sizes  40x10 (the list tier), 81x24 and 79x25 (either side of the compact tier's width), 89x40 (the full tier just above its breakpoint)
 //   taps   a key held down (first press, then repeats every 33 ms from 0.5 s on, for 3 s), and 14 taps 0.3, 0.44, 0.48 and 0.7 s apart, from 2 s
 //   seeds  the app's seed and the jitter clock's seed change from case to case (none is a replay from t0 of the same run), see caseSeeds() in helpers-shelf-real.js
-// Each case is its own test, so a case that fails names its clock, mode, size and tap interval and carries the number. The cases that read over a limit on the exact grid or on a real
-// clock are asserted in tests/shelf-clocks-red.test.js (DRIFT-9 red), not here; RED_CASES lists them so that no case is asserted twice and none is left out.
+// Each case is its own test, so a case that fails names its clock, mode, size and tap interval and carries the number. Every case is asserted here, once, and passes (DRIFT-9 item 3 turned the 21 that read over L2 25 % green; tests/shelf-gate-mutant.test.js proves the gate that did it).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runShelf, showNums, caseSeeds, caseKey, SHELF_CLOCKS, SHELF_MODES, SHELF_SIZES, SHELF_TAPS } from './helpers-shelf-real.js';
-import { RED_CASES } from './helpers-shelf-red.js';
 
 test('shelf clocks: the matrix has the four required sizes, the five tap intervals, both colour modes and the three clocks', () => {
   assert.deepEqual(SHELF_SIZES, [[40, 10], [81, 24], [79, 25], [89, 40]]);
@@ -33,23 +31,8 @@ test('shelf clocks: the arm drives the REAL app on the library, across seeds (no
   assert.ok(reps.size >= 2, 'the seeds do not replay one run');
 });
 
-test('shelf clocks: the arm catches the known failure, 40x10 in 256 colours on the exact grid with taps 0.48 s apart reads L2 37.50 % (a real number from the challenge, over 25 %)', async () => {
-  const r = await runShelf({ clock: 'grid', mode: '256', cols: 40, rows: 10, gap: 0.48 });
-  assert.deepEqual(r.fail, ['l2.x1'], showNums(r.nums));
-  assert.equal(r.nums.l2, 37.5);
-  assert.ok(r.nums.l1 === 0 && r.nums.r === 0 && r.nums.c === 0, 'and only L2 is over: ' + showNums(r.nums));
-  // the size matrix is what keeps it in view: take the small sizes out and the arm, run on the rest of the same taps, no longer reads this case at all
-  const without = SHELF_SIZES.filter(([c]) => c > 40);
-  assert.ok(without.length === SHELF_SIZES.length - 1 && !without.some(([c, r2]) => c === 40 && r2 === 10), 'the mutated matrix has lost 40x10');
-  const lostSmall = RED_CASES.filter((k) => without.some(([c, r2]) => k.includes(` ${c}x${r2} `)));
-  const inFull = RED_CASES.filter((k) => SHELF_SIZES.some(([c, r2]) => k.includes(` ${c}x${r2} `)));
-  assert.ok(inFull.length > lostSmall.length, `the full matrix reads ${inFull.length} failing cases, the matrix without 40x10 only ${lostSmall.length}`);
-  assert.ok(inFull.some((k) => k.includes(' 40x10 ')), '40x10 is among the failing cases');
-});
-
 SHELF_CLOCKS.forEach((clock) => SHELF_MODES.forEach((mode) => SHELF_SIZES.forEach(([cols, rows], si) => SHELF_TAPS.forEach((tap, ti) => {
   const key = caseKey(clock, mode, cols, rows, tap);
-  if (RED_CASES.includes(key)) return; // asserted in tests/shelf-clocks-red.test.js
   test(`shelf real app: ${key}: the five 1x rules pass`, async () => {
     const r = await runShelf({ clock, mode, cols, rows, gap: tap, ...caseSeeds(si, ti) });
     assert.equal(r.screen, 'library');

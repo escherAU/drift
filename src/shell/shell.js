@@ -107,7 +107,7 @@ export function createShell(o) {
   // two full-contrast changes (a slide counts as two, a dissolve as one); scrubFrom = the frame on screen when the dissolve in began.
   let artIndex = index, artDial = dial, phase = 'rest', inT = SCRUB_IN_SECONDS, outT = 0, outIndex = index, outDial = dial, outFrom = 'dim', scrubFrom = null;
   let stripIndex = index, stripDial = dial, stripAge = 0; // the cartridge the dim strip shows (it follows the cursor at most every SCRUB_STRIP_SECONDS: each redraw rewrites the whole shelf)
-  let sincePress = 1e9, evAge1 = 1e9, evAge2 = 1e9;
+  let sincePress = 1e9, evAge1 = 1e9, evAge2 = 1e9, dimAge = 1e9; // dimAge: seconds since the answer parts were last cut from bright to dim
   let helpOpen = false; // library help (the runtime keeps its own)
   let enterT = o.from === 'classic' ? 0 : LIBRARY_FADE_SECONDS; // seconds since the library was opened from Classic
   // The library takes over from the eject animation (or the error card) by dissolve: at the list tier those are text
@@ -266,7 +266,7 @@ export function createShell(o) {
       return;
     }
     index = (index + carts.length + dir) % carts.length; dial += dir; message = '';
-    if (phase === 'rest') phase = 'stale';
+    if (phase === 'rest') { phase = 'stale'; dimAge = 0; }
   }
   function startMove(dir, carry) {
     prev = index; index = (index + carts.length + dir) % carts.length; artIndex = index;
@@ -290,6 +290,7 @@ export function createShell(o) {
   function endOut() {
     artIndex = outIndex; artDial = outDial; prev = artIndex; slideT = SLIDE_SECONDS; idleT = 0; drawnSig = '';
     phase = index === outIndex ? 'rest' : 'stale';
+    if (phase === 'stale') dimAge = 0;
     forced = true;
   }
 
@@ -352,17 +353,18 @@ export function createShell(o) {
         if (slideT < SLIDE_SECONDS) {
           slideT += d; forced = true;
         }
-        sincePress = Math.min(sincePress + d, 1e9); evAge1 = Math.min(evAge1 + d, 1e9); evAge2 = Math.min(evAge2 + d, 1e9);
+        sincePress = Math.min(sincePress + d, 1e9); evAge1 = Math.min(evAge1 + d, 1e9); evAge2 = Math.min(evAge2 + d, 1e9); dimAge = Math.min(dimAge + d, 1e9);
         if (phase !== 'rest') {
           // the art waits for the flash gate (a third full-contrast change within a second would flash), then dissolves into the
           // dim strip while presses keep coming, or back to the full picture once they have stopped
           const open = evAge2 >= SCRUB_GATE_SECONDS;
-          if (phase === 'stale') { if (open) { if (sincePress < SCRUB_HOLD_SECONDS) beginIn(); else beginOut(); } }
+          const back = open && dimAge >= SCRUB_GATE_SECONDS; // the answers' own gate: cut to dim, back to bright, cut again must not fit in a second
+          if (phase === 'stale') { if (open) { if (sincePress < SCRUB_HOLD_SECONDS) beginIn(); else if (back) beginOut(); } }
           else if (phase === 'in' || phase === 'dim') {
             if (phase === 'in') { inT += d; forced = true; if (inT >= SCRUB_IN_SECONDS) phase = 'dim'; }
             stripAge += d;
             if (stripAge >= SCRUB_STRIP_SECONDS && stripIndex !== index) { stripIndex = index; stripDial = dial; stripAge = 0; forced = true; }
-            if (phase === 'dim' && open && sincePress >= SCRUB_HOLD_SECONDS) beginOut();
+            if (phase === 'dim' && back && sincePress >= SCRUB_HOLD_SECONDS) beginOut();
           }
           else { outT += d; forced = true; if (outT >= SCRUB_OUT_SECONDS) endOut(); }
         }
