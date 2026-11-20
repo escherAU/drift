@@ -21,7 +21,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HF = 'tests/helpers-flash.js';
 const HC = 'tests/helpers-flash-controls.js';
 const COPY_DIRS = ['src', 'cartridges'];
-const COPY_FILES = [HF, HC, 'tests/helpers-flash-halves.js', 'tests/helpers-flash-colour.js', 'tests/helpers-flash-scenes.js', 'tests/helpers-colour-clock.js',
+const COPY_FILES = [HF, HC, 'tests/helpers-flash-halves.js', 'tests/helpers-flash-colour.js', 'tests/helpers-flash-scenes.js', 'tests/helpers-clock.js', 'tests/helpers-colour-clock.js',
   'tests/flash-colour.test.js', 'tests/flash-colour-rosette.test.js', 'package.json'];
 const PATTERN = 'rule C constants|T4\\.1a 61x21|T4\\.1b 61x21|T4\\.1c 61x21|T4\\.1d 61x21|T4\\.1e 61x21|T4\\.1f 61x21|colourClockAt|control colours';
 

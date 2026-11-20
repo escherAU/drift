@@ -11,6 +11,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFlashMeter, failedRules } from './helpers-flash.js';
+import { createRun } from './helpers-clock.js';
 import { flashRig, composerFor } from './helpers-flash-controls.js';
 import {
   STEADY_CEILING, WORST_SECOND_CEILING, CPU_MEAN_CEILING_MS, BUDGET_RUN, limitFromMeasured, measureBytes, checkBudget, measureCpu, checkCpu,
@@ -27,13 +28,16 @@ const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worst
 const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
 const failed = (rep) => failedRules(rep);
 
+// DRIFT-9: `clock` = 'grid' | 'q156' | 'jitter' (tests/helpers-clock.js) replays the same run as the app would paint it on that clock: sample k (the viewer's 18 Hz grid) shows the frame
+// of the last paint at or before it, so the scene time is the paint's, not k's; none is the old exact grid.
 // One solo run through the composer. reduce256: the frames as 256-colour output would show them.
-function run(scene, cols, rows, { phase = 0, seed = 1, seconds = SECONDS, reduce256 = false } = {}) {
+function run(scene, cols, rows, { phase = 0, seed = 1, seconds = SECONDS, reduce256 = false, clock = null } = {}) {
+  const clk = createRun({ clock, fps: FPS });
   const rig = flashRig([scene], cols, rows, { seed, mode: reduce256 ? '256' : 'truecolor' }); // a 256 run gets a 256 composer (the scene sees params.cmode)
   const meter = createFlashMeter(cols, rows, FPS);
   const N = Math.round(seconds * FPS);
   for (let k = 0; k < N; k++) {
-    const s = rig.show(rig.cc.frame({ a: 0, b: 0, p: 0 }, (k + phase) / FPS));
+    const s = rig.show(rig.cc.frame({ a: 0, b: 0, p: 0 }, (clk.sceneIndex(k) + phase) / FPS));
     meter.push(s.frame, s.palette);
   }
   return meter.report();

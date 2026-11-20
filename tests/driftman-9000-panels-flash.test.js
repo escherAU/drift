@@ -7,6 +7,7 @@ import test from 'node:test';
 import { RULE_IDS, ruleOf } from './helpers-flash.js';
 import assert from 'node:assert/strict';
 import { shownMeter, FLASH_MODE, MODE_NOTE } from './helpers-flash-modes.js';
+import { createRun } from './helpers-clock.js';
 import { arrive9000, stepFrames, stepSeconds, pickVision, VISIONS, FPS } from './helpers-driftman-panels.js';
 
 const SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [176, 58], [78, 24]];
@@ -18,8 +19,10 @@ const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
 const failing = (rep) => RULES.filter(([, get]) => !get(rep).pass).map(([n]) => n);
 const TABLE = [];
 
-async function run(cols, rows, id, speed, { hard = false, offset = 0 } = {}) {
-  const sh = await arrive9000(cols, rows, { speed, cmode: FLASH_MODE });
+// (DRIFT-9: `clock` = 'grid' | 'q156' | 'jitter' runs the metered part of the flow on that clock, tests/helpers-clock.js; none is the old exact grid)
+async function run(cols, rows, id, speed, { hard = false, offset = 0, clock = null } = {}) {
+  const sh0 = await arrive9000(cols, rows, { speed, cmode: FLASH_MODE });
+  let sh = sh0;
   const rt = sh.runtime();
   if (id !== 'rosette') pickVision(sh, id); else sh.key('esc');
   stepSeconds(sh, 0.6);
@@ -27,7 +30,9 @@ async function run(cols, rows, id, speed, { hard = false, offset = 0 } = {}) {
   while (rt.state().t < from + 20) stepFrames(sh, 9);
   assert.equal(sh.state().sceneId, id);
   if (offset > 0) sh.tick(offset / FPS); // offset is a fraction of a frame (0, 1/4, 1/2, 3/4): the clock phase against the scene's own steps
-  const meter = shownMeter(cols, rows, FPS);
+  const clk = createRun({ clock, fps: FPS });
+  sh = clk.sh(sh0); // (from here the shell's steps are the clock's)
+  const meter = clk.meter(shownMeter(cols, rows, FPS));
   const push = (f) => meter.push(f);
   const rest = (s) => stepSeconds(sh, s, push);
   const press = (key) => {

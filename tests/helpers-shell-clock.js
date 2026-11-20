@@ -21,6 +21,7 @@ import { discoverCartridges, loadScenes as realLoadScenes } from '../src/cartrid
 import { fakeStdin, fakeStdout, fakeProc, fakeStderr } from './helpers.js';
 import { makeRoot, addSeasonal } from './helpers-shell.js';
 import { makeFixtureCartridge } from './helpers-cartridge.js';
+import { createClock } from './helpers-clock.js';
 
 let shared = null;
 // One cartridge root for the whole file: classic, fixture, locker (locked), seasonal (has skin seasons), zfail (a fixture whose load is made to fail).
@@ -54,7 +55,9 @@ export function bursts(times, frameMs) {
 export const gameStep = (fps) => Math.min(1 / fps, 0.25);
 export const realPerGame = (fps) => (1 / fps) / gameStep(fps);
 
-export async function makeRig({ fps, env = {}, cols = 60, rows = 20, config } = {}) {
+// DRIFT-9: `clock` = 'grid' | 'q156' | 'jitter' (tests/helpers-clock.js) runs the app's loop on that clock through the `timer` seam instead of the mock timers (the rig still steps 1 ms at a
+// time; a loop tick fires at the clock's own fire time inside the step, and renders and writes are stamped with it); none is the old mock-timer rig.
+export async function makeRig({ fps, env = {}, cols = 60, rows = 20, config, clock = null, clockSeed = 1 } = {}) {
   const sh = await sharedCarts();
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-clock-'));
   const envFull = { COLORTERM: 'truecolor', ...env };
@@ -68,23 +71,26 @@ export async function makeRig({ fps, env = {}, cols = 60, rows = 20, config } = 
   const realFps = opts.fps;
 
   let ms = 1000, nowCalls = 0;
-  const now = () => { nowCalls++; return ms; };
+  const clk = clock ? createClock({ mode: clock, seed: clockSeed }) : null;
+  if (clk) clk.advanceTo(ms);
+  const stamp = () => (clk ? clk.now() : ms);
+  const now = () => { nowCalls++; return stamp(); };
   const renders = [];
   const realRenderer = createRenderer();
   const renderer = {
-    render(a) { renders.push({ ms }); return realRenderer.render(a); },
+    render(a) { renders.push({ ms: stamp() }); return realRenderer.render(a); },
     invalidate() { realRenderer.invalidate(); },
   };
   const stdin = fakeStdin(), stdout = fakeStdout({ columns: cols, rows }), proc = fakeProc();
   const wrote = []; // { ms, s } for every write
   const origWrite = stdout.write;
-  stdout.write = (s, cb) => { wrote.push({ ms, s: String(s) }); return origWrite(s, cb); };
+  stdout.write = (s, cb) => { wrote.push({ ms: stamp(), s: String(s) }); return origWrite(s, cb); };
   const loadScenes = (cart) => (cart.id === 'zfail'
     ? Promise.resolve({ scenes: null, errors: [{ reason: 'this cartridge cannot be loaded (made up for the test)' }] })
     : Promise.resolve(sh.loaded.get(cart.id)));
-  mock.timers.enable({ apis: ['setTimeout'] });
+  if (!clk) mock.timers.enable({ apis: ['setTimeout'] });
   const app = createApp({
-    stdin, stdout, stderr: fakeStderr(), proc, env: envFull, ...opts, configPath, dirs: sh.dirs, loadScenes, now, renderer, startScreen: null,
+    stdin, stdout, stderr: fakeStderr(), proc, env: envFull, ...opts, configPath, dirs: sh.dirs, loadScenes, now, renderer, startScreen: null, ...(clk ? { timer: clk.timer } : {}),
   });
   app.start();
 
@@ -96,7 +102,7 @@ export async function makeRig({ fps, env = {}, cols = 60, rows = 20, config } = 
     shell: () => app.getState().shell,
     screen: () => { const s = app.getState().shell; return s ? s.screen : 'classic'; },
     micro: async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); },
-    step() { ms += 1; mock.timers.tick(1); },
+    step() { ms += 1; if (clk) clk.advanceTo(ms); else mock.timers.tick(1); },
     // advance 1 ms at a time (the loop's timer fires on the step it is due); cond is read at the start and after each loop tick only, so reading state stays cheap
     async until(cond, capMs, what) {
       const end = ms + capMs;

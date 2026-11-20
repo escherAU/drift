@@ -3,6 +3,7 @@
 // between them).
 import { createFlashMeter, X1_RULE_IDS, ruleOf } from './helpers-flash.js';
 import { foilRoot, foilShell, copyOf, DT, FPS } from './helpers-foil.js';
+import { createRun } from './helpers-clock.js';
 
 export { DT, FPS, foilRoot, foilShell, copyOf };
 export const ORDER = ['aaa', 'foil-a', 'foil-b', 'zzz'];
@@ -23,11 +24,27 @@ export function burstPresses({ start = 0.5, n = 5, gap = 0.03, dir = 'next' } = 
 
 // Play `presses` ([[seconds, 'next' | 'prev'], ...] sorted) for `seconds`. onFrame(frame, k, clock, sh) gets every frame after its presses.
 // Returns { sh, log } where log[i] = { t, dir, indexAfter } (the cursor right after each press).
-export function play(sh, presses, seconds, { onFrame = null, offset = 0 } = {}) {
+// DRIFT-9: `run` (tests/helpers-clock.js createRun, with sh already wrapped by run.sh) plays the same schedule on a clock: a press arrives before the first paint at or after its time,
+// the loop ends at `seconds` of the shell's wall time, and each step is the clock's (the arm's tick(DT) is replaced inside the wrapper). Without it, the old loop.
+export function play(sh, presses, seconds, { onFrame = null, offset = 0, run = null } = {}) {
   if (offset > 0) sh.tick(offset);
   const log = [];
   let next = 0;
   const at = () => ORDER.indexOf(sh.state().cartridge);
+  if (run && run.active) {
+    const t0 = run.t(); // (the offset, if any, is not part of the walk's own clock)
+    for (let k = 0; run.t() - t0 < seconds - 1e-9; k++) {
+      const clock = run.t() - t0;
+      while (next < presses.length && presses[next][0] <= clock + 1e-9) {
+        const [t, dir] = presses[next++];
+        sh.actions[KEY[dir]]();
+        log.push({ t, dir, indexAfter: at() });
+      }
+      if (onFrame) onFrame(sh.frame(), k, clock, sh);
+      sh.tick(DT);
+    }
+    return { sh, log };
+  }
   for (let k = 0, clock = 0; k < Math.round(seconds * FPS); k++, clock = k * DT) {
     while (next < presses.length && presses[next][0] <= clock + 1e-9) {
       const [t, dir] = presses[next++];
@@ -41,11 +58,13 @@ export function play(sh, presses, seconds, { onFrame = null, offset = 0 } = {}) 
 }
 
 // The flash meter's report for a press schedule on the foil shelf (`seconds` long), at 1x
-export function walkReport(cols, rows, presses, { art = 'dense', withFoil = true, seconds = 6, offset = 0, select = 'aaa', shellOpts = {} } = {}) {
-  const { sh } = foilShell(cols, rows, { root: foilRoot({ withFoil, art }), select, shellOpts });
-  const meter = createFlashMeter(cols, rows, FPS);
-  const r = play(sh, presses, seconds, { onFrame: (f) => meter.push(f), offset });
-  return { rep: meter.report(), log: r.log, sh };
+export function walkReport(cols, rows, presses, { art = 'dense', withFoil = true, seconds = 6, offset = 0, select = 'aaa', shellOpts = {}, clock = null, clockSeed = 1 } = {}) {
+  const { sh: sh0 } = foilShell(cols, rows, { root: foilRoot({ withFoil, art }), select, shellOpts });
+  const run = clock ? createRun({ clock, seed: clockSeed, fps: FPS }) : null;
+  const sh = run ? run.sh(sh0) : sh0;
+  const meter = run ? run.meter(createFlashMeter(cols, rows, FPS)) : createFlashMeter(cols, rows, FPS);
+  const r = play(sh, presses, seconds, { onFrame: (f) => meter.push(f), offset, run });
+  return { rep: meter.report(), log: r.log, sh: sh0, run };
 }
 
 export const pc = (x) => (x * 100).toFixed(2);

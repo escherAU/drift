@@ -7,6 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFlashMeter, failedRules, X1_RULE_IDS } from './helpers-flash.js';
+import { createRun } from './helpers-clock.js';
 import { frameAtSpeed, flashRig } from './helpers-flash-controls.js';
 import {
   STEADY_CEILING, WORST_SECOND_CEILING, CPU_MEAN_CEILING_MS, BUDGET_RUN, limitFromMeasured, measureBytes, checkBudget, measureCpu, checkCpu,
@@ -24,13 +25,16 @@ const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worstFra
 const X1 = X1_RULE_IDS; // l1, l2, l3, r at x1, and the colour rule C (DRIFT-8 C4: judged at the playback speed, so the 4x runs are judged on it too)
 const failed = (rep) => failedRules(rep);
 
+// DRIFT-9: `clock` = 'grid' | 'q156' | 'jitter' (tests/helpers-clock.js) replays the same run as the app would paint it on that clock: sample k (the viewer's 18 Hz grid) shows the frame
+// of the last paint at or before it, so the scene time is the paint's, not k's; none is the old exact grid.
 // One solo run through the composer. `step` is the frame step in seconds (1/18 at the shell's 1x; speed/18 at 2x to 4x). reduce256: as 256-colour output shows it.
-function run(scene, cols, rows, { phase = 0, seed = 1, seconds = SECONDS, reduce256 = false, speed = 1, start = 0 } = {}) {
+function run(scene, cols, rows, { phase = 0, seed = 1, seconds = SECONDS, reduce256 = false, speed = 1, start = 0, clock = null } = {}) {
+  const clk = createRun({ clock, fps: FPS });
   const rig = flashRig([scene], cols, rows, { seed, mode: reduce256 ? '256' : 'truecolor' }); // a 256 run gets a 256 composer (scenes see params.cmode)
   const meter = createFlashMeter(cols, rows, FPS);
   const N = Math.round((seconds * FPS) / speed);
   for (let k = 0; k < N; k++) {
-    const s = rig.show(frameAtSpeed(rig.cc, { a: 0, b: 0, p: 0 }, start + ((k + phase) * speed) / FPS, speed));
+    const s = rig.show(frameAtSpeed(rig.cc, { a: 0, b: 0, p: 0 }, start + ((clk.sceneIndex(k) + phase) * speed) / FPS, speed));
     meter.push(s.frame, s.palette);
   }
   return meter.report();

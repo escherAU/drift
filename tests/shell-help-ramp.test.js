@@ -12,6 +12,7 @@ import { driftmanSkin } from '../src/shell/driftman.js';
 import { RGB_CELL, makeGlow, makePlain, sameCell } from './helpers-fullcolour.js';
 import { FLASH_FRACTION, failedRules, ruleOf } from './helpers-flash.js';
 import { shownMeter } from './helpers-flash-modes.js';
+import { createRun } from './helpers-clock.js';
 import { boot, grab, DT, ESC, SIX } from './helpers-night-drive-shell.js';
 import { mkShell, runCartridge } from './helpers-shell.js';
 
@@ -150,15 +151,17 @@ test('key frame: the first step after h changes 40% or less of the cells at seve
 
 // The flash meter over: the scene, h (the panel ramps in), 1 s of rest, h (the panel ramps out), 1 s of rest.
 // `hard` is the control: the same sequence with the ramp stepped over in one tick (the old hard cut).
-async function meterRun(cols, rows, speed, hard, mode = 'truecolor') {
-  const sh = await running(cols, rows, { speed, cmode: mode });
-  const meter = shownMeter(cols, rows, FPS, mode);
-  for (let k = 0; k < 6; k++) { meter.push(sh.frame()); sh.tick(1 / FPS); }
+// (DRIFT-9: `clock` = 'grid' | 'q156' | 'jitter' runs the flow on that clock, tests/helpers-clock.js; none is the old exact grid)
+async function meterRun(cols, rows, speed, hard, mode = 'truecolor', clock = null) {
+  const run = createRun({ clock, fps: FPS });
+  const sh = run.sh(await running(cols, rows, { speed, cmode: mode }));
+  const meter = run.meter(shownMeter(cols, rows, FPS, mode));
+  for (const k of run.steps(6 / FPS)) { meter.push(sh.frame()); sh.tick(1 / FPS); }
   for (let pass = 0; pass < 2; pass++) {
     sh.key('h');
     meter.push(sh.frame());
     sh.tick(hard ? 0.3 : 1 / FPS); meter.push(sh.frame());
-    for (let k = 0; k < FPS + 2; k++) { sh.tick(1 / FPS); meter.push(sh.frame()); }
+    for (const k of run.steps((FPS + 2) / FPS)) { sh.tick(1 / FPS); meter.push(sh.frame()); }
   }
   return meter.report();
 }

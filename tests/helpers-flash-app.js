@@ -13,6 +13,7 @@ import { mock } from 'node:test';
 import { createScreen, COLOUR_256, COLOUR_BASIC } from './helpers-ansi.js';
 import { createFlashMeter } from './helpers-flash.js';
 import { fakeStdin, fakeStdout, fakeProc, fakeStderr } from './helpers.js';
+import { createClock } from './helpers-clock.js';
 
 export const APP_FPS = 18;
 const DEF_FG = 0xcccccc, DEF_BG = 0x0c0c0c;
@@ -29,8 +30,15 @@ const rgbOf = (v, dflt) => (v === -1 ? dflt : (v & COLOUR_256) === COLOUR_256 &&
 // DRIFT-8 r5: how a run advances the app one frame of the requested rate. By default app.tick(1 / fps), as the earlier arms did. With viaLoop the app's own timer loop runs
 // (autoLoop on, a fake clock the helper advances 1 ms at a time, setTimeout mocked), which is how the real app is driven: its schedule, its cap on the paint rate and its
 // dt are the shipped ones, and the meter still reads one screen per 1 / fps of the fake clock (a screen that was not repainted is read again, as a viewer sees it).
-function makeDriver({ viaLoop, fps, stepMs = 0.05 }) {
+// DRIFT-9: with `clock` ('grid', 'q156' or 'jitter', tests/helpers-clock.js) the app's loop runs on that clock through the `timer` seam instead (autoLoop on; no mock timers):
+// the clock is advanced to each frame boundary (keys are pressed at the boundary, before the step), so the app paints when the clock lets it and the meter still reads one screen
+// per 1 / fps of clock time. Without it the arms are unchanged.
+function makeDriver({ viaLoop, fps, stepMs = 0.05, clock = null, clockSeed = 1 }) {
   const state = { ms: 0 };
+  if (clock) {
+    const c = createClock({ mode: clock, seed: clockSeed });
+    return { clock: c, timer: c.timer, now: c.now, advance(app, k) { c.advanceTo(((k + 1) * 1000) / fps); }, done() {} };
+  }
   if (viaLoop) mock.timers.enable({ apis: ['setTimeout'] });
   return {
     now: () => state.ms,
@@ -52,9 +60,9 @@ export const PLAN_1X = [];
 // of the screens just shown, from `lead` real seconds before the dissolve starts (the dissolve lasts `fade` real seconds from 1x up) to `tail` real seconds after it
 // ends, a fresh meter per dissolve. `speed` is the speed the plan reaches; it only sizes the ring: whether the app really ran at that speed is MEASURED from the
 // real time between switches ((hold + fade) / speed), returned as `sinceLast`.
-export async function runAppDissolves({ cols = 80, rows = 24, mode = 'truecolor', seed = 1, seconds = 100, plan = PLAN_4X, speed = 4, lead = 4, tail = 4, fade = 2, count = Infinity, root = null, fps = APP_FPS, viaLoop = false, stepMs = 0.05 } = {}) {
+export async function runAppDissolves({ cols = 80, rows = 24, mode = 'truecolor', seed = 1, seconds = 100, plan = PLAN_4X, speed = 4, lead = 4, tail = 4, fade = 2, count = Infinity, root = null, fps = APP_FPS, viaLoop = false, stepMs = 0.05, clock = null, clockSeed = 1 } = {}) {
   // fps: the frame rate the user asked for (--fps); the app is told it and ticked at it, and the meter reads every tick (DRIFT-8 r5)
-  const drv = makeDriver({ viaLoop, fps, stepMs });
+  const drv = makeDriver({ viaLoop, fps, stepMs, clock, clockSeed });
   // root: a copy of the tree (src/ and cartridges/) to run instead of this one; the mutation test runs the app with the fix taken out
   const createApp = root ? (await import(pathToFileURL(path.join(root, "src", "app.js")).href)).createApp : realCreateApp;
   const INSTALL_DIR = root ? path.join(root, "cartridges") : REAL_INSTALL_DIR;
@@ -64,7 +72,7 @@ export async function runAppDissolves({ cols = 80, rows = 24, mode = 'truecolor'
   const env = mode === 'truecolor' ? { COLORTERM: 'truecolor' } : {};
   const app = createApp({
     stdin, stdout, stderr, proc, env, configPath: path.join(tmp, 'config.json'), dirs: [{ dir: INSTALL_DIR, trusted: true }],
-    autoLoop: viaLoop, now: drv.now, seed, fps, startScreen: { screen: 'cartridge', cartridge: 'driftman-9000', skipBoot: false },
+    autoLoop: viaLoop || !!clock, now: drv.now, timer: drv.timer, seed, fps, startScreen: { screen: 'cartridge', cartridge: 'driftman-9000', skipBoot: false },
   });
   const out = [];
   try {
@@ -126,15 +134,15 @@ function finish(o) {
 // DRIFT-8 r4: the same app, but a window around a moment you choose instead of around a dissolve. `keys` are { atRunning, key } presses (seconds into the running program,
 // as in `plan`); the window is [pickAt - before, pickAt + after] seconds into the running program; the scene shown is read every frame (ids[k] is the sceneId at frame k since
 // running began, null while there is none). Used for the menu jump, where the dissolve is the program-switch one and does not show up as a scene change on its own schedule.
-export async function runAppWindow({ cols = 80, rows = 24, mode = 'truecolor', seed = 1, keys = [], pickAt, before = 6, after = 4, fps = APP_FPS, viaLoop = false, stepMs = 0.05 } = {}) {
-  const drv = makeDriver({ viaLoop, fps, stepMs });
+export async function runAppWindow({ cols = 80, rows = 24, mode = 'truecolor', seed = 1, keys = [], pickAt, before = 6, after = 4, fps = APP_FPS, viaLoop = false, stepMs = 0.05, clock = null, clockSeed = 1 } = {}) {
+  const drv = makeDriver({ viaLoop, fps, stepMs, clock, clockSeed });
   const stdout = fakeStdout({ columns: cols, rows });
   const stdin = fakeStdin(), stderr = fakeStderr(), proc = fakeProc();
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-flash-app-'));
   const env = mode === 'truecolor' ? { COLORTERM: 'truecolor' } : {};
   const app = realCreateApp({
     stdin, stdout, stderr, proc, env, configPath: path.join(tmp, 'config.json'), dirs: [{ dir: REAL_INSTALL_DIR, trusted: true }],
-    autoLoop: viaLoop, now: drv.now, seed, fps, startScreen: { screen: 'cartridge', cartridge: 'driftman-9000', skipBoot: false },
+    autoLoop: viaLoop || !!clock, now: drv.now, timer: drv.timer, seed, fps, startScreen: { screen: 'cartridge', cartridge: 'driftman-9000', skipBoot: false },
   });
   const ids = [];
   try {

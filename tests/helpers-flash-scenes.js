@@ -5,16 +5,20 @@
 // off the scene clock), kept as the control that the clock is doing the work.
 import { createFlashMeter } from './helpers-flash.js';
 import { flashRig, frameAtSpeed } from './helpers-flash-controls.js';
+import { createRun } from './helpers-clock.js';
 
 export const FPS = 18;
 
-export function runScene(scene, [cols, rows], { speed = 1, mode = 'truecolor', seed = 1, seconds = 66, clock = true, start = 0 } = {}) {
+// DRIFT-9: `clk` = 'grid' | 'q156' | 'jitter' (tests/helpers-clock.js) replays it as the app would paint it on that clock (sample k shows the last paint at or before it); none is the old exact grid.
+// (`clock` below is the colour clock, an older option.)
+export function runScene(scene, [cols, rows], { speed = 1, mode = 'truecolor', seed = 1, seconds = 66, clock = true, start = 0, clk: clockMode = null } = {}) {
+  const run = createRun({ clock: clockMode, fps: FPS });
   const rig = flashRig([scene], cols, rows, { seed, mode });
   const meter = createFlashMeter(cols, rows, FPS);
   const N = Math.round((seconds * FPS) / speed);
   const st = { a: 0, b: 0, p: 0 };
   for (let k = 0; k < N; k++) {
-    const t = start + (k * speed) / FPS;
+    const t = start + (run.sceneIndex(k) * speed) / FPS;
     const s = rig.show(clock ? frameAtSpeed(rig.cc, st, t, speed) : rig.cc.frame(st, t));
     meter.push(s.frame, s.palette);
   }

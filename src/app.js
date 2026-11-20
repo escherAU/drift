@@ -156,6 +156,9 @@ export function createApp(o) {
   const configPath = o.configPath !== undefined ? o.configPath : defaultConfigPath(env);
   const cmode = o.colorMode || detectColorMode(env); // truecolor | 256
   const autoLoop = o.autoLoop !== false;
+  // DRIFT-9: the timer the loop runs on, { set(fn, ms), clear(handle) }. Tests inject a clock's timer; the default resolves the global setTimeout / clearTimeout at
+  // call time (so mock.timers still drives it). Only the loop uses it: the 750 ms quit backstops stay on the global timer.
+  const timerSeam = o.timer || { set: (fn, ms) => setTimeout(fn, ms), clear: (h) => clearTimeout(h) };
   const seed = o.seed ?? DEFAULTS.seed;
 
   const term = createTerminal({ stdin, stdout });
@@ -400,7 +403,7 @@ export function createApp(o) {
     running = false;
     if (shell) shell.dispose();
     if (runningResolve) runningResolve(false);
-    if (timer) { clearTimeout(timer); timer = null; }
+    if (timer) { timerSeam.clear(timer); timer = null; }
     if (uninstall) { uninstall(); uninstall = null; }
     term.leave(() => {
       if (errText) stderr.write(errText, () => exitOnce(code));
@@ -479,7 +482,7 @@ export function createApp(o) {
     const every = cmode === '256' && fullColourOn ? Math.max(interval, 1000 * FULLCOLOUR_256_PERIOD) : interval; // the cap, in the loop's own schedule
     nextAt += every;
     if (nextAt < n) nextAt = n + every;
-    timer = setTimeout(loop, Math.max(1, nextAt - now()));
+    timer = timerSeam.set(loop, Math.max(1, nextAt - now()));
   }
 
   function start() {
@@ -500,7 +503,7 @@ export function createApp(o) {
     running = true;
     lastNow = now();
     nextAt = lastNow;
-    if (autoLoop) timer = setTimeout(loop, 1);
+    if (autoLoop) timer = timerSeam.set(loop, 1);
     return true;
   }
 

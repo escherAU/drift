@@ -21,6 +21,7 @@ import { shelfLayout, LABEL_W, LABEL_H } from '../src/shell/library.js';
 import { sizeTier } from '../src/shell/ui.js';
 import { foilRoot, foilShell, copyOf, DT, FPS } from './helpers-foil.js';
 import { flush } from './helpers-console-hook.js';
+import { createRun } from './helpers-clock.js';
 
 const SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [176, 58], [78, 24]];
 const RULES = RULE_IDS.map((id) => [id, (r) => ruleOf(r, id)]); // the shared list (helpers-flash.js): the brightness and red rules and C (DRIFT-8 C4)
@@ -53,11 +54,13 @@ const show = (rep, x4 = true) => `${showOne(rep.cell, x4)} | pixel ${showOne(rep
 const TRUECOLOR = FLASH_MODE === 'truecolor'; // the ceilings are measured on truecolor; in 256 colours every rule is held at its own limit and the numbers are printed
 
 // the 30 s at rest: wait for nothing, the library is the start screen
-function rest(cols, rows, { withFoil = true, seconds = 30, offset = 0, filter = null, art = 'dense' } = {}) {
-  const { sh } = foilShell(cols, rows, { root: foilRoot({ withFoil, art }), cmode: FLASH_MODE });
-  const meter = shownMeter(cols, rows, FPS);
+// (DRIFT-9: `clock` = 'grid' | 'q156' | 'jitter' runs the same flow on that clock, tests/helpers-clock.js; none is the old exact grid)
+function rest(cols, rows, { withFoil = true, seconds = 30, offset = 0, filter = null, art = 'dense', clock = null } = {}) {
+  const run = createRun({ clock, fps: FPS });
+  const sh = run.sh(foilShell(cols, rows, { root: foilRoot({ withFoil, art }), cmode: FLASH_MODE }).sh);
+  const meter = run.meter(shownMeter(cols, rows, FPS));
   if (offset > 0) sh.tick(offset);
-  for (let k = 0; k < seconds * FPS; k++) {
+  for (const k of run.steps(seconds)) {
     const f = sh.frame();
     meter.push(filter ? filter(copyOf(f), k) : f);
     sh.tick(DT);
@@ -67,17 +70,18 @@ function rest(cols, rows, { withFoil = true, seconds = 30, offset = 0, filter = 
 
 // the walk
 const WALK = [[8, 'libNext'], [13, 'libPrev'], [18, 'libPrev'], [22, 'libNext'], [26, 'libNext'], [26.3, 'libPrev']];
-function walk(cols, rows, { withFoil = true, offset = 0, art = 'dense' } = {}) {
-  const { sh } = foilShell(cols, rows, { root: foilRoot({ withFoil, art }), cmode: FLASH_MODE });
-  const meter = shownMeter(cols, rows, FPS);
+function walk(cols, rows, { withFoil = true, offset = 0, art = 'dense', clock: mode = null } = {}) {
+  const run = createRun({ clock: mode, fps: FPS });
+  const sh = run.sh(foilShell(cols, rows, { root: foilRoot({ withFoil, art }), cmode: FLASH_MODE }).sh);
+  const meter = run.meter(shownMeter(cols, rows, FPS));
   if (offset > 0) sh.tick(offset);
   let clock = 0, next = 0;
   const path = [sh.state().cartridge];
-  for (let k = 0; k < 30 * FPS; k++) {
+  for (const k of run.steps(30)) {
     while (next < WALK.length && clock >= WALK[next][0] - 1e-9) { sh.actions[WALK[next][1]](); next++; path.push(sh.state().cartridge); }
     meter.push(sh.frame());
     sh.tick(DT);
-    clock += DT;
+    clock = mode ? run.t() : clock + DT;
   }
   return { rep: meter.report(), path };
 }
@@ -100,10 +104,11 @@ function wobble(cols, rows) {
 }
 
 // insert + boot until the cartridge runs (plus a second of it), then the eject; the foil is frozen at t = 0 for all of it
-async function insertFlow(cols, rows, withFoil) {
-  const { sh } = foilShell(cols, rows, { root: foilRoot({ withFoil, art: 'delza' }), start: { cartridge: 'foil-a' }, cmode: FLASH_MODE });
+async function insertFlow(cols, rows, withFoil, { clock = null } = {}) {
+  const run = createRun({ clock, fps: FPS });
+  const sh = run.sh(foilShell(cols, rows, { root: foilRoot({ withFoil, art: 'delza' }), start: { cartridge: 'foil-a' }, cmode: FLASH_MODE }).sh);
   await flush();
-  const ins = shownMeter(cols, rows, FPS);
+  const ins = run.meter(shownMeter(cols, rows, FPS));
   let sawFoil = false;
   for (let n = 0; sh.state().screen !== 'running' && n < 900; n++) {
     const f = sh.frame();
@@ -113,11 +118,11 @@ async function insertFlow(cols, rows, withFoil) {
     if (n % 10 === 0) await flush();
   }
   assert.equal(sh.state().screen, 'running', `${cols}x${rows} reached the running screen`);
-  for (let k = 0; k < FPS; k++) { ins.push(sh.frame()); sh.tick(DT); }
+  for (const k of run.steps(1)) { ins.push(sh.frame()); sh.tick(DT); }
   sh.key('e');
-  const eje = shownMeter(cols, rows, FPS);
+  const eje = run.meter(shownMeter(cols, rows, FPS));
   for (let n = 0; sh.state().screen === 'eject' && n < 600; n++) { eje.push(sh.frame()); sh.tick(DT); }
-  for (let k = 0; k < 6; k++) { eje.push(sh.frame()); sh.tick(DT); }
+  for (const k of run.steps(6 / FPS)) { eje.push(sh.frame()); sh.tick(DT); }
   return { ins: ins.report(), eje: eje.report(), sawFoil };
 }
 

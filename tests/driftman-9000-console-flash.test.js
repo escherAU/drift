@@ -18,6 +18,7 @@ import { shelfLayout } from '../src/shell/library.js';
 import { sizeTier, newFrame } from '../src/shell/ui.js';
 import { flush, DT, FPS, SIZES, hook, RGB_CELL } from './helpers-driftman-console.js';
 import { measureRelativeCost } from './helpers-budget.js';
+import { createRun } from './helpers-clock.js';
 
 const RULES = RULE_IDS.map((id) => [id, (r) => ruleOf(r, id)]); // the shared list (helpers-flash.js): the brightness and red rules and C (DRIFT-8 C4)
 const pc = (x) => (x * 100).toFixed(2);
@@ -55,25 +56,27 @@ function shell9(cols, rows, withHook) {
 
 // Insert + boot (until the running screen, plus one second of it) and, from the same shell, the eject (plus the library after it).
 // `filter(frame, k, rect)` is a test-only post-filter on the frames the shell drew (the control).
-async function measure(cols, rows, phase, { withHook = true, filter = null } = {}) {
-  const sh = shell9(cols, rows, withHook);
+// (DRIFT-9: `clock` = 'grid' | 'q156' | 'jitter' runs the flow on that clock, tests/helpers-clock.js; none is the old exact grid)
+async function measure(cols, rows, phase, { withHook = true, filter = null, clock = null } = {}) {
+  const run = createRun({ clock, fps: FPS });
+  const sh = run.sh(shell9(cols, rows, withHook));
   await flush();
   const lay = shelfLayout(cols, rows, sizeTier(cols, rows));
   const full = sizeTier(cols, rows) === 'full';
   const rect = full ? { x: lay.consoleX, y: lay.consoleTop, w: 84, h: 18 } : { x: lay.miniX, y: lay.miniTop, w: 38, h: 4 };
   if (phase > 0) sh.tick(phase * DT);
-  const ins = shownMeter(cols, rows, FPS);
+  const ins = run.meter(shownMeter(cols, rows, FPS));
   let k = 0;
   const push = (meter) => { const f = sh.frame(); meter.push(filter ? filter(f, k++, rect) : f); };
   let n = 0;
   for (; sh.state().screen !== 'running' && n < 600; n++) { push(ins); sh.tick(DT); }
   assert.ok(n < 600, 'the boot reached the running screen');
-  for (let j = 0; j < FPS; j++) { push(ins); sh.tick(DT); }
+  for (const j of run.steps(1)) { push(ins); sh.tick(DT); }
   const insRep = ins.report();
   sh.key('e');
-  const eje = shownMeter(cols, rows, FPS);
+  const eje = run.meter(shownMeter(cols, rows, FPS));
   for (let m = 0; sh.state().screen === 'eject' && m < 600; m++) { push(eje); sh.tick(DT); }
-  for (let j = 0; j < 6; j++) { push(eje); sh.tick(DT); }
+  for (const j of run.steps(6 / FPS)) { push(eje); sh.tick(DT); }
   return { ins: insRep, eje: eje.report() };
 }
 

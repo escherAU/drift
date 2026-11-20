@@ -22,6 +22,7 @@ import { shownMeter, FLASH_MODE, MODE_NOTE } from './helpers-flash-modes.js';
 import { loadScenes as realLoadScenes } from '../src/cartridge/loader.js';
 import { shelfLayout } from '../src/shell/library.js';
 import { sizeTier } from '../src/shell/ui.js';
+import { createRun } from './helpers-clock.js';
 import { insertedShell, calmHookSource, harshHookSource, strobeHookSource, recorderHookSource, flush, DT, SIZES } from './helpers-console-hook.js';
 
 const FPS = 18;
@@ -39,12 +40,14 @@ const TRUECOLOR = FLASH_MODE === 'truecolor'; // the L2 ceilings and the fixture
 
 // Insert + boot (until the running screen, plus one second of it) and, from the same shell, the eject (plus the library after it).
 // -> { ins, eje, y: { first, last } } (y = the luminance of one line cell of the console at its first and last hooked frame)
-async function measure(source, cols, rows, loadScenes) {
-  const { sh } = insertedShell(cols, rows, { source, cmode: FLASH_MODE, ...(loadScenes ? { loadScenes } : {}) });
+// (DRIFT-9: `clock` = 'grid' | 'q156' | 'jitter' runs the flow on that clock, tests/helpers-clock.js; none is the old exact grid)
+async function measure(source, cols, rows, loadScenes, clock = null) {
+  const run = createRun({ clock, fps: FPS });
+  const sh = run.sh(insertedShell(cols, rows, { source, cmode: FLASH_MODE, ...(loadScenes ? { loadScenes } : {}) }).sh);
   await flush();
   const full = sizeTier(cols, rows) === 'full';
   const lay = shelfLayout(cols, rows, sizeTier(cols, rows));
-  const ins = shownMeter(cols, rows, FPS);
+  const ins = run.meter(shownMeter(cols, rows, FPS));
   const y = { first: null, last: null, at: -1 };
   for (let k = 0, n = 0; sh.state().screen !== 'running' && n++ < 600; k++) {
     const f = sh.frame();
@@ -57,12 +60,12 @@ async function measure(source, cols, rows, loadScenes) {
     if (y.at >= 0 && sh.state().screen === 'boot' && f.shades[y.at] === 255) y.last = ins.cellY(y.at);
     sh.tick(DT);
   }
-  for (let k = 0; k < FPS; k++) { ins.push(sh.frame()); sh.tick(DT); }
+  for (const k of run.steps(1)) { ins.push(sh.frame()); sh.tick(DT); }
   const insRep = ins.report();
   sh.key('e');
-  const eje = shownMeter(cols, rows, FPS);
+  const eje = run.meter(shownMeter(cols, rows, FPS));
   for (let n = 0; sh.state().screen === 'eject' && n < 600; n++) { eje.push(sh.frame()); sh.tick(DT); }
-  for (let k = 0; k < 6; k++) { eje.push(sh.frame()); sh.tick(DT); }
+  for (const k of run.steps(6 / FPS)) { eje.push(sh.frame()); sh.tick(DT); }
   return { ins: insRep, eje: eje.report(), y };
 }
 
