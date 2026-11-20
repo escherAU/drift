@@ -257,7 +257,52 @@ test('stuck stdout, error path: stderr that calls back late (300 ms) exits 1 on 
   } finally { mock.timers.reset(); }
 });
 
-test('stuck stdout, error path with BOTH streams stuck: exit 1 once at 750 ms (the restore write never calls back, so the error text is not written at all)', async () => {
+// DRIFT-9 item 1: the error text goes to stderr only after stdout has drained (so it lands after the restore sequence), once, with the 750 ms backstop.
+test('DRIFT-9 quit error text (a) stdout drains late: nothing on stderr until the restore write is flushed, then the text once; exit on the stderr callback; nothing more at 750 ms', async () => {
+  const stdout = stuckStdout({ columns: 80, rows: 24, stuck: false }), stderr = stuckStderr();
+  const s = await classic({ rgb: false, cols: 80, rows: 24, stdout, stderr });
+  try {
+    stdout.stick();
+    s.proc.emit('uncaughtException', new Error('drain probe'));
+    assert.equal(lastWrite(s), LEAVE, 'the restore sequence is written');
+    assert.equal(stderr.writes.length, 0, 'stderr is empty while stdout has not drained');
+    mock.timers.tick(200);
+    assert.equal(stderr.writes.length, 0, 'still empty at 200 ms');
+    stdout.release(); // the terminal catches up
+    assert.equal(stderr.writes.length, 1, 'the text is written once, after the drain');
+    assert.ok(stderr.writes[0].includes('drain probe'), stderr.writes[0]);
+    assert.ok(stdout.writes.includes(LEAVE), 'the restore sequence was among stdout writes before the text');
+    assert.deepEqual(s.proc.exits, [], 'the exit waits for the stderr write callback');
+    stderr.release();
+    assert.deepEqual(s.proc.exits, [1], 'exit fires on the stderr callback');
+    mock.timers.tick(BACKSTOP + 2000);
+    assert.equal(stderr.writes.length, 1, 'nothing more is written at 750 ms');
+    assert.deepEqual(s.proc.exits, [1], 'exactly once');
+  } finally { mock.timers.reset(); }
+});
+
+test('DRIFT-9 quit error text (b) stdout stuck: stderr empty before 750 ms; the text is written once at 750 ms; exit once at 750 ms and not at 749', async () => {
+  const stdout = stuckStdout({ columns: 80, rows: 24 }), stderr = fakeStderr();
+  const s = await classic({ rgb: false, cols: 80, rows: 24, stdout, stderr });
+  try {
+    s.proc.emit('uncaughtException', new Error('stuck probe'));
+    assert.equal(lastWrite(s), LEAVE);
+    assert.equal(stderr.writes.length, 0, 'stderr is empty right after the quit');
+    mock.timers.tick(BACKSTOP - 1);
+    assert.equal(stderr.writes.length, 0, 'stderr is empty at 749 ms');
+    assert.deepEqual(s.proc.exits, [], 'no exit at 749 ms');
+    mock.timers.tick(1);
+    assert.equal(stderr.writes.length, 1, 'the text is written once at 750 ms');
+    assert.ok(stderr.writes[0].includes('stuck probe'), stderr.writes[0]);
+    assert.deepEqual(s.proc.exits, [1], 'exit 1 at 750 ms');
+    stdout.release(); // a late drain must not write the text again or exit again
+    mock.timers.tick(5000);
+    assert.equal(stderr.writes.length, 1, 'the text is not written a second time');
+    assert.deepEqual(s.proc.exits, [1], 'exactly once');
+  } finally { mock.timers.reset(); }
+});
+
+test('stuck stdout, error path with BOTH streams stuck: exit 1 once at 750 ms (the restore write never calls back; the text is written to stderr at 750 ms and its stuck callback does not hold the exit)', async () => {
   const stdout = stuckStdout({ columns: 80, rows: 24 }), stderr = stuckStderr();
   const s = await classic({ rgb: false, cols: 80, rows: 24, stdout, stderr });
   try {

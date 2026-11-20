@@ -405,12 +405,16 @@ export function createApp(o) {
     if (runningResolve) runningResolve(false);
     if (timer) { timerSeam.clear(timer); timer = null; }
     if (uninstall) { uninstall(); uninstall = null; }
-    term.leave(() => {
-      if (errText) stderr.write(errText, () => exitOnce(code));
-      else exitOnce(code);
-    });
+    // the error text goes to stderr once, after stdout has drained (so it lands after the restore sequence), or at the backstop
+    let errSent = false;
+    const sendErr = (then) => {
+      if (!errText || errSent) return then();
+      errSent = true;
+      return stderr.write(errText, then);
+    };
+    term.leave(() => sendErr(() => exitOnce(code)));
     // never hang on a stuck stream
-    setTimeout(() => exitOnce(code), 750).unref();
+    setTimeout(() => { sendErr(() => {}); exitOnce(code); }, 750).unref();
   }
 
   function guard(reason, arg) {
