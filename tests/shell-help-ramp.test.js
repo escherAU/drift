@@ -13,6 +13,7 @@ import { RGB_CELL, makeGlow, makePlain, sameCell } from './helpers-fullcolour.js
 import { FLASH_FRACTION, failedRules, ruleOf } from './helpers-flash.js';
 import { shownMeter } from './helpers-flash-modes.js';
 import { createRun } from './helpers-clock.js';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
 import { boot, grab, DT, ESC, SIX } from './helpers-night-drive-shell.js';
 import { mkShell, runCartridge } from './helpers-shell.js';
 
@@ -341,3 +342,12 @@ test('Classic (drawn by the app, not the shell) keeps its hard cut: the panel is
   c.done();
   void runCartridge; void SIX;
 });
+
+// ---- DRIFT-9: the same flow on the q156 and the jitter clock (tests/helpers-clock.js), h open, 1 s, h close at runtime 4x on a lit full-colour fixture at 80x24; the five 1x rules at their own limits. One arm per clock, then the cost by count.
+for (const clock of [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }]) {
+  test(`flash meter over h open, 1 s, h close at 4x on the ${clock.mode} clock, 80x24: the five 1x rules pass`, async () => {
+    const rep = await clockArm(() => meterRun(80, 24, 4, false, 'truecolor', clock));
+    judgeX1(rep, `help ramp ${clock.mode} 80x24 4x`);
+  });
+}
+test('DRIFT-9 clock arms cost: help ramp flash read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('help ramp flash'); });

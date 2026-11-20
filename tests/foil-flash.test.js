@@ -22,6 +22,7 @@ import { sizeTier } from '../src/shell/ui.js';
 import { foilRoot, foilShell, copyOf, DT, FPS } from './helpers-foil.js';
 import { flush } from './helpers-console-hook.js';
 import { createRun } from './helpers-clock.js';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
 
 const SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [176, 58], [78, 24]];
 const RULES = RULE_IDS.map((id) => [id, (r) => ruleOf(r, id)]); // the shared list (helpers-flash.js): the brightness and red rules and C (DRIFT-8 C4)
@@ -210,3 +211,13 @@ test(`foil flash TABLE${MODE_NOTE}: every measured value at the six sizes`, () =
   console.log([`TABLE foil flash meter${MODE_NOTE} (x1/x4; limits L1 25, L2 25, L3 30, R 25; cell grid | pixel grid)`, ...TABLE.map((l) => '  ' + l)].join('\n'));
   assert.ok(TABLE.length === 0 || TABLE.length >= SIZES.length * 4);
 });
+
+// ---- DRIFT-9: the same flow on the q156 and the jitter clock (tests/helpers-clock.js), insert + boot and eject of a foil cartridge at 88x39, the largest ceiling in this file; the five 1x rules at their own limits. One arm per clock, then the cost by count.
+for (const clock of [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }]) {
+  test(`foil flash${MODE_NOTE} on the ${clock.mode} clock: insert + boot and eject of a foil cartridge at 88x39 pass the five 1x rules`, async () => {
+    const r = await clockArm(() => insertFlow(88, 39, true, { clock }));
+    judgeX1(r.ins, `foil ${clock.mode} 88x39 insert+boot`);
+    judgeX1(r.eje, `foil ${clock.mode} 88x39 eject`);
+  });
+}
+test('DRIFT-9 clock arms cost: foil flash read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('foil flash'); });

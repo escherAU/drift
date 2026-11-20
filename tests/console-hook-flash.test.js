@@ -23,6 +23,7 @@ import { loadScenes as realLoadScenes } from '../src/cartridge/loader.js';
 import { shelfLayout } from '../src/shell/library.js';
 import { sizeTier } from '../src/shell/ui.js';
 import { createRun } from './helpers-clock.js';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
 import { insertedShell, calmHookSource, harshHookSource, strobeHookSource, recorderHookSource, flush, DT, SIZES } from './helpers-console-hook.js';
 
 const FPS = 18;
@@ -117,3 +118,13 @@ test(`flash TABLE${MODE_NOTE}: every measured value (standard flow, calm, harsh,
   console.log([`TABLE console hook flash meter${MODE_NOTE} (x1/x4; limits L1 25, L2 25, L3 30, R 25; cell grid | pixel grid)`, ...TABLE.map((l) => '  ' + l)].join('\n'));
   assert.ok(TABLE.length === 0 || TABLE.length === SIZES.length * 4);
 });
+
+// ---- DRIFT-9: the same flow on the q156 and the jitter clock (tests/helpers-clock.js), the calm hook over the whole insert + boot and eject at 80x24; the five 1x rules at their own limits. One arm per clock, then the cost by count.
+for (const clock of [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }]) {
+  test(`flash${MODE_NOTE} on the ${clock.mode} clock: the calm hook over the whole insert + boot and the whole eject at 80x24 passes the five 1x rules`, async () => {
+    const m = await clockArm(() => measure(calmHookSource(), 80, 24, undefined, clock));
+    judgeX1(m.ins, `console hook ${clock.mode} 80x24 insert+boot`);
+    judgeX1(m.eje, `console hook ${clock.mode} 80x24 eject`);
+  });
+}
+test('DRIFT-9 clock arms cost: console hook flash read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('console hook flash'); });

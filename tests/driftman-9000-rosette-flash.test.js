@@ -12,6 +12,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFlashMeter, failedRules } from './helpers-flash.js';
 import { createRun } from './helpers-clock.js';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
 import { flashRig, composerFor } from './helpers-flash-controls.js';
 import {
   STEADY_CEILING, WORST_SECOND_CEILING, CPU_MEAN_CEILING_MS, BUDGET_RUN, limitFromMeasured, measureBytes, checkBudget, measureCpu, checkCpu,
@@ -156,3 +157,12 @@ test('rosette CPU: mean scene + render per frame at 240x67 (180 frames after 18 
   assert.equal(m.frames, 180);
   checkCpu(m);
 });
+
+// ---- DRIFT-9: the same flow on the q156 and the jitter clock (tests/helpers-clock.js), the Rosette solo on 256-colour output at 80x24; the five 1x rules at their own limits. One arm per clock, then the cost by count.
+for (const clock of [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }]) {
+  test(`rosette flash on the ${clock.mode} clock: solo on 256-colour output, 80x24, passes the five 1x rules`, async () => {
+    const rep = await clockArm(async () => run(rosette, 80, 24, { clock, reduce256: true }));
+    judgeX1(rep, `rosette ${clock.mode} 80x24 256 colours`);
+  });
+}
+test('DRIFT-9 clock arms cost: rosette flash read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('rosette flash'); });

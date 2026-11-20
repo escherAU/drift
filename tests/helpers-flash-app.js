@@ -25,7 +25,7 @@ export function xterm256(i) {
   if (i < 232) { const k = i - 16; return (XC[Math.floor(k / 36)] << 16) | (XC[Math.floor(k / 6) % 6] << 8) | XC[k % 6]; }
   const g = 8 + (i - 232) * 10; return (g << 16) | (g << 8) | g;
 }
-const rgbOf = (v, dflt) => (v === -1 ? dflt : (v & COLOUR_256) === COLOUR_256 && v < 0x2000000 ? xterm256(v & 255) : (v & COLOUR_BASIC) === COLOUR_BASIC ? CAMPBELL[(v & 255) % 16] : v);
+export const rgbOf = (v, dflt) => (v === -1 ? dflt : (v & COLOUR_256) === COLOUR_256 && v < 0x2000000 ? xterm256(v & 255) : (v & COLOUR_BASIC) === COLOUR_BASIC ? CAMPBELL[(v & 255) % 16] : v);
 
 // DRIFT-8 r5: how a run advances the app one frame of the requested rate. By default app.tick(1 / fps), as the earlier arms did. With viaLoop the app's own timer loop runs
 // (autoLoop on, a fake clock the helper advances 1 ms at a time, setTimeout mocked), which is how the real app is driven: its schedule, its cap on the paint rate and its

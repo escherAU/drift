@@ -19,6 +19,7 @@ import { sizeTier, newFrame } from '../src/shell/ui.js';
 import { flush, DT, FPS, SIZES, hook, RGB_CELL } from './helpers-driftman-console.js';
 import { measureRelativeCost } from './helpers-budget.js';
 import { createRun } from './helpers-clock.js';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
 
 const RULES = RULE_IDS.map((id) => [id, (r) => ruleOf(r, id)]); // the shared list (helpers-flash.js): the brightness and red rules and C (DRIFT-8 C4)
 const pc = (x) => (x * 100).toFixed(2);
@@ -174,3 +175,13 @@ if (FLASH_MODE === 'truecolor') test('9000 console CPU control: a hook that does
   console.log(`CPU control (3x): ratio ${m.ratio.toFixed(3)}`);
   assert.ok(m.ratio >= RATIO_BOUND, `the 3x hook reads ${m.ratio.toFixed(3)}, under the bound ${RATIO_BOUND}: the gate no longer bites`);
 });
+
+// ---- DRIFT-9: the same flow on the q156 and the jitter clock (tests/helpers-clock.js), the 9000 console over the whole insert + boot and eject at 80x24, where the L2 pin is tightest; the five 1x rules at their own limits. One arm per clock, then the cost by count.
+for (const clock of [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }]) {
+  test(`9000 console flash${MODE_NOTE} on the ${clock.mode} clock: insert + boot and eject at 80x24 pass the five 1x rules`, async () => {
+    const m = await clockArm(() => measure(80, 24, 0, { clock }));
+    judgeX1(m.ins, `9000 console ${clock.mode} 80x24 insert+boot`);
+    judgeX1(m.eje, `9000 console ${clock.mode} 80x24 eject`);
+  });
+}
+test('DRIFT-9 clock arms cost: 9000 console flash read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('9000 console flash'); });

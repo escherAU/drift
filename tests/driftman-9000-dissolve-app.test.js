@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import { runAppDissolves, PLAN_4X, PLAN_1X, APP_FPS } from './helpers-flash-app.js';
 import { failedRules, X1_RULE_IDS } from './helpers-flash.js';
 import { FLASH_MODE, MODE_NOTE } from './helpers-flash-modes.js';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
 
 const pc = (x) => (100 * x).toFixed(1);
 const show = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)} L2 ${pc(rep.l2.x1.worstFraction)} L3 ${pc(rep.l3.worstFraction)} R ${pc(rep.r.x1.worstFraction)} C ${pc(rep.c.worstFraction)}`;
@@ -96,3 +97,13 @@ test(`9000 dissolves in the app at 4x last their 2 seconds in real time (not a q
   assert.ok(gaps.length >= 3, `dissolves ${res.dissolves.length}`);
   for (const g of gaps) assert.ok(Math.abs(g - 17) <= 0.1, `gap ${g} s, want 17 (15.5 would be a dissolve of 0.5 s)`);
 });
+
+// ---- DRIFT-9: the same flow on the q156 and the jitter clock (tests/helpers-clock.js), the real app at real 4x, 80x24, seed 8 (the seed whose Bloomfall > Rosette dissolve read highest before the DRIFT-8 fix); the five 1x rules at their own limits. One arm per clock, then the cost by count.
+for (const clock of [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }]) {
+  test(`9000 dissolves on the real app${MODE_NOTE} on the ${clock.mode} clock: seed 8, 80x24, real 4x, every dissolve window passes the five 1x rules`, async () => {
+    const res = await clockArm(() => runAppDissolves({ mode: FLASH_MODE, seed: 8, seconds: 82, plan: PLAN_4X, speed: 4, clock: clock.mode, clockSeed: clock.seed }));
+    assert.ok(res.dissolves.length >= 3, `the app made ${res.dissolves.length} dissolves on the ${clock.mode} clock`);
+    for (const d of res.dissolves) judgeX1(d.report, `dissolve ${d.from}>${d.to} ${clock.mode} seed 8`);
+  });
+}
+test('DRIFT-9 clock arms cost: 9000 dissolve app read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('9000 dissolve app'); });

@@ -483,6 +483,8 @@ function worseOf(cell, pixel) {
   return { ...w, pass: cell.pass && pixel.pass, details: { ...w.details, grid: w === pixel ? 'pixel' : 'cell' } };
 }
 
+// DRIFT-9: every frame any meter in this process has read (a count, never a time); tests/helpers-clock-arms.js uses it to hold the new clock arms to a share of a file's metering.
+export const meterStats = { frames: 0 };
 export function createFlashMeter(cols, rows, fps) {
   const n = cols * rows;
   const cf = fieldSize(cols, rows);
@@ -503,6 +505,7 @@ export function createFlashMeter(cols, rows, fps) {
     const { glyphs, shades, fg, bg } = frame;
     const fgT = pal && pal.fgRgb, bgT = pal && pal.bgRgb;
     k++;
+    meterStats.frames++;
     const all = k === 0 || pal !== prevPal;
     prevPal = pal;
     for (let y = 0; y < rows; y++) {

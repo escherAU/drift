@@ -8,6 +8,7 @@ import { RULE_IDS, ruleOf } from './helpers-flash.js';
 import assert from 'node:assert/strict';
 import { shownMeter, FLASH_MODE, MODE_NOTE } from './helpers-flash-modes.js';
 import { createRun } from './helpers-clock.js';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
 import { arrive9000, stepFrames, stepSeconds, pickVision, VISIONS, FPS } from './helpers-driftman-panels.js';
 
 const SIZES = [[120, 40], [80, 24], [240, 67], [88, 39], [176, 58], [78, 24]];
@@ -92,3 +93,12 @@ test(`panels flash TABLE${MODE_NOTE}: every measured value`, () => {
   console.log([`TABLE panels flash meter${MODE_NOTE} (x1/x4 views; limits L1 25, L2 25, L3 30, R 25; cell grid | pixel grid)`, ...TABLE.map((l) => '  ' + l)].join('\n'));
   assert.ok(TABLE.length > 0);
 });
+
+// ---- DRIFT-9: the same flow on the q156 and the jitter clock (tests/helpers-clock.js), menu and help open and close over Bloomfall at 4x at 78x24 (the compact size just above its breakpoint); the five 1x rules at their own limits. One arm per clock, then the cost by count.
+for (const clock of [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }]) {
+  test(`panels flash${MODE_NOTE} on the ${clock.mode} clock: menu and help open/close over Bloomfall at 4x, 78x24, pass the five 1x rules`, async () => {
+    const rep = await clockArm(() => run(78, 24, 'bloomfall', 4, { clock }));
+    judgeX1(rep, `panels ${clock.mode} 78x24 bloomfall 4x`);
+  });
+}
+test('DRIFT-9 clock arms cost: panels flash read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('panels flash'); });

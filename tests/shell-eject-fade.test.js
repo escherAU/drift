@@ -14,6 +14,7 @@ import { ramp, newFrame } from '../src/shell/ui.js';
 import { RGB_CELL, makeGlow, GLOW_GLYPH, sameCell } from './helpers-fullcolour.js';
 import { shownMeter } from './helpers-flash-modes.js';
 import { createRun } from './helpers-clock.js';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
 
 const SKIN = { ...driftmanSkin, frame: { ...driftmanSkin.frame, show: 'never' } };
 const SPEEDS = [1, 2, 3, 4];
@@ -271,3 +272,12 @@ test('flash meter over the whole eject at 1x and 4x on a lit full-colour fixture
   assert.deepEqual(bad, []);
 });
 }
+
+// ---- DRIFT-9: the same flow on the q156 and the jitter clock (tests/helpers-clock.js), the whole eject on a lit full-colour fixture at 78x24, the size with the highest L2 ceiling; the five 1x rules at their own limits. The file's other arms read only about 700 frames, so two arms would cost more than 15 % of that: one arm here, on the q156 clock (the Windows tick); the jitter clock is run by the other files' arms.
+for (const clock of [{ mode: 'q156', seed: 1 }]) {
+  test(`flash meter over the whole eject on the ${clock.mode} clock, 78x24: the five 1x rules pass`, async () => {
+    const rep = await clockArm(() => ejectMeterReport(78, 24, 'truecolor', clock));
+    judgeX1(rep, `eject ${clock.mode} 78x24`);
+  });
+}
+test('DRIFT-9 clock arms cost: eject flash read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('eject flash'); });
