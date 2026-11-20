@@ -41,6 +41,8 @@ export const FLIP_WINDOW_SECONDS = 3;
 export const FULLCOLOUR_256_MAX_FPS = 18;
 const FULLCOLOUR_256_PERIOD = 1 / FULLCOLOUR_256_MAX_FPS;
 const FULLCOLOUR_256_SLACK = 0.001; // a step this much short of the period still counts as the period (a timer firing early must not drop a frame)
+// DRIFT-9: the lowest --fps. The loop clamps a step to 0.25 s, so under 4 fps real time is lost; 4 still fails L3 at 61x21 (30.5 %, seed 6, 4x, 256 colours); 5 reads at most 24.8 %.
+export const MIN_FPS = 5;
 const DEFAULTS = { fps: 18, sceneSeconds: 180, fadeSeconds: DEFAULT_FADE_SECONDS, seed: 1 };
 
 // Palette entries the help panel uses in the single-hue palettes (calm, experimental).
@@ -55,7 +57,7 @@ ${cliKeysText()}
 options:
   --scene-seconds N   seconds per scene (default 180)
   --fade-seconds N    calm cross-fade length (default ${DEFAULT_FADE_SECONDS}); other modes dissolve in ${DISSOLVE_SECONDS} s
-  --fps N             frames per second, 1-30 (default 18); full-colour cartridges in 256 colours are held to ${FULLCOLOUR_256_MAX_FPS}
+  --fps N             frames per second, ${MIN_FPS}-30 (default 18); full-colour cartridges in 256 colours are held to ${FULLCOLOUR_256_MAX_FPS}
   --seed N            random seed (default 1)
   --scene NAME|N      start on a scene, in its mode (${allSceneIds().join(' ')})
   --library           start in the cartridge library
@@ -95,7 +97,7 @@ export function parseOptions(argv = [], env = {}) {
   }
   return {
     help,
-    fps: num(pick('fps', 'DRIFT_FPS'), 1, 30, DEFAULTS.fps),
+    fps: num(pick('fps', 'DRIFT_FPS'), MIN_FPS, 30, DEFAULTS.fps),
     sceneSeconds: num(pick('scene-seconds', 'DRIFT_SCENE_SECONDS'), 0.5, 1e9, DEFAULTS.sceneSeconds),
     fadeSeconds: num(pick('fade-seconds', 'DRIFT_FADE_SECONDS'), 0.1, 600, DEFAULTS.fadeSeconds),
     seed: Math.floor(num(pick('seed', 'DRIFT_SEED'), -1e9, 1e9, DEFAULTS.seed)),

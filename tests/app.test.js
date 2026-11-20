@@ -339,6 +339,8 @@ test('parseOptions reads flags and DRIFT_* env', () => {
   assert.equal(parseOptions(['--help'], {}).help, true);
   assert.equal(parseOptions(['--fps', 'banana'], {}).fps, 18);
   assert.equal(parseOptions(['--fps', '500'], {}).fps, 30);
+  assert.equal(parseOptions(['--fps', '3'], {}).fps, 5, 'the floor is 5 fps (MIN_FPS)');
+  assert.equal(parseOptions(['--fps', '0'], {}).fps, 5, '--fps 0 reads 5');
 });
 
 test('synchronized output: every frame is ONE write wrapped in ESC[?2026h ... ESC[?2026l', () => {

@@ -5,10 +5,10 @@
 //
 //   T1  the duration equals its constant to within one frame (1/fps): not earlier (a flow must never run faster than real time) and not later.
 //       Repeated at ALL 8 speeds (SPEEDS in src/app.js; Classic and the running cartridge are both set with the + and - keys before the flow),
-//       at --fps 1, 12, 18 and 30, and under every DRIFT_* environment setting that exists (see ENV below).
+//       at --fps 5 (the floor, MIN_FPS; DRIFT-9 item 2: the rows were at 1 until parseOptions stopped accepting it), 12, 18 and 30, and under every DRIFT_* environment setting that exists (see ENV below).
 //   T2  the eject, as bytes on the terminal, is the same at 1x and at 4x.
 //
-// Below 4 fps the loop's stall guard (src/app.js: dt > 0.25 is cut to 0.25) means one frame adds 0.25 s of flow for 1/fps of real time, so at --fps 1 a
+// (DRIFT-9 item 2: --fps below 5 now reads 5, so the 4x-scaled rows no longer arise through the options.) Below 4 fps the loop's stall guard (src/app.js: dt > 0.25 is cut to 0.25) means one frame adds 0.25 s of flow for 1/fps of real time, so at --fps 1 a
 // flow takes 4x as long as its constant in real time. That is slower, never faster; it is judged in flow seconds (real seconds / 4) against the same
 // bounds, and said plainly here rather than hidden: the fps 1 rows show it (see the finding in the ticket report).
 //
@@ -75,7 +75,7 @@ function structure(out, what) {
   }
 }
 
-const FPS_LIST = [1, 12, 18, 30];
+const FPS_LIST = [5, 12, 18, 30]; // 5 is the lowest --fps parseOptions gives (MIN_FPS); the below-4 fps scaling in gameStep/realPerGame stays in the helper
 
 for (const fps of FPS_LIST) {
   for (let idx = 0; idx < SPEEDS.length; idx++) {

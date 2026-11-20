@@ -1,4 +1,4 @@
-// DRIFT-8 r5: the Driftman 9000 on the REAL app at the frame rates a user can ask for (--fps 1 to 30, DRIFT_FPS), judged by the flash meter with every rule (L1, L2, L3, R and the
+// DRIFT-8 r5: the Driftman 9000 on the REAL app at the frame rates a user can ask for (--fps 5 to 30, DRIFT_FPS), judged by the flash meter with every rule (L1, L2, L3, R and the
 // four-axis colour rule C) at 1x and at real 4x (the `+` key pressed four times). Everything before r5 metered at 18 fps only (the default), and the finding was that the same
 // scenes read differently when the app is asked for more: in 256 colours at --fps 30 and 4x, Rosette alone reads up to 29.6 % on rule C, Bloomfall alone up to 34.7 % (16 of 80
 // dissolve windows over seeds 1-16, worst 29.2 %), and 24 fps passes only by a thin margin (worst 23.8 %). Truecolor at 30 fps passes (worst 7.2 %): it is the snapping of two
@@ -13,6 +13,7 @@
 // and truecolor at 30 fps as the arm the cap must NOT change (it passes today and keeps passing, and tests/fps-cap.test.js pins that truecolor still paints every tick).
 // Every dissolve window is lead 4 s + dissolve + tail 4 s, so each window holds Rosette, Cortex or Bloomfall on its own for 4 s before and after the dissolve.
 // Each arm prints its worst value per rule and the margin to the 25 % limit.
+// DRIFT-9 item 2 (the end of the file): the floor of --fps is 5; 5 fps at 61x21 must pass with L3 at most 30 %, and 4 fps at 61x21 seed 6 must fail L3 (the control).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runAppDissolves, runAppWindow, PLAN_4X, PLAN_1X } from './helpers-flash-app.js';
@@ -118,4 +119,28 @@ test('truecolor at --fps 30, real 4x, 120x40, seed 2: every dissolve window pass
 
 test('truecolor at --fps 30, 1x, 80x24, seed 2: every dissolve window passes every rule', async () => {
   judge(await arm({ cols: 80, rows: 24, mode: 'truecolor', fps: 30, speed: 1, seeds: [2] }));
+});
+
+// ---- DRIFT-9 item 2: the floor of --fps is 5 (MIN_FPS). 4 still fails L3 at 61x21 (30.5 % at seed 6); 5 reads at most 24.8 %.
+const L3_LIMIT = 0.30;
+const SEEDS_8 = [1, 2, 3, 4, 5, 6, 7, 8];
+
+test('256 colours at --fps 5 (the floor), real 4x, 61x21, seeds 1-8: every dissolve window passes every rule and L3 stays at or under 30 %', async () => {
+  const r = await arm({ cols: 61, rows: 21, mode: '256', fps: 5, speed: 4, seeds: SEEDS_8 });
+  console.log(`FPS FLOOR 61x21 256 5 fps 4x seeds 1-8: max L3 ${pc(r.worst.l3)} % (limit ${pc(L3_LIMIT)} %, margin ${pc(L3_LIMIT - r.worst.l3)} points)`);
+  assert.ok(r.worst.l3 <= L3_LIMIT, `max L3 ${pc(r.worst.l3)} % is over ${pc(L3_LIMIT)} %`);
+  judge(r);
+});
+
+test('control: --fps 4 (below the floor) at 61x21, 256 colours, real 4x, seed 6 FAILS L3, so the 5 fps arm can tell', async () => {
+  const res = await runAppDissolves({ cols: 61, rows: 21, mode: '256', fps: 4, seed: 6, seconds: 82, plan: PLAN_4X, speed: 4, viaLoop: true });
+  assert.ok(res.dissolves.length >= 4, `expected at least 4 dissolves, got ${res.dissolves.length}`);
+  let worst = 0; const failing = [];
+  for (const d of res.dissolves) {
+    worst = Math.max(worst, d.report.l3.worstFraction);
+    if (failedRules(d.report, { only: ['l3'] }).length) failing.push(`${d.from}>${d.to} ${pc(d.report.l3.worstFraction)}`);
+  }
+  console.log(`FPS FLOOR control 61x21 256 4 fps 4x seed 6: max L3 ${pc(worst)} %, failing windows: ${failing.join(', ')}`);
+  assert.ok(failing.length >= 1, `fps 4 should fail L3 at seed 6; worst ${pc(worst)} %`);
+  assert.ok(worst > L3_LIMIT, `fps 4 worst L3 ${pc(worst)} % should be over ${pc(L3_LIMIT)} %`);
 });
