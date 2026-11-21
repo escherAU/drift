@@ -134,14 +134,17 @@ function finish(o) {
 // DRIFT-8 r4: the same app, but a window around a moment you choose instead of around a dissolve. `keys` are { atRunning, key } presses (seconds into the running program,
 // as in `plan`); the window is [pickAt - before, pickAt + after] seconds into the running program; the scene shown is read every frame (ids[k] is the sceneId at frame k since
 // running began, null while there is none). Used for the menu jump, where the dissolve is the program-switch one and does not show up as a scene change on its own schedule.
-export async function runAppWindow({ cols = 80, rows = 24, mode = 'truecolor', seed = 1, keys = [], pickAt, before = 6, after = 4, fps = APP_FPS, viaLoop = false, stepMs = 0.05, clock = null, clockSeed = 1 } = {}) {
+export async function runAppWindow({ cols = 80, rows = 24, mode = 'truecolor', seed = 1, keys = [], pickAt, before = 6, after = 4, fps = APP_FPS, viaLoop = false, stepMs = 0.05, clock = null, clockSeed = 1, root = null } = {}) {
   const drv = makeDriver({ viaLoop, fps, stepMs, clock, clockSeed });
+  // root (DRIFT-9 part 3 (b)): a copy of the tree (src/ and cartridges/) to run instead of this one, as in runAppDissolves; the controls run the app with a fix taken out
+  const createApp = root ? (await import(pathToFileURL(path.join(root, 'src', 'app.js')).href)).createApp : realCreateApp;
+  const INSTALL_DIR = root ? path.join(root, 'cartridges') : REAL_INSTALL_DIR;
   const stdout = fakeStdout({ columns: cols, rows });
   const stdin = fakeStdin(), stderr = fakeStderr(), proc = fakeProc();
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-flash-app-'));
   const env = mode === 'truecolor' ? { COLORTERM: 'truecolor' } : {};
-  const app = realCreateApp({
-    stdin, stdout, stderr, proc, env, configPath: path.join(tmp, 'config.json'), dirs: [{ dir: REAL_INSTALL_DIR, trusted: true }],
+  const app = createApp({
+    stdin, stdout, stderr, proc, env, configPath: path.join(tmp, 'config.json'), dirs: [{ dir: INSTALL_DIR, trusted: true }],
     autoLoop: viaLoop || !!clock, now: drv.now, timer: drv.timer, seed, fps, startScreen: { screen: 'cartridge', cartridge: 'driftman-9000', skipBoot: false },
   });
   const ids = [];
