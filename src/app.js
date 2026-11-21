@@ -20,6 +20,7 @@ import { drawHelp } from './overlay.js';
 import { isMode, nextMode, MODE_LABELS } from './modes.js';
 import { discoverCartridges, INSTALL_DIR, userDir } from './cartridge/loader.js';
 import { createShell } from './shell/shell.js';
+import { newFrame, drawTooSmall, MSG_TOO_SMALL_CLASSIC } from './shell/ui.js';
 
 export const SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
 const DEFAULT_SPEED_INDEX = 3;
@@ -44,6 +45,10 @@ const FULLCOLOUR_256_SLACK = 0.001; // a step this much short of the period stil
 // DRIFT-9: the lowest --fps. The loop clamps a step to 0.25 s, so under 4 fps real time is lost. Chosen by a sweep of every integer fps 5-30 on the exact grid, the q156 clock and the jitter clock (256 colours, 4x and 1x):
 // 4 fails L3 on the exact grid (30.5 %), 5, 6 and 7 fail L3 on the q156 clock (31.7, 36.9, 33.5 %; limit 30 %); 8 is the lowest rate from which every rate to 30 passes every rule on all three clocks.
 export const MIN_FPS = 8;
+// DRIFT-12: Classic's smallest window. Below this many columns OR below this many rows Classic shows the size card (the console's too-small card, Classic's words) instead of the art,
+// in every mode, and its clock stands still until the window is big enough again. The console has its own tiers and is not affected.
+export const CLASSIC_MIN_COLS = 40;
+export const CLASSIC_MIN_ROWS = 10;
 const DEFAULTS = { fps: 18, sceneSeconds: 180, fadeSeconds: DEFAULT_FADE_SECONDS, seed: 1 };
 
 // Palette entries the help panel uses in the single-hue palettes (calm, experimental).
@@ -64,6 +69,8 @@ options:
   --library           start in the cartridge library
   --cartridge ID      insert a cartridge at start ("last" = the one inserted last)
   --help              this text
+
+Classic needs a window of at least ${CLASSIC_MIN_COLS}x${CLASSIC_MIN_ROWS} (columns x rows); below that it shows a "make the window bigger" card and waits.
 `;
 }
 
@@ -167,6 +174,8 @@ export function createApp(o) {
   const term = createTerminal({ stdin, stdout });
   const renderer = o.renderer || createRenderer(); // tests may pass a spy
   let { cols, rows } = term.size();
+  // the size the composers hold (DRIFT-12): they follow the window only while Classic shows art, so a window shrunk below the minimum and grown back to the same size finds its scenes as it left them
+  let artCols = cols, artRows = rows;
   const composer = createComposer({ scenes, cols, rows, seed });
   const cellComps = {};
 
@@ -198,9 +207,17 @@ export function createApp(o) {
     return scheds[mode];
   }
   function cells(mode) {
-    if (!cellComps[mode]) cellComps[mode] = createCellComposer({ scenes: playlists[mode], cols, rows, seed, cmode });
+    if (!cellComps[mode]) cellComps[mode] = createCellComposer({ scenes: playlists[mode], cols: artCols, rows: artRows, seed, cmode });
     return cellComps[mode];
   }
+  // Is the size card (not the art) what Classic shows now? Never while the console owns the screen.
+  const cardUp = () => !(shown.shell && shell) && (cols < CLASSIC_MIN_COLS || rows < CLASSIC_MIN_ROWS);
+  function resizeArt(w, h) {
+    artCols = w; artRows = h;
+    composer.resize(w, h);
+    for (const m of Object.keys(cellComps)) cellComps[m].resize(w, h);
+  }
+  const fitArt = () => { if (cols !== artCols || rows !== artRows) resizeArt(cols, rows); };
   const listOf = (mode) => (mode === 'calm' ? scenes : playlists[mode]);
   sched(shown.mode);
 
@@ -246,6 +263,8 @@ export function createApp(o) {
 
   function renderFrame() {
     if (shown.shell && shell) return renderShellFrame();
+    if (cardUp()) return renderCard();
+    fitArt();
     const sc = sched(shown.mode);
     const f = shown.mode === 'calm' ? composer.frame(sc.state(), t) : cells(shown.mode).frame(sc.state(), t, rt);
     const pal = paletteNow();
@@ -257,6 +276,17 @@ export function createApp(o) {
     lastFrame = f;
     const out = renderer.render(renderArgs(f, pal));
     // one write per frame; synchronized output (DEC 2026) so the terminal paints it atomically
+    if (out) stdout.write(SYNC_BEGIN + out + SYNC_END);
+    dirty = false;
+  }
+
+  // The size card: the console's too-small card in the mode's own UI colour (in high contrast the one two-tone, so the polarity key still inverts it). No scene is touched.
+  function renderCard() {
+    const pal = paletteNow();
+    const f = newFrame(cols, rows);
+    drawTooSmall(f, (pal.ui || SINGLE_HUE_UI).text, MSG_TOO_SMALL_CLASSIC);
+    lastFrame = f;
+    const out = renderer.render(renderArgs(f, pal));
     if (out) stdout.write(SYNC_BEGIN + out + SYNC_END);
     dirty = false;
   }
@@ -311,7 +341,8 @@ export function createApp(o) {
     sched(shown.mode);
     renderer.invalidate();
     if (changedMode || leavingShell) { // back from the console: fresh band memory / sim state, same mode and scene
-      if (shown.mode === 'calm') composer.resize(cols, rows); // fresh band memory
+      if (!cardUp()) fitArt();
+      if (shown.mode === 'calm') composer.resize(artCols, artRows); // fresh band memory
       else cells(shown.mode).reset(t, rt);
     }
     dirty = true;
@@ -364,7 +395,7 @@ export function createApp(o) {
 
   // Held time is only ever given up by a step that actually advances time: a step with dt <= 0 leaves it pending, and a real step (gated or not) carries it, so time is never lost.
   function takeHeld(dt) {
-    if (dt > 0 && held > 0) { dt += held; held = 0; }
+    if (dt > 0 && held > 0 && !cardUp()) { dt += held; held = 0; } // under the size card time stands still and what is held waits for the art
     return dt;
   }
 
@@ -381,7 +412,7 @@ export function createApp(o) {
           return;
         }
       }
-      if (!paused && !helpOpen && dt > 0) {
+      if (!cardUp() && !paused && !helpOpen && dt > 0) { // the size card stops Classic's clock like the console does; wall (the flip guard) still runs
         const d = dt * SPEEDS[speedIdx];
         t += d;
         rt += dt * Math.min(SPEEDS[speedIdx], 1);
@@ -467,9 +498,7 @@ export function createApp(o) {
   function onResize(c, r) {
     if (!running) return;
     try {
-      cols = c; rows = r;
-      composer.resize(c, r);
-      for (const m of Object.keys(cellComps)) cellComps[m].resize(c, r);
+      cols = c; rows = r; // the composers follow in renderFrame, once there is art to draw
       if (shell) shell.resize(c, r);
       renderer.invalidate();
       renderFrame();
@@ -501,8 +530,6 @@ export function createApp(o) {
       return false;
     }
     ({ cols, rows } = term.size());
-    composer.resize(cols, rows);
-    for (const m of Object.keys(cellComps)) cellComps[m].resize(cols, rows);
     if (startScreen) ensureShell(null);
     term.onKey(handleKey);
     term.onResize(onResize);

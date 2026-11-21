@@ -5,6 +5,8 @@ import { fadeOffsets } from '../compose.js';
 import { DEFAULT_UI } from '../cartridge/palette.js';
 
 export const MSG_TOO_SMALL = 'Make the window bigger to see the cartridges.';
+// DRIFT-12: Classic's own card (below 40x10 it shows this instead of the art); the same look as the console's, its own last words
+export const MSG_TOO_SMALL_CLASSIC = 'Make the window bigger to see drift.';
 export const DEFAULT_BOX = '┌─┐│┘─└│'; // tl t tr r br b bl l
 
 // The skin's four UI shades with the defaults filled in (a validated skin keeps only the ones it names).
@@ -161,8 +163,8 @@ export function dissolveThresholds(n) {
 }
 
 // Print the "too small" message wrapped to the width, centred, in as many rows as it needs.
-export function drawTooSmall(f, shade) {
-  const lines = wrapWords(MSG_TOO_SMALL, Math.max(1, f.cols));
+export function drawTooSmall(f, shade, msg = MSG_TOO_SMALL) {
+  const lines = wrapWords(msg, Math.max(1, f.cols));
   const y0 = Math.max(0, Math.floor((f.rows - lines.length) / 2));
   for (let k = 0; k < lines.length; k++) putCentered(f, y0 + k, lines[k], shade);
 }
