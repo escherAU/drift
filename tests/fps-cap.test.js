@@ -16,32 +16,40 @@ import { createRenderer } from '../src/renderer.js';
 import { INSTALL_DIR, discoverCartridges } from '../src/cartridge/loader.js';
 import { fakeStdin, fakeStdout, fakeProc, fakeStderr } from './helpers.js';
 import { runAppDissolves, PLAN_4X, PLAN_1X } from './helpers-flash-app.js';
-import { failedRules, X1_RULE_IDS } from './helpers-flash.js';
+import { failedRules, X1_RULE_IDS, meterStats } from './helpers-flash.js';
+import { createClock } from './helpers-clock.js';
+import { clockArm, assertArmCost } from './helpers-clock-arms.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
 const pc = (x) => (100 * x).toFixed(1);
 
+// DRIFT-9 item 4: every paint any rig below saw (a count), added with the meter's frames to what the cost test holds the clock arms to a share of.
+const paintStats = { frames: 0 };
+const allFrames = { get frames() { return paintStats.frames + meterStats.frames; } };
 // An app with a spy on the renderer: paints[] is the fake-clock time (s) of every render call.
-function rig({ mode, fps, cartridge = 'driftman-9000', loop = false, create = createApp }) {
+// DRIFT-9 item 4: `clockMode` ('q156' | 'jitter', seeded by `clockSeed`, tests/helpers-clock.js) runs the app's own loop on that clock through the timer seam instead of the mocked setTimeout.
+function rig({ mode, fps, cartridge = 'driftman-9000', loop = false, create = createApp, clockMode = null, clockSeed = 1 }) {
   const paints = [], fc = [], tags = []; // fc[i]: was paint i a full-colour frame; tags[i]: what the test was doing (r.tag.cur) when it was painted
   const tag = { cur: 'real' };
   const stdin = fakeStdin();
-  const clock = { ms: 0 };
+  const cl = clockMode ? createClock({ mode: clockMode, seed: clockSeed }) : null;
+  if (cl) loop = true;
+  const clock = cl ? { get ms() { return cl.now(); } } : { ms: 0 };
   const inner = createRenderer();
   const renderer = { ...inner, render: (a) => { paints.push(clock.ms / 1000); fc.push(a.fg !== undefined); tags.push(tag.cur); return inner.render(a); } };
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-fps-cap-'));
   const proc = fakeProc();
   const stdout = fakeStdout({ columns: 80, rows: 24 });
-  if (loop) mock.timers.enable({ apis: ['setTimeout'] });
+  if (loop && !cl) mock.timers.enable({ apis: ['setTimeout'] });
   const app = create({
     stdin, stdout, stderr: fakeStderr(), proc, env: mode === 'truecolor' ? { COLORTERM: 'truecolor' } : {}, configPath: path.join(tmp, 'config.json'),
-    dirs: [{ dir: INSTALL_DIR, trusted: true }], autoLoop: loop, now: () => clock.ms, fps, seed: 2, renderer,
+    dirs: [{ dir: INSTALL_DIR, trusted: true }], autoLoop: loop, now: () => clock.ms, ...(cl ? { timer: cl.timer } : {}), fps, seed: 2, renderer,
     startScreen: cartridge ? { screen: 'cartridge', cartridge, skipBoot: false } : null,
   });
   app.start();
-  const advanceMs = (ms) => { if (loop) for (let i = 0; i < ms; i++) { clock.ms++; mock.timers.tick(1); } else { clock.ms += ms; app.tick(ms / 1000); } };
-  const cleanup = () => { try { proc.emit('exit'); } catch { /* ignore */ } if (loop) mock.timers.reset(); fs.rmSync(tmp, { recursive: true, force: true }); };
+  const advanceMs = (ms) => { if (cl) cl.advanceTo(cl.now() + ms); else if (loop) for (let i = 0; i < ms; i++) { clock.ms++; mock.timers.tick(1); } else { clock.ms += ms; app.tick(ms / 1000); } };
+  const cleanup = () => { paintStats.frames += paints.length; try { proc.emit('exit'); } catch { /* ignore */ } if (loop && !cl) mock.timers.reset(); fs.rmSync(tmp, { recursive: true, force: true }); };
   return { app, paints, fc, tags, tag, stdin, clock, advanceMs, cleanup, stepMs: 1000 / fps };
 }
 
@@ -316,3 +324,48 @@ for (const create of [createApp, null]) {
     });
   }
 }
+
+// ---- DRIFT-9 item 4: the paint rate on the q156 and the jitter clock (rig's `clockMode`: the app's own loop on that clock through the timer seam, tests/helpers-clock.js). The loop's schedule on a
+// clock paints at multiples of 15.625 ms (q156) or up to 16 ms late (jitter); the cap must still hold the busiest second to 18 paints, the paths it must not touch must still be painted at
+// the rate asked for, and the cap taken out of a copy of the tree must still be seen. One arm per clock for each: 256 colours, full-colour scene, --fps 30 (never more than 18 paints in any
+// second, not starved); truecolor, full-colour scene, --fps 30 (every tick painted: 29 to 31 a second); the control, the cap taken out of a copy of the tree (the busiest second is over 18 on
+// this clock too). The cost is by count of paints and meter frames.
+for (const [clockMode, clockSeed] of [['q156', 1], ['jitter', 3]]) {
+  test(`256 colours, full-colour scene, --fps 30, the app's own loop on the ${clockMode} clock: never more than ${FULLCOLOUR_256_MAX_FPS} paints in any second (and not starved)`, async () => {
+    await clockArm(async () => {
+      const r = rig({ mode: '256', fps: 30, clockMode, clockSeed });
+      try {
+        await toRunning(r);
+        const m = await measure(r, 8);
+        console.log(`PAINTS 256 full-colour --fps 30 ${clockMode} clock: per second ${m.perSecond.join(' ')}, busiest 1 s window ${m.max}`);
+        assert.ok(m.max <= FULLCOLOUR_256_MAX_FPS + 1, `${clockMode}: busiest second ${m.max} paints`); // one frame of jitter at a window edge, as the plain loop arm allows
+        assert.ok(m.total >= 8 * 8, `${clockMode}: ${m.total} paints in 8 s: the cap must thin, not starve`);
+      } finally { r.cleanup(); }
+    }, allFrames);
+  });
+  test(`truecolor, full-colour scene, --fps 30, the app's own loop on the ${clockMode} clock: the cap does not apply, and the loop paints 29 to 31 a second`, async () => {
+    await clockArm(async () => {
+      const r = rig({ mode: 'truecolor', fps: 30, clockMode, clockSeed });
+      try {
+        await toRunning(r);
+        const m = await measure(r, 4);
+        console.log(`PAINTS truecolor full-colour --fps 30 ${clockMode} clock: per second ${m.perSecond.join(' ')}`);
+        assert.ok(m.perSecond.every((c) => c >= 29 && c <= 31), `${clockMode}: ${m.perSecond.join(' ')}`);
+      } finally { r.cleanup(); }
+    }, allFrames);
+  });
+  test(`control on the ${clockMode} clock: with the cap taken out of a copy of the tree the app paints more than ${FULLCOLOUR_256_MAX_FPS} in a second at --fps 30 in 256 colours, so the arm above can fail`, async () => {
+    const kept = paintStats.frames; // not an arm, and not paints the file's other arms read: not counted
+    const m = await mutant(...CAP_OUT);
+    try {
+      const r = rig({ mode: '256', fps: 30, clockMode, clockSeed, create: m.create });
+      try {
+        await toRunning(r);
+        const got = await measure(r, 8);
+        console.log(`PAINTS MUTANT (no cap) 256 full-colour --fps 30 ${clockMode} clock: per second ${got.perSecond.join(' ')}, busiest 1 s window ${got.max}`);
+        assert.ok(got.max > FULLCOLOUR_256_MAX_FPS + 1, `${clockMode}: with the cap out the busiest second is ${got.max}`);
+      } finally { r.cleanup(); }
+    } finally { fs.rmSync(m.dir, { recursive: true, force: true }); paintStats.frames = kept; }
+  });
+}
+test('DRIFT-9 clock arms cost: the paint-rate clock arms read at most 15 % of the paints and meter frames the other arms of this file read (by count)', () => { assertArmCost('fps cap', undefined, allFrames); });

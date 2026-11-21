@@ -83,3 +83,72 @@ test(`9000 menu jump at 4x: bloomfall>cortex, rosette>bloomfall and cortex>roset
   console.log(`APP MENU JUMP at 4x${MODE_NOTE}\n  ${lines.join('\n  ')}`);
   assert.deepEqual(bad, []);
 });
+
+
+// ---- DRIFT-9 item 4: the same paths on the q156 and the jitter clock (runAppDissolves' and runAppWindow's `clock`: the app's own loop on that clock through the timer seam, the screens read on the
+// viewer's 18 Hz grid). One arm per clock on the two paths that end in the program-switch dissolve, seed 8, 80x24, real 4x: (b) space in Bloomfall at running + 40 s, and (c) the menu jump
+// bloomfall>cortex at running + 41 s; every dissolve of each run passes the five 1x rules at their own limits and the timing assertions of the plain arms hold on the clock (the switch 36 +/- 1
+// frames after the space; the scene playing before the menu opened and 4 s after the pick). Path (a), the 4x press inside a dissolve, is a 220 s run that alone would cost more than the 15 %
+// of this file's frames the cost test allows for both clocks, so it is not repeated here. Controls: with the real-time dissolve taken out of a copy of the tree (the DRIFT-8 r2 fix) the
+// space path at 4x on 256 colours fails L2 on each clock; the real tree passes the same run. The cost is by count of frames the meters read.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
+import { meterStats } from './helpers-flash.js';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO = path.resolve(HERE, '..');
+// a copy of the tree with the fix of src/shell/runtime.js taken out (the dissolve is scene time again: 0.5 s at 4x), the way tests/driftman-9000-dissolve-app-mutation.test.js makes it
+function noRealTimeDissolve() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-paths-clock-mutant-'));
+  fs.cpSync(path.join(REPO, 'src'), path.join(dir, 'src'), { recursive: true });
+  fs.cpSync(path.join(REPO, 'cartridges'), path.join(dir, 'cartridges'), { recursive: true });
+  fs.copyFileSync(path.join(REPO, 'package.json'), path.join(dir, 'package.json'));
+  const f = path.join(dir, 'src', 'shell', 'runtime.js');
+  const src = fs.readFileSync(f, 'utf8');
+  const find = /sched\.advance\(d, Math\.min\(SPEEDS\[speedIdx\], 1\) \/ SPEEDS\[speedIdx\]\)/g;
+  assert.equal((src.match(find) || []).length, 1, 'the fix is where this test expects it (src/shell/runtime.js)');
+  fs.writeFileSync(f, src.replace(find, 'sched.advance(d, 1)'));
+  return dir;
+}
+async function clockSpace(clock, { mode = FLASH_MODE, root = null } = {}) {
+  const at = 40;
+  const res = await runAppDissolves({ mode, seed: 8, seconds: 70, count: 3, plan: [...PLAN_4X, { atRunning: at, key: ' ' }], speed: 4, clock: clock.mode, clockSeed: clock.seed, root });
+  const pressFrame = res.runningAt + fr(at);
+  const d = res.dissolves.find((x) => x.from === 'bloomfall' && x.to === 'rosette' && x.switchFrame > pressFrame);
+  return { res, d, gap: d ? d.switchFrame - pressFrame : null };
+}
+for (const clock of [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }]) {
+  test(`9000 space at 4x on the ${clock.mode} clock: the skip key in Bloomfall at running + 40 s, seed 8, the first three dissolves: the switch to Rosette comes 36 +/- 1 frames later and every dissolve passes the five 1x rules${MODE_NOTE}`, async () => {
+    const { res, d, gap } = await clockArm(() => clockSpace(clock));
+    assert.ok(d, `${clock.mode}: no bloomfall>rosette after the press (${res.dissolves.map((x) => `${x.from}>${x.to}`).join(', ')})`);
+    assert.ok(Math.abs(gap - 36) <= 1, `${clock.mode}: the switch came ${gap} frames after the press, want 36 (2 s of real time)`);
+    for (const x of res.dissolves) judgeX1(x.report, `space at 4x ${clock.mode} seed 8 ${x.from}>${x.to}`);
+  });
+  test(`9000 menu jump at 4x on the ${clock.mode} clock: bloomfall>cortex through the menu (Enter, arrows from the first entry, Enter), seed 8, 6 s before the pick to 4 s after, every rule${MODE_NOTE}`, async () => {
+    const { from, to, at } = JUMPS[0];
+    const pick = at + 0.8;
+    const keys = [...PLAN_4X, { atRunning: at, key: '\r' }];
+    for (let s = 0; s < ENTRY[to]; s++) keys.push({ atRunning: at + 0.4 + 0.1 * s, key: DOWN });
+    keys.push({ atRunning: pick, key: '\r' });
+    const res = await clockArm(() => runAppWindow({ mode: FLASH_MODE, seed: 8, keys, pickAt: pick, before: 6, after: 4, clock: clock.mode, clockSeed: clock.seed }));
+    assert.equal(res.ids[fr(at)], from, `${clock.mode}: the scene playing when the menu was opened`);
+    assert.equal(res.ids[fr(pick) + 4 * APP_FPS], to, `${clock.mode}: the scene playing 4 s after the pick`);
+    assert.equal(res.frames, 10 * APP_FPS + 1, `${clock.mode}: the window is 6 s before the pick to 4 s after`);
+    judgeX1(res.report, `menu jump ${clock.mode} seed 8 ${from}>${to}`);
+  });
+  test(`9000 clock arm control (${clock.mode}): with the real-time dissolve taken out of a copy of the tree, space at 4x in 256 colours fails L2 on this clock; the real tree passes the same run`, async () => {
+    const kept = meterStats.frames; // not an arm, and not one of the file's other arms: not counted
+    const dir = noRealTimeDissolve();
+    try {
+      const bad = await clockSpace(clock, { mode: '256', root: dir });
+      const failing = bad.res.dissolves.filter((x) => failedRules(x.report, { only: X1_RULE_IDS }).includes('l2.x1'));
+      assert.ok(failing.length >= 1, `${clock.mode}: the mutant failed no window (${bad.res.dissolves.length} windows)`);
+      const good = await clockSpace(clock, { mode: '256' });
+      for (const x of good.res.dissolves) assert.deepEqual(failedRules(x.report, { only: X1_RULE_IDS }), [], `${clock.mode}: the real tree ${x.from}>${x.to}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); meterStats.frames = kept; }
+  });
+}
+test('DRIFT-9 clock arms cost: 9000 dissolve paths clock arms read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('9000 dissolve paths'); });

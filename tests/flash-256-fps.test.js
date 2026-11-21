@@ -32,11 +32,12 @@ const worstOf = (rep) => ({ l1: rep.l1.x1.worstFraction, l2: rep.l2.x1.worstFrac
 const showWorst = (w) => `L1 ${pc(w.l1)} L2 ${pc(w.l2)} L3 ${pc(w.l3)} R ${pc(w.r)} C ${pc(w.c)}`;
 
 // one arm: every seed, every dissolve window of the run, every X1 rule; prints the worst per rule and the margin to the limit
-async function arm({ cols, rows, mode, fps, speed, seeds }) {
+// DRIFT-9 item 4: `clock` ({ mode: 'q156' | 'jitter', seed }, tests/helpers-clock.js) puts the app's own loop on that clock instead of the mocked setTimeout; none is the old exact grid.
+async function arm({ cols, rows, mode, fps, speed, seeds, clock = null }) {
   const bad = [], worst = { l1: 0, l2: 0, l3: 0, r: 0, c: 0 };
   let windows = 0;
   for (const seed of seeds) {
-    const res = await runAppDissolves({ cols, rows, mode, fps, seed, seconds: speed === 4 ? 82 : 205, plan: speed === 4 ? PLAN_4X : PLAN_1X, speed, viaLoop: true });
+    const res = await runAppDissolves({ cols, rows, mode, fps, seed, seconds: speed === 4 ? 82 : 205, plan: speed === 4 ? PLAN_4X : PLAN_1X, speed, viaLoop: true, clock: clock && clock.mode, clockSeed: clock && clock.seed });
     const want = speed === 4 ? 4 : 3;
     assert.ok(res.dissolves.length >= want, `${cols}x${rows} ${mode} ${fps} fps ${speed}x seed ${seed}: expected at least ${want} dissolves, the app made ${res.dissolves.length}`);
     for (const d of res.dissolves) {
@@ -48,10 +49,11 @@ async function arm({ cols, rows, mode, fps, speed, seeds }) {
     }
   }
   const top = Math.max(...Object.values(worst));
-  const tag = `${cols}x${rows} ${mode} ${fps} fps ${speed}x, ${seeds.length} seeds, ${windows} windows`;
+  const tag = `${cols}x${rows} ${mode} ${fps} fps ${speed}x${clock ? ` on the ${clock.mode} clock` : ''}, ${seeds.length} seeds, ${windows} windows`;
   console.log(`FPS ARM ${tag}: worst ${showWorst(worst)} | margin to ${LIMIT * 100} % is ${pc(LIMIT - top)} points, ${bad.length} of ${windows} windows fail`);
   return { bad, worst, windows, tag };
 }
+const armOn = (clock, o) => arm({ ...o, clock });
 const judge = (r) => assert.deepEqual(r.bad, [], `${r.tag}: ${r.bad.length} of ${r.windows} windows fail: ${r.bad.join(' | ')}`);
 
 // ---- 256 colours, real 4x, 80x24
@@ -144,3 +146,72 @@ test('control: --fps 4 (below the floor) at 61x21, 256 colours, real 4x, seed 6 
   assert.ok(failing.length >= 1, `fps 4 should fail L3 at seed 6; worst ${pc(worst)} %`);
   assert.ok(worst > L3_LIMIT, `fps 4 worst L3 ${pc(worst)} % should be over ${pc(L3_LIMIT)} %`);
 });
+
+// ---- DRIFT-9 item 4: the same arms on the q156 and the jitter clock (arm's `clock`: runAppDissolves puts the app's own loop on that clock through the timer seam, with --fps N told to the app, and the
+// meter reads one screen per 1 / fps of clock time). One arm per clock on the case that read highest: 256 colours at --fps 30, real 4x, 80x24, seed 6 (the cap path: the app paints at most 18 a
+// second whatever 30 asks for). The floor (--fps 5, real 4x, 61x21, seed 6, L3 at most 30 %) is run on the jitter clock only: on the q156 clock that arm reads over L3 30 % at some seeds, which
+// is reported on DRIFT-9 and is not committed here. Every dissolve window passes the five 1x rules at their own limits. Controls on the clocks: the cap taken out of a copy of the tree
+// (FULLCOLOUR_256_MAX_FPS = 1000) fails rule C at --fps 30 (seeds 2, 6 and 14: 14 is the seed that reads highest on the q156 clock, where 2 and 6 read just under the limit), and --fps 4 fails L3 at 61x21 on some seed of 1-8 on the jitter clock, so the arms can
+// tell. The cost is by count of frames the meters read.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { clockArm, assertArmCost } from './helpers-clock-arms.js';
+import { meterStats } from './helpers-flash.js';
+
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+function capOut() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-fps-clock-mutant-'));
+  fs.cpSync(path.join(REPO, 'src'), path.join(dir, 'src'), { recursive: true });
+  fs.cpSync(path.join(REPO, 'cartridges'), path.join(dir, 'cartridges'), { recursive: true });
+  fs.copyFileSync(path.join(REPO, 'package.json'), path.join(dir, 'package.json'));
+  const g = path.join(dir, 'src', 'app.js');
+  const raw = fs.readFileSync(g, 'utf8');
+  const crlf = raw.includes('\r\n');
+  const src = raw.replace(/\r\n/g, '\n');
+  const find = 'export const FULLCOLOUR_256_MAX_FPS = 18;';
+  assert.equal(src.split(find).length, 2, 'the cap is where this test expects it (src/app.js)');
+  const out = src.replace(find, 'export const FULLCOLOUR_256_MAX_FPS = 1000;');
+  fs.writeFileSync(g, crlf ? out.replace(/\n/g, '\r\n') : out);
+  return dir;
+}
+const CLOCKS = [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }];
+const JITTER = CLOCKS[1];
+for (const clock of CLOCKS) {
+  test(`256 colours at --fps 30 on the ${clock.mode} clock, real 4x, 80x24, seed 6: every dissolve window passes every rule`, async () => {
+    const r = await clockArm(() => armOn(clock, { cols: 80, rows: 24, mode: '256', fps: 30, speed: 4, seeds: [6] }));
+    judge(r);
+  });
+  test(`control on the ${clock.mode} clock: the cap taken out of a copy of the tree fails rule C at --fps 30 (seeds 2, 6 and 14, 80x24, 256, 4x)`, async () => {
+    const kept = meterStats.frames; // not an arm, and not frames the file's other arms read: not counted
+    const dir = capOut();
+    try {
+      const failing = [];
+      let worstC = 0;
+      for (const seed of [2, 6, 14]) {
+        const m = await runAppDissolves({ cols: 80, rows: 24, mode: '256', fps: 30, seed, seconds: 82, plan: PLAN_4X, speed: 4, clock: clock.mode, clockSeed: clock.seed, root: dir });
+        for (const d of m.dissolves) { worstC = Math.max(worstC, d.report.c.worstFraction); if (failedRules(d.report, { only: X1_RULE_IDS }).includes('c')) failing.push(`seed ${seed} ${d.from}>${d.to}`); }
+      }
+      assert.ok(failing.length >= 1, `${clock.mode}: the no-cap mutant failed no window on rule C (worst C ${pc(worstC)} %)`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); meterStats.frames = kept; }
+  });
+}
+test('256 colours at --fps 5 (the floor) on the jitter clock, real 4x, 61x21, seed 6: every dissolve window passes every rule and L3 stays at or under 30 %', async () => {
+  const r = await clockArm(() => armOn(JITTER, { cols: 61, rows: 21, mode: '256', fps: 5, speed: 4, seeds: [6] }));
+  console.log(`FPS FLOOR jitter 61x21 256 5 fps 4x seed 6: max L3 ${pc(r.worst.l3)} % (limit ${pc(L3_LIMIT)} %, margin ${pc(L3_LIMIT - r.worst.l3)} points)`);
+  assert.ok(r.worst.l3 <= L3_LIMIT, `jitter: max L3 ${pc(r.worst.l3)} % is over ${pc(L3_LIMIT)} %`);
+  judge(r);
+});
+test('control on the jitter clock: --fps 4 (below the floor) at 61x21, 256 colours, real 4x, fails L3 on some seed of 1-8, so the 5 fps arm can tell', async () => {
+  const kept = meterStats.frames; // not an arm, and not frames the file's other arms read: not counted
+  try {
+    let worst = 0; const failing = [];
+    for (const seed of SEEDS_8) {
+      const res = await runAppDissolves({ cols: 61, rows: 21, mode: '256', fps: 4, seed, seconds: 82, plan: PLAN_4X, speed: 4, clock: JITTER.mode, clockSeed: JITTER.seed });
+      for (const d of res.dissolves) { worst = Math.max(worst, d.report.l3.worstFraction); if (failedRules(d.report, { only: ['l3'] }).length) failing.push(`seed ${seed} ${d.from}>${d.to} ${pc(d.report.l3.worstFraction)}`); }
+    }
+    assert.ok(failing.length >= 1, `jitter --fps 4 should fail L3 on some seed; worst ${pc(worst)} %`);
+  } finally { meterStats.frames = kept; }
+});
+test('DRIFT-9 clock arms cost: fps arms on a clock read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('flash-256 fps'); });
