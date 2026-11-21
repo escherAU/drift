@@ -15,19 +15,28 @@ import { relY } from '../src/pixels.js';
 import { makeRosette } from '../cartridges/driftman-9000/scenes/rosette.js';
 import rosette from '../cartridges/driftman-9000/scenes/rosette.js';
 import { flashRig } from './helpers-flash-controls.js';
+import { createRun } from './helpers-clock.js';
+import { clockArm, assertArmCost } from './helpers-clock-arms.js';
+
+// every frame measure() reads: the cost test holds the clock arms to a share of what the file's other arms read (this file has no flash meter to count)
+const rangeStats = { frames: 0 };
 
 const FPS = 18;
 export const TRIPWIRE = 0.07;
 const FRAMES = 40 * FPS; // 40 s of wall time at 4x = 160 s of scene time: more than two 60 s fold cycles
 
 // { all: range of Y over every pixel and frame, pixel: worst range of any one pixel } for the scene in the mode, at 4x.
-function measure(scene, cols, rows, mode, seed, { frames = FRAMES, speed = 4 } = {}) {
+// DRIFT-9 item 4: `clock` = 'q156' | 'jitter' (tests/helpers-clock.js) shows sample k (the viewer's 18 Hz grid) the frame of the last paint at or before it, so the scene time is speed x the paint's wall
+// time, not speed x k / 18; none is the old exact grid.
+function measure(scene, cols, rows, mode, seed, { frames = FRAMES, speed = 4, clock = null } = {}) {
+  const clk = createRun({ clock, fps: FPS });
   const rig = flashRig([scene], cols, rows, { seed, mode });
   const n = cols * rows;
   const lo = new Float64Array(2 * n).fill(9), hi = new Float64Array(2 * n).fill(-9);
   let gmin = 9, gmax = -9;
   for (let k = 0; k < frames; k++) {
-    const f = rig.show(rig.cc.frame({ a: 0, b: 0, p: 0 }, (speed * k) / FPS)).frame;
+    rangeStats.frames++;
+    const f = rig.show(rig.cc.frame({ a: 0, b: 0, p: 0 }, (speed * clk.sceneIndex(k)) / FPS)).frame;
     for (let i = 0; i < n - 1; i++) { // the renderer never draws the bottom-right cell
       const top = mode === '256' ? f.fg[i] : f.fg[i] & 0xfcfcfc, bot = mode === '256' ? f.bg[i] : f.bg[i] & 0xfcfcfc;
       const yt = relY(top), yb = relY(bot);
@@ -66,3 +75,25 @@ test('T1.1 controls: the same measurement sees a truecolor contour at 0.72 (0.08
   assert.ok(c70.all > TRIPWIRE, `256 contour 0.70: ${c70.all}`);
   console.log(`RANGE controls: truecolor 0.72 ${tc72.all.toFixed(4)}; 256 at 0.70 ${c70.all.toFixed(4)}`);
 });
+
+// ---- DRIFT-9 item 4: the same measurement on the q156 and the jitter clock (measure's `clock`): 40 s of wall time at 4x, 80x24, seed 1, in both colour modes, at the same tripwire (0.07, never loosened). One arm
+// per clock and mode, the two contour controls on this clock too (a truecolor contour at 0.72 and a 256-colour contour at 0.70 are over the line), and the cost by count of frames measured.
+for (const clock of [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }]) {
+  for (const mode of ['truecolor', '256']) {
+    test(`T1.1 rosette per-pixel brightness range over a whole 4x run on the ${clock.mode} clock, ${mode}: at most ${TRIPWIRE} at 80x24, seed 1`, async () => {
+      const m = await clockArm(async () => measure(rosette, 80, 24, mode, 1, { clock }), rangeStats);
+      console.log(`RANGE ${clock.mode} clock ${mode} 80x24 seed 1: range over all pixels ${m.all.toFixed(4)}, worst single pixel ${m.pixel.toFixed(4)} (tripwire ${TRIPWIRE})`);
+      assert.ok(m.all <= TRIPWIRE && m.pixel <= TRIPWIRE, `${clock.mode} ${mode}: range ${m.all.toFixed(4)}, single pixel ${m.pixel.toFixed(4)} (tripwire ${TRIPWIRE})`);
+    });
+  }
+  test(`T1.1 controls on the ${clock.mode} clock: the same measurement sees a truecolor contour at 0.72 and a 256-colour contour at 0.70 over the tripwire`, () => {
+    const kept = rangeStats.frames; // not an arm, and not one of the file's other arms: not counted
+    try {
+      const tc72 = measure(makeRosette(0.72, 180, 0.72), 120, 40, 'truecolor', 1, { frames: 360, clock });
+      assert.ok(tc72.all > TRIPWIRE, `${clock.mode} truecolor contour 0.72: ${tc72.all}`);
+      const c70 = measure(makeRosette(0.70, 180, 0.70), 120, 40, '256', 1, { frames: 360, clock });
+      assert.ok(c70.all > TRIPWIRE, `${clock.mode} 256 contour 0.70: ${c70.all}`);
+    } finally { rangeStats.frames = kept; }
+  });
+}
+test('DRIFT-9 clock arms cost: rosette range clock arms measure at most 15 % of the frames the other arms of this file measure (by count)', () => { assertArmCost('rosette range', undefined, rangeStats); });

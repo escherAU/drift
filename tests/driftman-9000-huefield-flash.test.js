@@ -9,6 +9,9 @@ import { field } from '../cartridges/driftman-9000/lib/huefield.js';
 import { newFrame } from './helpers-flash-controls.js';
 import { shownMeter } from './helpers-flash-modes.js';
 import { RULE_IDS, ruleOf, failedRules } from './helpers-flash-halves.js';
+import { meterStats } from './helpers-flash.js';
+import { createRun } from './helpers-clock.js';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
 
 const FPS = 18;
 const UPPER = 0x2580;
@@ -17,13 +20,15 @@ const showOne = (rep) => `L1 ${pc(rep.l1.x1.worstFraction)}/${pc(rep.l1.x4.worst
 const show = (rep) => `${showOne(rep.cell)} | pixel ${showOne(rep.pixel)}`;
 const failed = (rep) => failedRules(rep);
 
-function run(cols, rows, mode, { L = 0.66, seed = 1, seconds = 12, lAt = null } = {}) {
+// DRIFT-9 item 4: `clock` = 'q156' | 'jitter' (tests/helpers-clock.js) shows sample k (the viewer's 18 Hz grid) the field of the last paint at or before it, so the time is the paint's, not k's; none is the old exact grid.
+function run(cols, rows, mode, { L = 0.66, seed = 1, seconds = 12, lAt = null, clock = null } = {}) {
+  const clk = createRun({ clock, fps: FPS });
   const meter = shownMeter(cols, rows, FPS, mode);
   const f = newFrame(cols, rows);
   f.glyphs.fill(UPPER);
   const N = Math.round(seconds * FPS);
   for (let k = 0; k < N; k++) {
-    const t = k / FPS, l = lAt ? lAt(k) : L;
+    const t = clk.sceneIndex(k) / FPS, l = lAt ? lAt(k) : L;
     for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
       const i = y * cols + x;
       f.fg[i] = field(x + 0.5, y + 0.25, t, l, seed);
@@ -59,3 +64,21 @@ test('huefield flash TABLE: every measured value', () => {
   console.log(['TABLE huefield flash meter (x1/x4 views; limits L1 25, L2 25, L3 30, R 25; cell grid | pixel grid)', ...TABLE.map((l) => '  ' + l)].join('\n'));
   assert.ok(TABLE.length > 0);
 });
+
+// ---- DRIFT-9 item 4: the same field on the q156 and the jitter clock (run's `clock`): the half-block field alone at 80x24 on 256-colour output (the mode its colour snapping reads highest in) at L 0.66 (the lightest of the three the file runs) for 12 s, the five 1x rules at their own limits (the worse of the cell grid and the pixel grid). One arm per clock, a control (the stepped-lightness field fails L1 and L2 on this clock too) and the cost by count.
+for (const clock of [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }]) {
+  test(`huefield flash on the ${clock.mode} clock, 80x24 256 colours: the field alone at L 0.66 for 12 s passes the five 1x rules on the cell grid and the pixel grid`, async () => {
+    for (const L of [0.66]) {
+      const rep = await clockArm(async () => run(80, 24, '256', { L, clock }));
+      judgeX1(rep, `huefield ${clock.mode} 80x24 256 L ${L} (the worse of the cell grid and the pixel grid)`);
+    }
+  });
+  test(`huefield flash clock control (${clock.mode}): the field with its lightness stepped between 0.30 and 0.75 four and a half times a second fails L1 and L2 on this clock too`, () => {
+    const kept = meterStats.frames; // not an arm, and not one of the file's other arms: not counted
+    try {
+      const rep = run(61, 21, '256', { seconds: 8, lAt: (k) => (k % 4 < 2 ? 0.30 : 0.75), clock });
+      assert.ok(failed(rep).includes('l1.x1') && failed(rep).includes('l2.x1'), `${clock.mode}: ${failed(rep).join(',')}`);
+    } finally { meterStats.frames = kept; }
+  });
+}
+test('DRIFT-9 clock arms cost: huefield flash clock arms read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('huefield flash'); });

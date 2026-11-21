@@ -252,3 +252,54 @@ test('huefield trust: the lib file is real code. In the user folder a cartridge 
   assert.deepEqual(res.errors, []);
   assert.ok(fs.existsSync(path.join(INSTALL_DIR, 'driftman-9000', 'lib', 'huefield.js')));
 });
+
+// ---- DRIFT-9 item 4: why this file has no clock arm. Every test above calls the field, the noise or the tables with the time as an ARGUMENT (field(x, y, t, L, seed), hueAt, noise(u, v, w, seed)),
+// so a loop clock cannot reach them: it only decides which t a caller passes, and how a clock's steps read through the flash meter is run on the field by
+// tests/driftman-9000-huefield-flash.test.js (q156 and jitter arms there). The proof is a trap, not a statement: every way a module could read a clock (Date, performance, process.hrtime and
+// uptime, setTimeout, setInterval, setImmediate, queueMicrotask, Math.random) is replaced by a function that throws, the field, the hue and the noise are called over a sweep of x, y, t, L and
+// seed, and nothing throws; and the control: the same trap does throw on a function that reads Date.now() or Math.random(), so a silent pass means the field really never read one.
+function withClockTrap(fn) {
+  const saved = new Map();
+  const trap = (name) => () => { throw new Error(`the trap: ${name} was read`); };
+  const swap = (obj, key, label) => { saved.set(`${label}.${key}`, [obj, key, obj[key]]); obj[key] = trap(`${label}.${key}`); };
+  const realDate = globalThis.Date;
+  try {
+    swap(globalThis, 'setTimeout', 'setTimeout'); swap(globalThis, 'setInterval', 'setInterval'); swap(globalThis, 'setImmediate', 'setImmediate'); swap(globalThis, 'queueMicrotask', 'queueMicrotask');
+    swap(Math, 'random', 'Math.random'); swap(globalThis.performance, 'now', 'performance.now'); swap(process, 'hrtime', 'process.hrtime'); swap(process, 'uptime', 'process.uptime');
+    globalThis.Date = new Proxy(realDate, { get() { throw new Error('the trap: Date was read'); }, construct() { throw new Error('the trap: new Date'); }, apply() { throw new Error('the trap: Date()'); } });
+    return fn();
+  } finally {
+    globalThis.Date = realDate;
+    for (const [obj, key, orig] of saved.values()) obj[key] = orig;
+  }
+}
+test('huefield never reads a clock: with every clock, timer and random source trapped, the field, the hue and the noise over a sweep of x, y, t, L and seed run without touching one (so no loop clock can change them)', () => {
+  const got = withClockTrap(() => {
+    let acc = 0;
+    for (const seed of [1, 2, 3, 40]) {
+      for (let k = 0; k < 2000; k++) {
+        const x = (k * 7) % 240, y = (k * 3) % 67, t = k * 0.0555, L = [0.18, 0.22, 0.45, 0.66][k % 4];
+        acc = (acc + field(x, y, t, L, seed) + Math.round(hueAt(x, y, t, seed) * 1000) + Math.round(noise(x / 40, y / 20, t * 0.15, seed) * 1000)) % 1000003;
+      }
+    }
+    return acc;
+  });
+  assert.ok(Number.isFinite(got));
+  // the same sweep without the trap gives the same number: the trap changed nothing
+  let again = 0;
+  for (const seed of [1, 2, 3, 40]) {
+    for (let k = 0; k < 2000; k++) {
+      const x = (k * 7) % 240, y = (k * 3) % 67, t = k * 0.0555, L = [0.18, 0.22, 0.45, 0.66][k % 4];
+      again = (again + field(x, y, t, L, seed) + Math.round(hueAt(x, y, t, seed) * 1000) + Math.round(noise(x / 40, y / 20, t * 0.15, seed) * 1000)) % 1000003;
+    }
+  }
+  assert.equal(again, got);
+});
+test('huefield clock trap control: the trap throws on a function that reads Date.now(), performance.now(), setTimeout or Math.random, and puts everything back afterwards', () => {
+  const realNow = Date.now, realRandom = Math.random, realTimeout = globalThis.setTimeout;
+  for (const bad of [() => Date.now(), () => new Date(), () => performance.now(), () => setTimeout(() => {}, 1), () => Math.random(), () => process.hrtime()]) {
+    assert.throws(() => withClockTrap(bad), /the trap/);
+  }
+  assert.equal(Date.now, realNow); assert.equal(Math.random, realRandom); assert.equal(globalThis.setTimeout, realTimeout);
+  assert.ok(Number.isFinite(Date.now()) && typeof Math.random() === 'number', 'the clock and the random source work again');
+});
