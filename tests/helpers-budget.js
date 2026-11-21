@@ -124,11 +124,11 @@ export function checkCpu(measured) {
 // or a busy sibling thread slowed it, so under `npm test` (every test file at once) a fixed millisecond bound on it is a coin flip
 // (the console hook read 0.064 ms against a 0.05 bound under load and 0.016 alone). process.cpuUsage cannot help: it ticks every
 // 15 ms on Windows and a batch of these calls is well under one tick. So:
-//   1. the SAME batch of work is timed many times and the quietest one is kept (preemption only ever adds time), and
+//   1. the SAME batch of work is timed many times and the quiet end (5th percentile, see lowQuantile) is kept (preemption only ever adds time), and
 //   2. a fixed calibration loop (typed-array writes of the kind a draw does) is timed in the same moment, interleaved batch by
 //      batch, and the answer is the RATIO work / calibration. A machine that is slower for one is slower for both, so the ratio
 //      stays put under load, while code that really gets slower moves it in proportion (3x the work = 3x the ratio).
-// -> { workMs (quietest batch), calibMs (quietest calibration), ratio, msPerCall (workMs / calls) }
+// -> { workMs (quiet-end batch), calibMs (quiet-end calibration), ratio, msPerCall (workMs / calls) }
 const CAL_N = 1512;
 const calG = new Uint16Array(CAL_N), calS = new Uint8Array(CAL_N), calA = new Uint32Array(CAL_N), calB = new Uint32Array(CAL_N);
 let calSink = 0;
@@ -143,18 +143,27 @@ export function calibrationLoop() {
   return calSink;
 }
 
+// DRIFT-12: "the quietest batch" is a low QUANTILE (5th percentile), not the minimum. The minimum is a single sample per series, and under
+// heavy load one lucky moment (a clock boost, an idle hyper-thread sibling) put it 25 to 40 % under the median independently in the work
+// and the calibration series, so the same loop against itself read 0.755 to 1.43 while its median ratio read 1.000. Preemption only ever
+// ADDS time, so a low quantile is still as load-proof as the minimum; it just needs 5 % of the batches clean rather than one lucky one.
+export const QUIET_QUANTILE = 0.05;
+export function lowQuantile(samples, q = QUIET_QUANTILE) {
+  const s = Array.from(samples).sort((a, b) => a - b);
+  return s[Math.floor(q * (s.length - 1))];
+}
+
 export function measureRelativeCost(batch, { calls = 1, batches = 1500, warmup = 60 } = {}) {
   for (let i = 0; i < warmup; i++) { batch(); calibrationLoop(); }
-  let work = Infinity, calib = Infinity;
+  const W = new Float64Array(batches), C = new Float64Array(batches);
   for (let i = 0; i < batches; i++) {
     let t0 = process.hrtime.bigint();
     batch();
-    const w = Number(process.hrtime.bigint() - t0) / 1e6;
+    W[i] = Number(process.hrtime.bigint() - t0) / 1e6;
     t0 = process.hrtime.bigint();
     calibrationLoop();
-    const c = Number(process.hrtime.bigint() - t0) / 1e6;
-    if (w < work) work = w;
-    if (c < calib) calib = c;
+    C[i] = Number(process.hrtime.bigint() - t0) / 1e6;
   }
-  return { workMs: work, calibMs: calib, ratio: work / calib, msPerCall: work / calls };
+  const work = lowQuantile(W), calib = lowQuantile(C);
+  return { workMs: work, calibMs: calib, ratio: work / calib, msPerCall: work / calls, minWorkMs: Math.min(...W), minCalibMs: Math.min(...C) };
 }

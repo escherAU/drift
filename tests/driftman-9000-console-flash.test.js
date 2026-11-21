@@ -143,7 +143,7 @@ test(`9000 console flash control${MODE_NOTE}: the same flow with every console c
 
 // ---- CPU: the hook's own cost per call, at the biggest size
 // DRIFT-7 stage E: a millisecond bound on a mean wall time read 0.064 ms under the whole `npm test` (0.016 alone), so it was a broken gate. The cost is
-// now measured as measureRelativeCost does it (tests/helpers-budget.js): the quietest of 300 identical batches of 8 calls, divided by a calibration
+// now measured as measureRelativeCost does it (tests/helpers-budget.js): the 5th-percentile (DRIFT-12) of 1500 identical batches of 8 calls, divided by a calibration
 // loop timed in the same moment. The ratio does not move with the load of the machine (1.0 to 1.3 alone and under 100 busy processes, up to 1.55 inside the whole suite) and moves in
 // proportion with the work (a hook that costs 3x as much reads 3.1 to 4.4; a hook 2.8x slower, planted for real, read 3.6).
 const RATIO_BOUND = 2.25;
@@ -164,7 +164,7 @@ const cpuCase = (draw) => {
   return measureRelativeCost(() => { for (let k = 0; k < 8; k++) draw(f, ctxs[k]); }, { calls: 8 });
 };
 
-if (FLASH_MODE === 'truecolor') test('9000 console CPU: drawConsole at 240x67 costs under 2.25x a calibration loop timed in the same moment (quietest of 1500 batches of 8 calls)', () => {
+if (FLASH_MODE === 'truecolor') test('9000 console CPU: drawConsole at 240x67 costs under 2.25x a calibration loop timed in the same moment (5th percentile of 1500 batches of 8 calls)', () => {
   const m = cpuCase((f, c) => hook.drawConsole(f, c));
   console.log(`CPU drawConsole at 240x67: ${m.msPerCall.toFixed(4)} ms per call, calibration ${m.calibMs.toFixed(4)} ms, ratio ${m.ratio.toFixed(3)} (bound ${RATIO_BOUND})`);
   assert.ok(m.ratio < RATIO_BOUND, `ratio ${m.ratio.toFixed(3)} (${m.msPerCall} ms per call) is over ${RATIO_BOUND}`);
