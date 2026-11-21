@@ -122,10 +122,11 @@ const SRC = path.join(HERE, '..', 'src');
 export const OLD_LIFE_FILE = path.join(HERE, 'fixtures', 'life-before-drift10.js');
 export const OLD_WIRE_FILE = path.join(HERE, 'fixtures', 'wire-before-drift11.js'); // DRIFT-11: wire.js and blocktype.js as they were at 7c2f34c (pure in t, kind 'cells')
 export const OLD_BLOCKTYPE_FILE = path.join(HERE, 'fixtures', 'blocktype-before-drift11.js');
+export const OLD_TUNNEL_FILE = path.join(HERE, 'fixtures', 'tunnel-before-drift12.js'); // DRIFT-12: tunnel.js as it was at 1cb2b62 (pure in t, kind 'cells', flows with the scene clock)
 export const V1_LIFE_FILE = path.join(HERE, 'fixtures', 'life-before-fps-fix.js'); // DRIFT-10's first fix (33f8142): the flip gap and a per-STEP share only, no per-frame cap
 // life: 'old' (the fixture), 'v1' (the first DRIFT-10 fix, fixture), 'new' (this tree's), or a function (text) -> text that edits the new one (it must change it: a mutation that matches nothing throws).
 // edits: { 'src/app.js': (text) => text, ... } the same for any other file of src/.
-// scenes: { wire, blocktype } each 'old' (the DRIFT-11 fixture), 'new' (this tree's) or a function (text) -> text that edits this tree's file (it must change it).
+// scenes: { wire, blocktype, tunnel } each 'old' (the DRIFT-11 fixture), 'new' (this tree's) or a function (text) -> text that edits this tree's file (it must change it).
 export function makeTree(life = 'new', edits = {}, scenes = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-life-tree-'));
   fs.cpSync(SRC, path.join(root, 'src'), { recursive: true });
@@ -140,7 +141,7 @@ export function makeTree(life = 'new', edits = {}, scenes = {}) {
   }
   for (const [name, how] of Object.entries(scenes)) {
     const f = path.join(root, 'src', 'scenes', name + '.js');
-    if (how === 'old') fs.copyFileSync(name === 'wire' ? OLD_WIRE_FILE : OLD_BLOCKTYPE_FILE, f);
+    if (how === 'old') fs.copyFileSync({ wire: OLD_WIRE_FILE, blocktype: OLD_BLOCKTYPE_FILE, tunnel: OLD_TUNNEL_FILE }[name], f);
     else if (typeof how === 'function') {
       const before = fs.readFileSync(f, 'utf8'), after = how(before);
       if (after === before) throw new Error(`makeTree: the mutation of ${name}.js changed nothing`);
@@ -156,6 +157,13 @@ export function makeTree(life = 'new', edits = {}, scenes = {}) {
   return root;
 }
 export const rmTree = (root) => fs.rmSync(root, { recursive: true, force: true });
+
+// DRIFT-12: the app as it was at 1cb2b62 where DRIFT-12 changed it: the scheduler's cross-fade at scene speed (no fadeScale) and the contrast composer without realTime. With the old tunnel
+// (makeTree('new', BEFORE12_EDITS, { tunnel: 'old' })) this is the whole Classic high contrast mode as it was; tools/life-matrix.mjs --tree before12 runs it. Strict: an edit that matches nothing throws.
+const must = (text, from, to) => { if (!text.includes(from)) throw new Error('BEFORE12_EDITS: no match for ' + from); return text.replace(from, to); };
+export const BEFORE12_EDITS = {
+  'src/app.js': (t) => must(must(t, "advance(d, shown.mode === 'contrast' ? Math.min(SPEEDS[speedIdx], 1) / SPEEDS[speedIdx] : 1);", 'advance(d);'), ", realTime: mode === 'contrast' }", ' }'),
+};
 
 // the five rules' worst readings in per cent (X1 views: the viewer's own second), and the rules that fail
 export function nums(rep) {

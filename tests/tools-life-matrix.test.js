@@ -98,3 +98,38 @@ test('DRIFT-12 life-matrix: the boards below 40x10 are not reachable: Classic sh
   const r = run('--scene', 'tunnel', '--seeds', '1', '--clocks', 'grid', '--modes', '256', '--speeds', '1x', '--sizes', '10x4', '--summary-only');
   assert.match(r.stderr, /note: 10x4 is below Classic's 40x10 minimum: Classic shows the size card there/);
 });
+
+// DRIFT-12: the tunnel and the whole cycle at 2x and 4x. The old looks are the control (--tree before12: a copy of src/ as it was at 1cb2b62 where DRIFT-12 changed it: tests/fixtures/tunnel-before-drift12.js,
+// the dissolve at scene speed and no realTime composer: BEFORE12_EDITS in tests/helpers-life-app.js)
+test('DRIFT-12 life-matrix --scene tunnel at 1x, 2x and 4x: the shipped tunnel passes (exit 0; the three speeds read the same, as the real-time clock runs the same flow); --tree before12 reads L2 50.46 and 100.00 and L3 31.09 at 2x and 4x and exits 1', () => {
+  const o = { scene: 'tunnel', seeds: '1,2,3', clocks: 'grid', modes: '256', speeds: '1x,2x,4x', sizes: '80x24,40x10' };
+  const flags = (x) => Object.entries(x).flatMap(([k, v]) => ['--' + k, v]);
+  const now = run(...flags(o), '--summary-only');
+  assert.equal(now.status, 0, now.stdout);
+  const lines = now.stdout.trim().split('\n');
+  assert.equal(lines.length, 6);
+  for (const l of lines) assert.match(l, /\| pass$/);
+  assert.equal(lines[0].split('|')[1], lines[2].split('|')[1], 'the 1x and 2x readings are the same run of the flow');
+  assert.equal(lines[2].split('|')[1], lines[4].split('|')[1], 'and the 4x');
+  const old = run(...flags({ ...o, tree: 'before12', sizes: '80x24' }), '--summary-only');
+  assert.equal(old.status, 1, old.stdout);
+  const [one, two, four] = old.stdout.trim().split('\n');
+  assert.match(one, /^before12 tunnel .* 1x .* \| pass$/);
+  assert.match(two, /^before12 tunnel .* 2x .* L1 +0\.46 L2 +50\.46 L3 +18\.91 .*FAIL l2\.x1$/);
+  assert.match(four, /^before12 tunnel .* 4x .* L1 +7\.41 L2 +100\.00 L3 +31\.09 .*FAIL l2\.x1 l3$/);
+});
+
+test('DRIFT-12 life-matrix --whole-cycle at 1x, 2x and 4x: the shipped cycle passes (exit 0) on seeds 1 to 3 at 80x24; --tree before12 reads L2 49.54 at 2x and L2 100.00, L3 31.15 at 4x and exits 1', () => {
+  const o = { 'whole-cycle': null, seeds: '1,2,3', clocks: 'grid', modes: '256', speeds: '1x,2x,4x', sizes: '80x24' };
+  const flags = (x) => Object.entries(x).flatMap(([k, v]) => (v === null ? ['--' + k] : ['--' + k, v]));
+  const now = run(...flags(o), '--summary-only');
+  assert.equal(now.status, 0, now.stdout);
+  const lines = now.stdout.trim().split('\n');
+  assert.equal(lines.length, 3);
+  for (const l of lines) { assert.match(l, /^after +cycle /); assert.match(l, /\| pass$/); }
+  const old = run(...flags({ ...o, tree: 'before12', speeds: '2x,4x' }), '--summary-only');
+  assert.equal(old.status, 1, old.stdout);
+  const [two, four] = old.stdout.trim().split('\n');
+  assert.match(two, /^before12 cycle .* 2x .* L1 +0\.46 L2 +49\.54 L3 +19\.06 .*FAIL l2\.x1$/);
+  assert.match(four, /^before12 cycle .* 4x .* L1 +8\.80 L2 +100\.00 L3 +31\.15 .*FAIL l2\.x1 l3$/);
+});
