@@ -20,7 +20,7 @@ Options (also available as environment variables):
 |---|---|---|---|
 | `--scene-seconds N` | `DRIFT_SCENE_SECONDS` | 180 | seconds per scene (scene time, so `+` speeds this up too) |
 | `--fade-seconds N` | `DRIFT_FADE_SECONDS` | 15 | length of the cross-fade between scenes |
-| `--fps N` | `DRIFT_FPS` | 18 | frames per second (5-30). In 256-colour terminals a full-colour cartridge (the Driftman 9000) is painted at 18 a second at most, whatever you ask for ([why](#driftman-9000-the-full-colour-cartridge)); everything else paints at the rate you ask for |
+| `--fps N` | `DRIFT_FPS` | 18 | frames per second (8-30; a lower value reads as 8). In 256-colour terminals a full-colour cartridge (the Driftman 9000) is painted at 18 a second at most, whatever you ask for ([why](#driftman-9000-the-full-colour-cartridge)); everything else paints at the rate you ask for |
 | `--seed N` | `DRIFT_SEED` | 1 | seed for rain and ripples |
 | `--scene NAME` | `DRIFT_SCENE` | squiggle | start scene, in its own mode: squiggle, sunburst, plasma, ripples, rain, glyphrain, swarm, glitch, fireworks, vortex, life, tunnel, wire, maze, blocktype, bounce, sand, waves, pendulum, cloth, artist (a bare number counts calm scenes) |
 | `--library` | | off | start in the cartridge library (see [Cartridges](#cartridges)) |

@@ -138,8 +138,8 @@ test('Classic in 256 colours at --fps 30 is painted at 30 a second, loop and tic
   }
 });
 
-test('256 colours, full-colour scene, at or below the cap (--fps 18, 12, 7, 5): the loop paints at the rate asked for', async () => {
-  for (const fps of [18, 12, 7, 5]) {
+test('256 colours, full-colour scene, at or below the cap (--fps 18, 12, 9, 8: 8 is the floor, MIN_FPS): the loop paints at the rate asked for', async () => {
+  for (const fps of [18, 12, 9, 8]) {
     const r = rig({ mode: '256', fps, loop: true });
     try {
       await toRunning(r);

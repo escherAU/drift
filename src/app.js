@@ -41,8 +41,9 @@ export const FLIP_WINDOW_SECONDS = 3;
 export const FULLCOLOUR_256_MAX_FPS = 18;
 const FULLCOLOUR_256_PERIOD = 1 / FULLCOLOUR_256_MAX_FPS;
 const FULLCOLOUR_256_SLACK = 0.001; // a step this much short of the period still counts as the period (a timer firing early must not drop a frame)
-// DRIFT-9: the lowest --fps. The loop clamps a step to 0.25 s, so under 4 fps real time is lost; 4 still fails L3 at 61x21 (30.5 %, seed 6, 4x, 256 colours); 5 reads at most 24.8 %.
-export const MIN_FPS = 5;
+// DRIFT-9: the lowest --fps. The loop clamps a step to 0.25 s, so under 4 fps real time is lost. Chosen by a sweep of every integer fps 5-30 on the exact grid, the q156 clock and the jitter clock (256 colours, 4x and 1x):
+// 4 fails L3 on the exact grid (30.5 %), 5, 6 and 7 fail L3 on the q156 clock (31.7, 36.9, 33.5 %; limit 30 %); 8 is the lowest rate from which every rate to 30 passes every rule on all three clocks.
+export const MIN_FPS = 8;
 const DEFAULTS = { fps: 18, sceneSeconds: 180, fadeSeconds: DEFAULT_FADE_SECONDS, seed: 1 };
 
 // Palette entries the help panel uses in the single-hue palettes (calm, experimental).
