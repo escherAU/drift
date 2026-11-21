@@ -207,7 +207,7 @@ export function createApp(o) {
     return scheds[mode];
   }
   function cells(mode) {
-    if (!cellComps[mode]) cellComps[mode] = createCellComposer({ scenes: playlists[mode], cols: artCols, rows: artRows, seed, cmode });
+    if (!cellComps[mode]) cellComps[mode] = createCellComposer({ scenes: playlists[mode], cols: artCols, rows: artRows, seed, cmode, realTime: mode === 'contrast' });
     return cellComps[mode];
   }
   // Is the size card (not the art) what Classic shows now? Never while the console owns the screen.
@@ -416,7 +416,9 @@ export function createApp(o) {
         const d = dt * SPEEDS[speedIdx];
         t += d;
         rt += dt * Math.min(SPEEDS[speedIdx], 1);
-        sched(shown.mode).advance(d);
+        // DRIFT-12: Classic high contrast dissolves in real time at every speed from 1x up (2 real seconds, as at 1x): at 4x a 0.5 s dissolve put a cell's last change in the outgoing scene, its
+        // flip and its first change in the incoming scene inside one second (rule L2). The Driftman 9000's dissolve does the same (src/shell/runtime.js). Calm, chaos and experimental are unchanged.
+        sched(shown.mode).advance(d, shown.mode === 'contrast' ? Math.min(SPEEDS[speedIdx], 1) / SPEEDS[speedIdx] : 1);
       } else if (!dirty) {
         return; // frozen or no time passed: nothing to draw
       }
