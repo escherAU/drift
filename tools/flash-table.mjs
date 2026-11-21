@@ -121,6 +121,22 @@ export const MANIFEST = [
   ['flash-colour-rosette', 'real 1x, 2x and 4x with the colour clock', 'Rosette at real 1x, 2x, 4x (colour clock)', 'none', BOTH, '61x21, 80x24, 120x40, 280x70', '1x, 2x, 4x', '18', '1, 2, 3, 7'],
   ['flash-colour-visions', 'real 1x, 2x and 4x at 61x21, 80x24 and 120x40 with the colour clock', 'Bloomfall, Cortex, huefield (colour clock)', 'none', BOTH, '61x21, 80x24, 120x40, 280x70', '1x, 2x, 4x', '18', '2, 3, 7 (and default)'],
   ['flash-colour', 'the equal-brightness pair with delta a = delta b = 0.09', 'must-fail controls for rule C', 'none', BOTH, 'four sizes in file', 'n/a', '18, 24', 'n/a'],
+  // ---- Classic high contrast (the Life scene) on the real app (DRIFT-10)
+  ['life-flash', 'life 1x grid, ${mode}, ${cols}x${rows}, seeds 1 to 8', 'Classic contrast, Life scene, real app, whole 30 s scene', 'grid', BOTH, '80x24, 120x40, 40x10, 41x11, 78x24, 79x25, 88x39, 89x40, 20x6, 10x4', '1x', '18', '1-8'],
+  ['life-flash', 'life 1x grid, inverted, ${mode}', 'Classic contrast, Life scene, inverted (black on white)', 'grid', BOTH, '80x24, 120x40', '1x', '18', '1-8'],
+  ['life-flash', '--fps 8, 12, 24 and 30, seeds 2, 4, 8', 'Classic contrast, Life scene, at four frame rates (meter at the same rate)', 'grid', C256, '80x24', '1x', '8, 12, 24, 30', '2, 4, 8'],
+  ['life-flash', '256 colours, 80x24, seeds 1, 2, 3, 4, 8', 'clock arm: Life, 1x', QJ, C256, '80x24', '1x', '18', 'app seeds 1, 2, 3, 4, 8 (clock seed = app seed)'],
+  ['life-flash', 'truecolor, 120x40, seed 2', 'clock arm: Life, 1x', QJ, TC, '120x40', '1x', '18', 'app seed 2'],
+  ['life-flash-speed', 'life ${speed} grid, ${mode}, ${cols}x${rows}, seeds 1 to 8', 'Classic contrast, Life scene, real + keys, 30 real seconds of Life', 'grid', BOTH, '80x24, 120x40', '2x, 4x', '18', '1-8'],
+  ['life-flash-speed', 'life 4x grid, ${mode}, ${cols}x${rows} (a layout breakpoint size)', 'Life at 4x at the layout breakpoint sizes', 'grid', BOTH, '40x10, 78x24, 88x39', '4x', '18', '1-4'],
+  ['life-flash-speed', 'with the scene length as shipped', 'Life at 4x, scene length 30 s (7.5 real seconds of Life)', 'grid', C256, '80x24', '4x', '18', '1-8'],
+  ['life-flash-speed', 'life 4x clock arm, ${clock}, 256 colours, 80x24, seeds 2, 4, 8', 'clock arm: Life, 4x', QJ, C256, '80x24', '4x', '18', 'app seeds 2, 4, 8 (clock seed = app seed)'],
+  ['life-flash-speed', 'life 2x clock arm, ${clock}, 256 colours, 80x24, seed 2', 'clock arm: Life, 2x', QJ, C256, '80x24', '2x', '18', 'app seed 2'],
+  ['life-flash-speed', 'life 4x clock arm, ${clock}, truecolor, 120x40, seed 2', 'clock arm: Life, 4x', QJ, TC, '120x40', '4x', '18', 'app seed 2'],
+  ['life-flash-controls', 'the old Life fails seed 2 at ${speed} on the ${clock} clock', 'control: the old Life must fail (seed 2, three clocks, 1x and 4x)', 'grid, q156, jitter', C256, '80x24', '1x, 4x', '18', '2'],
+  ['life-flash-controls', 'the old Life fails the 1x matrix', 'control: the old Life must fail the matrix', 'grid', C256, '80x24, 40x10, 78x24, 88x39, 120x40', '1x', '18', '1-8'],
+  ['life-flash-controls', 'the flip gap removed (FLIP_GAP 0)', 'control: mutant, no flip gap', 'grid', C256, '80x24', '1x', '18', '1-8'],
+  ['life-flash-controls', 'the speed lever removed from the scene', 'control: mutant, no realClock', 'grid', C256, '80x24', '1x, 4x', '18', '2, 4, 8'],
 ];
 
 const rd = (file) => fs.readFileSync(path.join(TESTS_DIR, `${file}.test.js`), 'utf8').split(/\r?\n/);

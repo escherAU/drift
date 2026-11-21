@@ -1,0 +1,120 @@
+// DRIFT-10: the flash meter watching Classic high contrast (the Life scene) in the REAL app. createApp itself, started in contrast mode on scene 0 (life), a
+// fake terminal, the app's own loop on a clock from tests/helpers-clock.js ('grid', 'q156', 'jitter') or one app.tick(1 / fps) per frame ('tick'), real key presses
+// (`+` raises the speed one step: 1x, 1.5x, 2x, 3x, 4x, SPEEDS in src/app.js), the bytes the renderer writes read back through the independent terminal reader
+// (tests/helpers-ansi.js), and those screens through the flash meter with the full rule set (L1, L2, L3, R, C). 256-colour runs read the index the terminal was told
+// to show, truecolor the 24-bit value. The meter reads one screen per 1 / fps of clock time, the viewer's grid, as in tests/helpers-flash-app.js.
+//
+// Only the Life scene is judged: frames count while the scheduler is holding scene `life` (not fading to the next one) and the run stops when the hold ends (a
+// dissolve into the tunnel scene is another scene's business). `sceneSeconds` is the scheduler's hold in SCENE seconds, which run `speed` times faster than the
+// wall clock: a run at 4x with sceneSeconds 30 sees Life for 7.5 real seconds; pass sceneSeconds = 30 * speed to see it for 30 real seconds at that speed.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createApp as realCreateApp } from '../src/app.js';
+import { createScreen } from './helpers-ansi.js';
+import { createFlashMeter } from './helpers-flash.js';
+import { createClock } from './helpers-clock.js';
+import { fakeStdin, fakeStdout, fakeProc, fakeStderr } from './helpers.js';
+import { rgbOf } from './helpers-flash-app.js';
+import assert from 'node:assert/strict';
+
+export const LIFE_FPS = 18;
+export const LIFE_SECONDS_FRAMES = 30 * LIFE_FPS; // a whole 30 s scene read at 18 fps, 1x
+const DEF_FG = 0xcccccc, DEF_BG = 0x0c0c0c;
+
+// the keys of a speed plan: `+` pressed n times, the first `at` seconds in, 0.2 s apart (the plan of PLAN_4X in helpers-flash-app.js is four presses at 1 s)
+export const plusKeys = (n, at = 1) => Array.from({ length: n }, (_, i) => ({ at: at + 0.2 * i, key: '+' }));
+// SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4]: from 1x, one press is 1.5x, two are 2x, three 3x, four 4x
+export const PLAN = { '1x': [], '2x': plusKeys(2), '4x': plusKeys(4) };
+export const SPEED_OF = { '1x': 1, '2x': 2, '4x': 4 };
+
+// Runs Life in the real app and returns { rep, frames, endedAt, ids, app-less facts }. `root`: a copy of the tree (src/) to run instead of this one (the controls).
+// feedAll: meter every frame of the run (the dissolves and the scenes after Life too); the tests never do, the README's "not covered" figures come from it.
+// `grab(k, screen, app)` is called on every frame the meter reads, for the look tests (lit counts, glyphs). `forceDead(app)` is not offered: quiet states use the scene directly.
+export async function runLife({
+  cols = 80, rows = 24, mode = '256', seed = 1, seconds = 32, keys = [], clock = 'grid', clockSeed = 1, root = null, fps = LIFE_FPS,
+  sceneSeconds = 30, invert = false, grab = null, startMode = 'contrast', stopAtDissolve = true, feedAll = false, scene = 'life', startScene = 0,
+} = {}) {
+  const createApp = root ? (await import(pathToFileURL(path.join(root, 'src', 'app.js')).href)).createApp : realCreateApp;
+  const useClock = clock && clock !== 'tick';
+  const c = useClock ? createClock({ mode: clock, seed: clockSeed }) : null;
+  const stdout = fakeStdout({ columns: cols, rows });
+  const stdin = fakeStdin(), stderr = fakeStderr(), proc = fakeProc();
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-life-app-'));
+  const cfg = path.join(tmp, 'config.json');
+  if (invert) fs.writeFileSync(cfg, JSON.stringify({ invert: true }));
+  const env = mode === 'truecolor' ? { COLORTERM: 'truecolor' } : {};
+  const app = createApp({
+    stdin, stdout, stderr, proc, env, configPath: cfg, dirs: [], startMode, startScene, sceneSeconds, seed, fps,
+    autoLoop: useClock, now: c ? c.now : undefined, timer: c ? c.timer : undefined,
+  });
+  const ids = [];
+  const n = cols * rows;
+  try {
+    app.start();
+    const screen = createScreen(cols, rows);
+    const meter = createFlashMeter(cols, rows, fps);
+    const total = Math.round(seconds * fps);
+    const keyAt = new Map();
+    for (const kk of keys) { const f = Math.round(kk.at * fps); keyAt.set(f, (keyAt.get(f) || []).concat(kk.key)); }
+    let frames = 0, endedAt = null, speedMax = 0;
+    for (let k = 0; k < total && !proc.exits.length; k++) {
+      for (const key of keyAt.get(k) || []) stdin.emit('data', key);
+      if (c) c.advanceTo(((k + 1) * 1000) / fps); else app.tick(1 / fps);
+      for (const w of stdout.writes.splice(0)) screen.feed(w);
+      if (k % 8 === 0) await new Promise((r) => setImmediate(r));
+      const st = app.getState();
+      speedMax = Math.max(speedMax, st.speed);
+      ids.push(st.fading ? 'fading' : st.sceneId);
+      if (!feedAll && (st.fading || st.sceneId !== scene)) { if (stopAtDissolve) { endedAt = k / fps; break; } continue; }
+      const f = { cols, rows, glyphs: new Uint32Array(n), fg: new Uint32Array(n), bg: new Uint32Array(n) };
+      for (let j = 0; j < n; j++) { f.glyphs[j] = screen.glyphs[j]; f.fg[j] = rgbOf(screen.fg[j], DEF_FG); f.bg[j] = rgbOf(screen.bg[j], DEF_BG); }
+      meter.push(f, undefined);
+      frames++;
+      if (grab) grab(k, screen, app, f);
+    }
+    return { rep: meter.report(), frames, endedAt, ids, speedMax, state: app.getState(), exits: proc.exits.slice() };
+  } finally {
+    try { proc.emit('exit'); } catch { /* ignore */ }
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// ---- trees for the controls: a copy of src/ with the Life scene swapped for the old one (tests/fixtures/life-before-drift10.js) or with a one-line mutation of the new one.
+const HERE = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+const SRC = path.join(HERE, '..', 'src');
+export const OLD_LIFE_FILE = path.join(HERE, 'fixtures', 'life-before-drift10.js');
+// life: 'old' (the fixture), 'new' (this tree's), or a function (text) -> text that edits the new one (it must change it: a mutation that matches nothing throws).
+// edits: { 'src/app.js': (text) => text, ... } the same for any other file of src/.
+export function makeTree(life = 'new', edits = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-life-tree-'));
+  fs.cpSync(SRC, path.join(root, 'src'), { recursive: true });
+  const file = path.join(root, 'src', 'scenes', 'life.js');
+  if (life === 'old') fs.copyFileSync(OLD_LIFE_FILE, file);
+  else if (typeof life === 'function') {
+    const before = fs.readFileSync(file, 'utf8');
+    const after = life(before);
+    if (after === before) throw new Error('makeTree: the mutation changed nothing');
+    fs.writeFileSync(file, after);
+  }
+  for (const [rel, fn] of Object.entries(edits)) {
+    const f = path.join(root, rel);
+    const before = fs.readFileSync(f, 'utf8'), after = fn(before);
+    if (after === before) throw new Error(`makeTree: the mutation of ${rel} changed nothing`);
+    fs.writeFileSync(f, after);
+  }
+  return root;
+}
+export const rmTree = (root) => fs.rmSync(root, { recursive: true, force: true });
+
+// the five rules' worst readings in per cent (X1 views: the viewer's own second), and the rules that fail
+export function nums(rep) {
+  const v = (r) => r.worstFraction * 100;
+  return { l1: v(rep.l1.x1), l2: v(rep.l2.x1), l3: v(rep.l3), r: v(rep.r.x1), c: v(rep.c) };
+}
+
+// the run read the whole Life scene: 540 frames (30 s at 18 fps), or one or two fewer when a late timer started the dissolve a frame early
+export function wholeScene(r, label) {
+  assert.ok(r.frames >= LIFE_SECONDS_FRAMES - 2 && r.frames <= LIFE_SECONDS_FRAMES, `${label}: the whole 30 s Life scene was metered (${r.frames} frames, ended at ${r.endedAt} s)`);
+}

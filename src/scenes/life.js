@@ -8,11 +8,25 @@
 //
 // kind 'sim': init(w, h, seed) -> state, step(state) at 1/30 s (one generation every 3rd
 // step, so 10 generations per second), draw(state, params).
+//
+// DRIFT-10, the flash rules. The board (s.cells) is the simulation; what is DRAWN is s.shown, which follows the board with a limit: a cell
+// (its two half-blocks together) may change on the screen at most once every FLIP_GAP steps (0.6 s). So no cell can change three times in
+// any one second, which is what the meter calls hot on the in-house rule L2 (and seven times, L1), whatever the pattern: blinkers, the pulsar and the
+// chaos of a methuselah all shimmer slowly instead of strobing, while a glider, whose cells each change a few times as it passes, still reads as
+// a glider (a pixel or two late). A cell that wants to change sooner waits, then takes whatever the board shows at that moment. The scene also
+// asks the composer for the real-time clock (realClock, src/cells.js): the speed keys do not make it step faster than 10 generations a real
+// second, so the limit above is a limit per real second at 4x too.
 
 const SUBSTEPS = 3; // sim steps per generation
 const RING = 24; // remember this many recent boards to spot short cycles
 const IDLE_GENS = 30; // dead or cycling for this long (3 s) -> reseed
 const MAX_AGE = 2400; // generations (4 min) before a refresh regardless
+// A drawn cell may change at most once in FLIP_GAP steps. Three changes then take 2 * FLIP_GAP = 1.2 s at the least; the meter's second is 17 frame
+// intervals (0.94 s at 18 fps) and a change is painted up to one frame (and a late timer's 16 ms) after it is made, so 1.2 s leaves a margin of more than 0.1 s.
+const FLIP_GAP = 18;
+// ... and at most this share of the cells may change on the screen in one step (1/30 s; a viewer's frame spans one to three), so a reseed that drops a pulsar on a small board
+// arrives over a few steps instead of in one frame, where it would be more than the 30 % of the screen the step rule (L3) allows. At 80x24 that is 153 cells a step.
+const FLIP_SHARE = 0.08;
 
 const PATTERNS = [
   ['.#.', '..#', '###'], // glider
@@ -72,9 +86,11 @@ function init(w, h, seed) {
     cells: new Uint8Array(n), next: new Uint8Array(n),
     rs: (seed | 0) ^ 0x9e3779b9, sub: 0, gen: 0, pop: 0,
     ring: new Uint32Array(RING), ringN: 0, idle: 0, age: 0, reseeds: 0,
+    shown: new Uint8Array(n), lastFlip: new Int32Array(W * H).fill(-FLIP_GAP), dirty: false, visits: 0,
   };
   seedPatterns(s, patternCount(s));
   s.pop = count(s.cells);
+  s.shown.set(s.cells); // the first picture is the board as it was seeded: nothing is waiting
   return s;
 }
 
@@ -97,6 +113,7 @@ function generation(s) {
     }
   }
   s.cells = next; s.next = cells;
+  s.dirty = true; // the drawn picture may now be behind the board
   s.gen++; s.age++;
   s.pop = count(s.cells);
   const hsh = hashCells(s.cells);
@@ -113,17 +130,41 @@ function generation(s) {
   }
 }
 
+// Brings the drawn picture up to the board, under the per-cell limit. Visits every cell of the visible grid once, only while something is waiting.
+function follow(s) {
+  if (!s.dirty) return;
+  const { w, h, cells, shown, lastFlip, sub } = s;
+  let waiting = false, budget = Math.max(1, Math.floor(w * h * FLIP_SHARE));
+  for (let r = 0; r < h; r++) {
+    const y = (r + sub) % h; // a different row first each step, so what has to wait is not always the bottom of the screen
+    if (budget === 0) { waiting = true; break; }
+    s.visits += w;
+    for (let x = 0; x < w; x++) {
+      const top = 2 * y * w + x, bot = top + w;
+      if (cells[top] === shown[top] && cells[bot] === shown[bot]) continue;
+      const i = y * w + x;
+      if (budget === 0 || sub - lastFlip[i] < FLIP_GAP) { waiting = true; continue; }
+      budget--;
+      lastFlip[i] = sub;
+      shown[top] = cells[top];
+      shown[bot] = cells[bot];
+    }
+  }
+  s.dirty = waiting;
+}
+
 function step(s) {
   s.sub++;
-  if (s.sub % SUBSTEPS !== 0 || s.w === 0 || s.H2 === 0) return;
-  generation(s);
+  if (s.w === 0 || s.H2 === 0) return;
+  if (s.sub % SUBSTEPS === 0) generation(s);
+  follow(s);
 }
 
 function draw(s, params) {
   const g = params.glyphs, c = params.colours;
   g.fill(32);
   c.fill(0);
-  const { w, h, cells } = s;
+  const { w, h } = s, cells = s.shown;
   for (let y = 0; y < h; y++) {
     const top = 2 * y * w, bot = top + w;
     for (let x = 0; x < w; x++) {
@@ -133,4 +174,4 @@ function draw(s, params) {
   }
 }
 
-export default { id: 'life', kind: 'sim', init, step, draw };
+export default { id: 'life', kind: 'sim', realClock: true, init, step, draw };

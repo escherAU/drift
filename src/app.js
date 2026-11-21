@@ -205,6 +205,7 @@ export function createApp(o) {
   sched(shown.mode);
 
   let t = 0, speedIdx = DEFAULT_SPEED_INDEX, paused = false, helpOpen = false;
+  let rt = 0; // DRIFT-10: the real-time clock of Classic: runs at min(speed, 1) of real time and stops with t (paused, help open); src/cells.js hands it to the scenes that ask for it
   let dirty = true, running = false, exited = false, timer = null, uninstall = null;
   let lastNow = 0, nextAt = 0, palette = null, exitDone = false;
   let fullColourOn = false, held = 0; // DRIFT-8 r5: is a full-colour frame on screen; time held back by the 256-colour paint cap
@@ -246,7 +247,7 @@ export function createApp(o) {
   function renderFrame() {
     if (shown.shell && shell) return renderShellFrame();
     const sc = sched(shown.mode);
-    const f = shown.mode === 'calm' ? composer.frame(sc.state(), t) : cells(shown.mode).frame(sc.state(), t);
+    const f = shown.mode === 'calm' ? composer.frame(sc.state(), t) : cells(shown.mode).frame(sc.state(), t, rt);
     const pal = paletteNow();
     if (helpOpen) {
       drawHelp(f.glyphs, f.shades, cols, rows, {
@@ -311,7 +312,7 @@ export function createApp(o) {
     renderer.invalidate();
     if (changedMode || leavingShell) { // back from the console: fresh band memory / sim state, same mode and scene
       if (shown.mode === 'calm') composer.resize(cols, rows); // fresh band memory
-      else cells(shown.mode).reset(t);
+      else cells(shown.mode).reset(t, rt);
     }
     dirty = true;
   }
@@ -383,6 +384,7 @@ export function createApp(o) {
       if (!paused && !helpOpen && dt > 0) {
         const d = dt * SPEEDS[speedIdx];
         t += d;
+        rt += dt * Math.min(SPEEDS[speedIdx], 1);
         sched(shown.mode).advance(d);
       } else if (!dirty) {
         return; // frozen or no time passed: nothing to draw

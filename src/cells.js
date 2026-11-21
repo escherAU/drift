@@ -25,6 +25,9 @@
 //   kind 'sim'     { id, kind: 'sim', init(w, h, seed) -> state, step(state), draw(state, params) }
 //                  step runs at a fixed 1/30 s. Same seed + same step count gives the same frame.
 //                  draw fills params.glyphs / params.colours in full and never mutates state.
+//                  DRIFT-10: a sim with `realClock: true` (life) is stepped from the colour clock tc (real time at min(speed, 1)) instead of t, when the
+//                  caller gives one (the app does, in every Classic mode), so a faster speed key does not make it step faster than it does at 1x; with no
+//                  tc it is stepped from t like every other sim. Scenes without the flag are stepped exactly as before.
 //
 // createCellComposer owns the sim states, steps them from a time accumulator (at most MAX_STEPS = 8
 // steps per frame: enough for 4x speed at 18 fps, never a spiral after a stall), and runs the
@@ -79,7 +82,7 @@ export function createCellComposer({ scenes, cols, rows, seed = 1, cmode = 'true
   let states = scenes.map(() => null);
   let since = scenes.map(() => null); // clock value when each scene became active (its visit started)
   let sinceC = scenes.map(() => null); // the colour clock's value at the same moment (DRIFT-8 C3), so a vision's colour time is scene-local too
-  let acc = 0, lastT = null;
+  let acc = 0, lastT = null, accR = 0, lastR = null; // accR / lastR: the same accumulator on the real-time clock, for sims with realClock
   const params = { seed, glyphs: null, colours: null, fg: null, bg: null, cmode: c.cmode, tc: undefined, tc0: undefined };
   let TC = null; // the colour clock of the frame being drawn, or null when the caller gave none
 
@@ -97,15 +100,16 @@ export function createCellComposer({ scenes, cols, rows, seed = 1, cmode = 'true
     states = scenes.map(() => null);
     since = scenes.map(() => null);
     sinceC = scenes.map(() => null);
-    acc = 0;
+    acc = 0; accR = 0; lastR = null;
   }
 
-  function reset(t) {
+  function reset(t, tc) {
     states = scenes.map(() => null);
     since = scenes.map(() => null);
     sinceC = scenes.map(() => null);
-    acc = 0;
+    acc = 0; accR = 0;
     lastT = Number.isFinite(t) ? t : null;
+    lastR = Number.isFinite(tc) ? tc : lastT;
   }
 
   function stateOf(idx) {
@@ -143,11 +147,22 @@ export function createCellComposer({ scenes, cols, rows, seed = 1, cmode = 'true
     acc += dt;
     let n = Math.floor(acc * STEP_HZ + 1e-9);
     if (n > MAX_STEPS) { n = MAX_STEPS; acc = 0; } else acc -= n * STEP_DT;
+    // the same count on the real-time clock, for sims that ask for it (no tc given: it is t)
+    const R = TC === null ? T : TC;
+    if (lastR === null) lastR = R;
+    let dR = R - lastR;
+    lastR = R;
+    if (!(dR > 0)) dR = 0;
+    accR += dR;
+    let nR = Math.floor(accR * STEP_HZ + 1e-9);
+    if (nR > MAX_STEPS) { nR = MAX_STEPS; accR = 0; } else accR -= nR * STEP_DT;
     stateOf(st.a);
     if (dissolving) stateOf(st.b);
-    for (let k = 0; k < n; k++) {
-      if (states[st.a]) scenes[st.a].step(states[st.a]);
-      if (dissolving && states[st.b]) scenes[st.b].step(states[st.b]);
+    const nA = scenes[st.a].realClock === true ? nR : n;
+    for (let k = 0; k < nA; k++) if (states[st.a]) scenes[st.a].step(states[st.a]);
+    if (dissolving) {
+      const nB = scenes[st.b].realClock === true ? nR : n;
+      for (let k = 0; k < nB; k++) if (states[st.b]) scenes[st.b].step(states[st.b]);
     }
     c.stepsLastFrame = n;
     c.stepsTotal += n;
