@@ -124,3 +124,36 @@ test('r2 README: the dissolve claims name the app-driven arm (seeds 1 to 16, rea
   // control: the check notices a README that no longer names the arm
   assert.ok(!flat(README.replace('`tests/driftman-9000-dissolve-app.test.js`', 'x')).includes('`tests/driftman-9000-dissolve-app.test.js`'));
 });
+
+// ---- DRIFT-12: the tunnel and the whole cycle at 1x, 2x and 4x: the README says what is asserted, names the files and their clock-arm cost lines, and no longer says they fail
+
+test('DRIFT-12 the flash audit sees the new tunnel files (they run the meter and judge the shared rule list)', () => {
+  const users = FILES.filter(([n, t]) => !METER_FILES.has(n) && USES_METER.test(t)).map(([n]) => n);
+  for (const need of ['tunnel-flash.test.js', 'tunnel-flash-sizes.test.js', 'tunnel-flash-fps.test.js', 'tunnel-flash-fps-256.test.js', 'tunnel-cycle.test.js', 'tunnel-flash-controls.test.js', 'tunnel-look.test.js', 'classic-dissolve-real-time.test.js']) {
+    assert.ok(users.includes(need) || FILES.some(([n, t]) => n === need && JUDGES_SHARED_LIST.test(t)), `the audit sees ${need}`);
+  }
+  assert.deepEqual(auditFlashFiles(FILES), []);
+});
+
+test('DRIFT-12 README: Classic high contrast tunnel and the whole cycle are asserted at 1x, 2x and 4x, the files and each file\'s clock-arm cost line are named, and the old "tunnel fails at speed" sentences are gone', () => {
+  const t = flat(README);
+  for (const need of [
+    '**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules (asserted since DRIFT-12).**',
+    'at 1x, 2x and 4x (Life since DRIFT-10, wire and blocktype since DRIFT-11, tunnel and the whole cycle at speed since DRIFT-12',
+    '`tunnel-flash` 12.3 % (12 runs), `tunnel-flash-sizes` 4.1 % (16 runs), `tunnel-flash-fps` 12.7 % and `tunnel-flash-fps-256` 12.5 % (112 runs each), `tunnel-cycle` 7.4 % (18 runs)',
+    '`tunnel-look`', '`classic-dissolve-real-time`', '`tunnel-flash-controls`', '`--tree before12`',
+    'the old flow left L3 at 34.25 % at 10 fps on the q156 clock on 40x10', 'There is no follower, no per-cell hold and no per-frame cap in the tunnel',
+    '12 tunnel cases moved, nothing else',
+  ]) assert.ok(t.includes(need), `the README says: ${need}`);
+  for (const gone of ['tunnel and the whole cycle FAIL', 'and except at speed: that claim is for 1x', 'does NOT meet the rules, because tunnel fails there', 'it is NOT held at 2x and 4x as a whole']) {
+    assert.ok(!t.includes(gone), `the README no longer says: ${gone}`);
+  }
+  // every file it names exists and ends with its own clock-arm cost assertion, which holds the arms to 15 % of the file's grid frames
+  for (const [file, label] of [['tunnel-flash', 'tunnel-flash'], ['tunnel-flash-sizes', 'tunnel-flash-sizes'], ['tunnel-flash-fps', 'tunnel-flash-fps'], ['tunnel-flash-fps-256', 'tunnel-flash-fps-256'], ['tunnel-cycle', 'tunnel-cycle']]) {
+    const text = read(`./${file}.test.js`);
+    assert.ok(text.includes(`assertArmCost('${label}')`), `${file} asserts its clock-arm cost`);
+    assert.ok(text.includes('clock' + 'Arm(() =>') || text.includes('clock' + 'Arm(async'), `${file} runs clock arms`);
+  }
+  // control: the check notices a README without the section
+  assert.ok(!flat(README.replace('**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules (asserted since DRIFT-12).**', 'x')).includes('**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules (asserted since DRIFT-12).**'));
+});

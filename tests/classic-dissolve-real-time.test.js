@@ -11,6 +11,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runLife, PLAN, SPEED_OF } from './helpers-life-app.js';
+import { failedRules, X1_RULE_IDS } from './helpers-flash.js';
 
 // the length in frames of the first run of 'fading' frames
 async function firstFade({ startMode = 'contrast', speed = '1x', sceneLen = 30, fps = 18, seconds = 60, scene = 'life', startScene = 0 }) {
@@ -20,13 +21,14 @@ async function firstFade({ startMode = 'contrast', speed = '1x', sceneLen = 30, 
   let b = a;
   while (b < r.ids.length && r.ids[b] === 'fading') b++;
   assert.ok(b < r.ids.length, 'and ended inside the run');
-  return { frames: b - a, at: a / fps, ids: r.ids };
+  return { frames: b - a, at: a / fps, ids: r.ids, rep: r.rep };
 }
 
 test('DRIFT-12 contrast: the first dissolve lasts 2 real seconds (36 frames at 18 fps, one either way) at 1x, 2x and 4x, and the same at --fps 8 and 30', async () => {
   for (const speed of ['1x', '2x', '4x']) {
     const f = await firstFade({ speed });
     assert.ok(f.frames >= 35 && f.frames <= 37, `${speed}: ${f.frames} frames of dissolve (began at ${f.at.toFixed(1)} s)`);
+    assert.deepEqual(failedRules(f.rep, { only: X1_RULE_IDS }), [], `${speed}: the first minute of the cycle (Life, the dissolve, the tunnel) passes the five rules`);
   }
   for (const fps of [8, 30]) for (const speed of ['1x', '4x']) {
     const f = await firstFade({ speed, fps });
