@@ -17,6 +17,7 @@ import blocktype, { ideal as blockIdeal, BLOCK_WORDS, SLOT_SECONDS, TRANSITION_S
 import { FLIP_SHARE } from '../src/scenes/follow.js';
 import { renderScene } from '../src/cells.js';
 import { runLife } from './helpers-life-app.js';
+import { failedRules, X1_RULE_IDS } from './helpers-flash.js';
 import { SCENE_INDEX } from './helpers-wb-flash.js';
 
 const SCENES = { wire, blocktype };
@@ -106,6 +107,7 @@ for (const [name, sc] of Object.entries(SCENES)) {
     // the same through the real app: two runs of the same seed meter the same, and read back the same last screen
     return Promise.all([1, 2].map(() => runLife({ cols: 40, rows: 12, mode: '256', seed: 3, clock: 'grid', seconds: 8, scene: name, startScene: SCENE_INDEX[name] }))).then(([x, y]) => {
       assert.deepEqual(x.rep.l3, y.rep.l3);
+      for (const r of [x, y]) assert.deepEqual(failedRules(r.rep, { only: X1_RULE_IDS }), [], `${name}: the same run passes the five rules`);
       assert.equal(x.frames, y.frames);
     });
   });
