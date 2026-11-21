@@ -33,17 +33,67 @@ test('DRIFT-10 life-matrix: the speed arm holds Life for 30 real seconds (the 4x
   assert.equal(num(out[0]), num(out[1]), 'Life steps 10 generations a real second at any speed, so the two runs read the same');
 });
 
-test('DRIFT-10 life-matrix --scene: the other contrast scenes, measured and pinned as NOT meeting the five rules where they do not (the README says so): wire and blocktype fail at 1x, tunnel and maze pass', () => {
-  const worst = (scene) => {
-    const r = run('--scene', scene, '--seeds', '1,2,3', '--clocks', 'grid', '--modes', '256', '--speeds', '1x', '--sizes', '80x24', '--summary-only');
-    const line = r.stdout.trim().split('\n').pop();
-    const m = /L1 +([\d.]+) L2 +([\d.]+) L3 +([\d.]+)/.exec(line);
-    return { status: r.status, l1: Number(m[1]), l2: Number(m[2]), l3: Number(m[3]), line };
-  };
-  const wire = worst('wire'), block = worst('blocktype'), tunnel = worst('tunnel'), maze = worst('maze');
-  assert.equal(wire.status, 1); assert.ok(wire.l1 > 25 && wire.l2 > 25, wire.line);
-  assert.equal(block.status, 1); assert.ok(block.l2 > 25, block.line);
-  assert.equal(tunnel.status, 0, tunnel.line);
-  assert.equal(maze.status, 0, maze.line);
-  console.log('NOT COVERED (pinned): ' + [wire, block, tunnel, maze].map((x) => x.line.replace(/ +/g, ' ')).join(' || '));
+
+// DRIFT-11: wire and blocktype now pass; the old looks are the control (--tree before11: a copy of src/ with wire.js and blocktype.js as they were at 7c2f34c)
+const worst = (scene, over = {}) => {
+  const o = { scene, seeds: '1,2,3', clocks: 'grid', modes: '256', speeds: '1x', sizes: '80x24', ...over };
+  const r = run(...Object.entries(o).flatMap(([k, v]) => ['--' + k, v]), '--summary-only');
+  const line = r.stdout.trim().split('\n').pop();
+  const m = /L1 +([\d.]+) L2 +([\d.]+) L3 +([\d.]+)/.exec(line);
+  return { status: r.status, l1: Number(m[1]), l2: Number(m[2]), l3: Number(m[3]), line };
+};
+
+test('DRIFT-11 life-matrix --scene: the shipped wire, blocktype, tunnel, maze and life all pass the five rules at 80x24, 1x, seeds 1 to 3 (exit 0), under every limit', () => {
+  for (const scene of ['wire', 'blocktype', 'tunnel', 'maze', 'life']) {
+    const w = worst(scene);
+    assert.equal(w.status, 0, w.line);
+    assert.match(w.line, /\| pass$/);
+    assert.ok(w.l1 <= 25 && w.l2 <= 25 && w.l3 <= 30, w.line);
+  }
+});
+
+test('DRIFT-11 life-matrix --tree before11: the old wire and blocktype read over the limits (wire L1 40.74 and L2 98.61, blocktype L2 81.02, seeds 1 to 3) and the tool exits 1; Life, tunnel and maze are the same tree and still pass', () => {
+  const wire = worst('wire', { tree: 'before11' }), block = worst('blocktype', { tree: 'before11' });
+  assert.equal(wire.status, 1);
+  assert.match(wire.line, /^before11 wire +grid .* L1 +40\.74 L2 +98\.61 L3 +16\.51 .*FAIL l1\.x1 l2\.x1$/);
+  assert.equal(block.status, 1);
+  assert.match(block.line, /^before11 blocktype +grid .* L1 +3\.70 L2 +81\.02 L3 +23\.44 .*FAIL l2\.x1$/);
+  for (const scene of ['life', 'tunnel', 'maze']) assert.equal(worst(scene, { tree: 'before11' }).status, 0, scene);
+});
+
+test('DRIFT-11 life-matrix --whole-cycle: the shipped cycle (Life, tunnel, wire, maze, blocktype and the four dissolves, 170 s) reads under every limit on grid, q156 and jitter, seeds 1 to 3, 80x24, and exits 0; the old looks read L1 43.52 and L2 99.54 and the tool exits 1', () => {
+  const r = run('--whole-cycle', '--seeds', '1,2,3', '--clocks', 'grid,q156,jitter', '--modes', '256', '--speeds', '1x', '--sizes', '80x24', '--summary-only');
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const lines = r.stdout.trim().split('\n');
+  assert.equal(lines.length, 3);
+  for (const l of lines) {
+    assert.match(l, /^after +cycle /);
+    const m = /L1 +([\d.]+) L2 +([\d.]+) L3 +([\d.]+) R +([\d.]+) C +([\d.]+)/.exec(l);
+    const [l1, l2, l3, rr, c] = m.slice(1).map(Number);
+    assert.ok(l1 <= 25 && l2 <= 25 && l3 <= 30 && rr <= 25 && c <= 25, l);
+    assert.match(l, /\| pass$/);
+  }
+  const old = run('--whole-cycle', '--tree', 'before11', '--seeds', '1,2,3', '--clocks', 'grid', '--modes', '256', '--speeds', '1x', '--sizes', '80x24', '--summary-only');
+  assert.equal(old.status, 1);
+  assert.match(old.stdout.trim(), /^before11 cycle +grid .* L1 +43\.52 L2 +99\.54 .*FAIL l1\.x1 l2\.x1$/);
+});
+
+test('DRIFT-11 life-matrix --fps takes a list: one line per fps, the rate in the line, and the smallest boards at --fps 8 pass for both scenes', () => {
+  for (const scene of ['wire', 'blocktype']) {
+    const r = run('--scene', scene, '--seeds', '1,2', '--clocks', 'q156', '--modes', '256', '--speeds', '1x', '--sizes', '10x4,25x5', '--fps', '8,12', '--summary-only');
+    assert.equal(r.status, 0, r.stdout);
+    const lines = r.stdout.trim().split('\n');
+    assert.equal(lines.length, 4, 'two fps x two sizes');
+    assert.deepEqual(lines.map((l) => /fps +(\d+)/.exec(l)[1]), ['8', '8', '12', '12']);
+  }
+});
+
+test('DRIFT-11 life-matrix: the cycle is NOT clean on the smallest boards, and the cause is not the DRIFT-11 scenes: tunnel and maze alone read L2 over the limit at 10x4 on the grid (pinned: the README says so)', () => {
+  const t = worst('tunnel', { sizes: '10x4' }), m = worst('maze', { sizes: '10x4' });
+  assert.equal(t.status, 1, t.line);
+  assert.ok(t.l2 > 25, t.line);
+  assert.equal(m.status, 1, m.line);
+  assert.ok(m.l2 > 25, m.line);
+  for (const scene of ['wire', 'blocktype', 'life']) assert.equal(worst(scene, { sizes: '10x4' }).status, 0, scene);
+  console.log('NOT COVERED (pinned): ' + [t, m].map((x) => x.line.replace(/ +/g, ' ')).join(' || '));
 });

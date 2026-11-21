@@ -187,3 +187,10 @@ for (const scene of ['wire', 'blocktype']) {
     } finally { rmTree(root); }
   });
 }
+
+// ---- the controls are real: a mutation that matches nothing is an error, not a silent pass
+test('DRIFT-11 makeTree: a mutation of wire.js, blocktype.js or follow.js that changes nothing throws (a mutant that is the shipped scene cannot pass for a control)', () => {
+  assert.throws(() => makeTree('new', {}, { wire: (t) => t }), /changed nothing/);
+  assert.throws(() => makeTree('new', {}, { blocktype: (t) => at(t, 'this text is nowhere in the file', 'x') }), /changed nothing/);
+  assert.throws(() => makeTree('new', { [FOLLOW]: (t) => at(t, 'export const FLIP_GAP = 99;', 'x') }), /changed nothing/);
+});
