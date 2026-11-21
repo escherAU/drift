@@ -78,7 +78,7 @@ export function colourPairs(screen) {
 //   root: a copy of the tree to run instead of this one (the mutants); playlists: injected scene lists (the cost and held pins)
 export async function startCard({
   cols = 80, rows = 24, startMode = 'calm', cmode = '256', seed = 1, invert = false, clock = 'tick', clockSeed = 1, fps = 18,
-  sceneSeconds = 180, root = null, playlists = null, startScene = 0, reported = null,
+  sceneSeconds = 180, root = null, playlists = null, startScene = 0, reported = null, fadeSeconds = undefined,
 } = {}) {
   const createApp = root ? (await import(pathToFileURL(path.join(root, 'src', 'app.js')).href)).createApp : realCreateApp;
   const useClock = clock && clock !== 'tick';
@@ -90,7 +90,7 @@ export async function startCard({
   if (invert) fs.writeFileSync(cfg, JSON.stringify({ invert: true }));
   const env = cmode === 'truecolor' ? { COLORTERM: 'truecolor' } : {};
   const app = createApp({
-    stdin, stdout, stderr, proc, env, configPath: cfg, dirs: [], startMode, startScene, sceneSeconds, seed, fps,
+    stdin, stdout, stderr, proc, env, configPath: cfg, dirs: [], startMode, startScene, sceneSeconds, seed, fps, ...(fadeSeconds !== undefined ? { fadeSeconds } : {}),
     ...(playlists ? { playlists, scenes: playlists.calm } : {}),
     autoLoop: useClock, now: c ? c.now : undefined, timer: c ? c.timer : undefined,
   });
@@ -153,3 +153,37 @@ export function assertWritesInside(writes, cols, rows, assert, label = '') {
 
 // how many cells of the screen are not blank
 export const inkOf = (screen) => { let n = 0; for (let i = 0; i < screen.glyphs.length; i++) if (screen.glyphs[i] !== 32) n++; return n; };
+
+// ---- the scene clock under the card (DRIFT-12 item 6)
+
+// Run an app, shrink it below the minimum at `at` seconds, leave it there for `gap` seconds of the clock, grow it back to the same size and watch: what the scene clock (t),
+// the scheduler (scene index, dissolve) and the picture were before the shrink, right after growing back, and one second later.
+export async function measurePause({ clock = 'grid', startMode = 'chaos', cmode = '256', cols = 80, rows = 24, sceneSeconds = 3, at = 1.5, gap = 3, small = [39, 10], root = null, seed = 1, clockSeed = 1, fadeSeconds } = {}) {
+  const h = await startCard({ cols, rows, startMode, cmode, clock, clockSeed, sceneSeconds, root, seed, fadeSeconds });
+  try {
+    h.advance(at);
+    const before = h.snap();
+    h.resize(small[0], small[1]);
+    h.advance(gap);
+    const card = h.snap();
+    h.resize(cols, rows);
+    const after = h.snap();
+    h.advance(1);
+    const later = h.snap();
+    return { before, card, after, later, gap, fps: h.fps };
+  } finally { h.close(); }
+}
+
+// what is wrong with a measurePause result (an empty list = the scene clock stood still under the card and resumed with no leap)
+export function pauseViolations(m) {
+  const bad = [];
+  const dt = 1 / m.fps + 0.0165; // t is read between two steps on both sides of the second: out by at most one frame period plus the latest a timer fires (16 ms of jitter)
+  if (m.after.state.t !== m.before.state.t) bad.push(`t moved under the card: ${m.before.state.t} -> ${m.after.state.t} over a ${m.gap} s gap`);
+  if (m.card.state.t !== m.before.state.t) bad.push(`t moved while the card showed: ${m.before.state.t} -> ${m.card.state.t}`);
+  if (m.after.state.sceneIndex !== m.before.state.sceneIndex) bad.push(`the scene moved: ${m.before.state.sceneIndex} -> ${m.after.state.sceneIndex}`);
+  if (m.after.state.fading !== m.before.state.fading) bad.push(`the dissolve moved: fading ${m.before.state.fading} -> ${m.after.state.fading}`);
+  if (m.after.text !== m.before.text) bad.push('the frame after growing back is not the frame before shrinking');
+  const grown = m.later.state.t - m.before.state.t;
+  if (!(grown >= 1 - dt && grown <= 1 + dt)) bad.push(`one second after resuming the scene clock had moved ${grown.toFixed(4)} s (a leap, or a stall)`);
+  return bad;
+}
