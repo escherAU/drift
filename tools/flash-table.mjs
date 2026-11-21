@@ -129,7 +129,7 @@ export const MANIFEST = [
   ['life-flash', 'truecolor, 120x40, seed 2', 'clock arm: Life, 1x', QJ, TC, '120x40', '1x', '18', 'app seed 2'],
   ['life-flash-speed', 'life ${speed} grid, ${mode}, ${cols}x${rows}, seeds 1 to 8', 'Classic contrast, Life scene, real + keys, 30 real seconds of Life', 'grid', BOTH, '80x24, 120x40', '2x, 4x', '18', '1-8'],
   ['life-flash-speed', 'life 4x grid, ${mode}, ${cols}x${rows} (a layout breakpoint size)', 'Life at 4x at the layout breakpoint sizes', 'grid', BOTH, '40x10, 78x24, 88x39', '4x', '18', '1-4'],
-  ['life-flash-speed', 'with the scene length as shipped', 'Life at 4x, scene length 30 s (7.5 real seconds of Life)', 'grid', C256, '80x24', '4x', '18', '1-8'],
+  ['life-flash-speed', 'with a scene length of 30 s', 'Life at 4x, scene length 30 s (7.5 real seconds of Life; the shipped default is 180 s)', 'grid', C256, '80x24', '4x', '18', '1-8'],
   ['life-flash-speed', 'life 4x clock arm, ${clock}, 256 colours, 80x24, seeds 2, 4, 8', 'clock arm: Life, 4x', QJ, C256, '80x24', '4x', '18', 'app seeds 2, 4, 8 (clock seed = app seed)'],
   ['life-flash-speed', 'life 2x clock arm, ${clock}, 256 colours, 80x24, seed 2', 'clock arm: Life, 2x', QJ, C256, '80x24', '2x', '18', 'app seed 2'],
   ['life-flash-speed', 'life 4x clock arm, ${clock}, truecolor, 120x40, seed 2', 'clock arm: Life, 4x', QJ, TC, '120x40', '4x', '18', 'app seed 2'],
@@ -137,6 +137,13 @@ export const MANIFEST = [
   ['life-flash-controls', 'the old Life fails the 1x matrix', 'control: the old Life must fail the matrix', 'grid', C256, '80x24, 40x10, 78x24, 88x39, 120x40', '1x', '18', '1-8'],
   ['life-flash-controls', 'the flip gap removed (FLIP_GAP 0)', 'control: mutant, no flip gap', 'grid', C256, '80x24', '1x', '18', '1-8'],
   ['life-flash-controls', 'the speed lever removed from the scene', 'control: mutant, no realClock', 'grid', C256, '80x24', '1x, 4x', '18', '2, 4, 8'],
+  // DRIFT-10 correction round 1: the low frame rates on small boards, the per-painted-frame cap, the slower speeds
+  ['life-flash-fps', 'life ${speed} grid, --fps ${fps}, ${mode}, the six small sizes', 'Classic contrast, Life scene at the low frame rates on small boards, whole 30 s scene', 'grid', BOTH, '10x4, 13x4, 15x5, 20x6, 25x5, 80x24', '1x, 4x', '8, 10, 12, 15', '1-8'],
+  ['life-flash-fps', 'life 1x clock arm, ${clock}, --fps ${fps}, the six small sizes', 'clock arm: Life at the low frame rates on small boards', QJ, BOTH, '10x4, 13x4, 15x5, 20x6, 25x5, 80x24', '1x', '8, 10, 12, 15', 'app seeds 2 (256 colours), 5 (truecolor); clock seed = app seed'],
+  ['life-flash-speed', 'life slower speeds slow it', 'Life at 0.5x and 0.25x: moves about half and a quarter as often as at 1x, the five rules pass', 'grid', C256, '80x24', '0.5x, 0.25x (1x as the reference)', '18', '1-3'],
+  ['life-flash-controls', 'the first fix (a share per step only, 33f8142) fails L3', 'control: the first DRIFT-10 fix must fail the low-fps runs', 'grid, q156', C256, '13x4, 15x5, 25x5 (grid fps 8); 10x4, 20x6 (q156 fps 10); 10x4 (q156 fps 12); 15x5 (q156 fps 15)', '1x', '8, 10, 12, 15', '1-8'],
+  ['life-flash-controls', 'the per-frame cap taken out of this Life', 'control: mutant, no per-frame cap', 'grid, q156', C256, 'as the control above', '1x', '8, 10, 12, 15', '1-8'],
+  ['life-flash-controls', 'the min(speed, 1) taken out of the app', 'control: mutant, the real-time clock at full pace at slower speeds', 'grid', C256, '80x24', '1x, 0.5x, 0.25x', '18', '2'],
 ];
 
 const rd = (file) => fs.readFileSync(path.join(TESTS_DIR, `${file}.test.js`), 'utf8').split(/\r?\n/);

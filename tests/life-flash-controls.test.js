@@ -2,12 +2,15 @@
 // viewer's 18 Hz grid, the five 1x rules), on a COPY of src/ in a temporary folder with one thing changed, and each must FAIL, so the passes in the other two files are shown to come from the fix.
 //   old Life        src/scenes/life.js as it was at a8b63a3 (tests/fixtures/life-before-drift10.js): fails seed 2 at 1x and at 4x on the grid, q156 and jitter clocks, and fails the 1x matrix
 //                   (80x24: seeds 2, 3, 4 and 8; and at least one seed at 40x10, 78x24, 88x39 and 120x40)
-//   mutants         of the new Life, one line each: the flip gap removed (0), halved (9 steps), the speed lever removed from the scene (realClock) or from the app (rt), and the per-step
-//                   share limit taken out (a reseed on a 20x6 board then moves more than 30 % of the screen in one frame)
+//   mutants         of the new Life, one line each: the flip gap removed (0), halved (9 steps), the speed lever removed from the scene (realClock) or from the app (rt), the per-step
+//                   share limit taken out (a reseed on a 20x6 board then moves more than 30 % of the screen in one frame), the min(speed, 1) of the app's real-time clock taken out
+//                   (slower speeds then do not slow Life), and the per-frame cap taken out
+//   first fix       src/scenes/life.js as it was at 33f8142 (tests/fixtures/life-before-fps-fix.js: the flip gap and a share per STEP, nothing per painted frame): fails L3 at the low frame rates on
+//                   small boards (tests/life-flash-fps.test.js's runs)
 // A passing control prints its numbers only after the assertion that it fails has passed.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runLife, makeTree, rmTree, nums, PLAN, SPEED_OF } from './helpers-life-app.js';
+import { runLife, movingFrames, makeTree, rmTree, nums, PLAN, SPEED_OF } from './helpers-life-app.js';
 import { failedRules, X1_RULE_IDS } from './helpers-flash.js';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -91,15 +94,62 @@ test('DRIFT-10 control: the speed lever removed from the app (the real-time cloc
   assert.equal(failed.length, 3);
 });
 
-test('DRIFT-10 control: the per-step share limit taken out: a reseed on a 20x6 board moves more than 30 % of the screen in one frame (L3)', async () => {
-  const noShare = (t) => t.replace('const FLIP_SHARE = 0.08;', 'const FLIP_SHARE = 1;');
-  const failed = await mutantFails('FLIP_SHARE 1', noShare, {}, SEEDS.map((seed) => ({ seed, clock: 'grid', cols: 20, rows: 6 })));
+test('DRIFT-10 control: both share limits taken out (per step and per painted frame): a reseed on a 20x6 board moves more than 30 % of the screen in one frame (L3)', async () => {
+  // the per-frame cap alone (FRAME_SHARE 0.15 over the frame's steps) also holds this 18 fps case, so both go
+  const noShare = (t) => t.replace('const FLIP_SHARE = 0.08;', 'const FLIP_SHARE = 1;').replace('const FRAME_SHARE = 0.15;', 'const FRAME_SHARE = 1;');
+  const failed = await mutantFails('FLIP_SHARE 1 and FRAME_SHARE 1', noShare, {}, SEEDS.map((seed) => ({ seed, clock: 'grid', cols: 20, rows: 6 })));
   assert.ok(failed.some((f) => f.b.includes('l3')), 'L3 is the rule that fails');
   // and the real one passes the same runs
   for (const seed of SEEDS) {
     const r = await runLife({ cols: 20, rows: 6, seed, mode: '256', clock: 'grid', seconds: 32 });
     assert.deepEqual(bad(r.rep), [], `the real Life, 20x6 seed ${seed}: ${fmt(r.rep)}`);
   }
+});
+
+// ---- the first DRIFT-10 fix (33f8142: flip gap + a share per STEP, nothing per painted frame) against tests/life-flash-fps.test.js's runs
+// Measured on 33f8142 (worst of seeds 1 to 8, 256 colours): fps 8 grid 13x4 30.77, 15x5 32.00, 25x5 32.00; fps 10 q156 10x4 45.00, 20x6 45.00; fps 12 q156 10x4 37.50; fps 15 q156 15x5 32.00.
+const V1_FAILS = [
+  { clock: 'grid', fps: 8, cols: 13, rows: 4 }, { clock: 'grid', fps: 8, cols: 15, rows: 5 }, { clock: 'grid', fps: 8, cols: 25, rows: 5 },
+  { clock: 'q156', fps: 10, cols: 10, rows: 4 }, { clock: 'q156', fps: 10, cols: 20, rows: 6 }, { clock: 'q156', fps: 12, cols: 10, rows: 4 }, { clock: 'q156', fps: 15, cols: 15, rows: 5 },
+];
+test('DRIFT-10 control: the first fix (a share per step only, 33f8142) fails L3 at the low frame rates on small boards: grid --fps 8, q156 --fps 10, 12 and 15', async () => {
+  const root = makeTree('v1');
+  try {
+    const out = [];
+    for (const c of V1_FAILS) {
+      const failed = [];
+      for (const seed of SEEDS) {
+        const r = await go(root, { ...c, seed, clockSeed: seed });
+        if (bad(r.rep).length) { assert.ok(bad(r.rep).includes('l3'), `${JSON.stringify(c)} seed ${seed}: L3 is the rule that fails (${bad(r.rep)})`); failed.push(seed); }
+      }
+      assert.ok(failed.length >= 1, `the first fix fails ${JSON.stringify(c)} on some seed of 1 to 8`);
+      out.push(`${c.clock} fps ${c.fps} ${c.cols}x${c.rows} [${failed}]`);
+    }
+    console.log(`CONTROL first fix (33f8142) fails L3 on seeds: ${out.join('; ')}`);
+  } finally { rmTree(root); }
+});
+
+test('DRIFT-10 control: the per-frame cap taken out of this Life (the count of steps ignored, so only the per-step share is left): fails L3 at the low frame rates', async () => {
+  const noFrame = (t) => t.replace('FRAME_SHARE / Math.max(1, n)', '1');
+  const root = makeTree(noFrame);
+  try {
+    let failing = 0;
+    for (const c of V1_FAILS) for (const seed of SEEDS) { const r = await go(root, { ...c, seed, clockSeed: seed }); if (bad(r.rep).includes('l3')) { failing++; break; } }
+    assert.equal(failing, V1_FAILS.length, 'every listed case fails without the cap');
+    console.log(`CONTROL mutant no frame cap: ${failing} of ${V1_FAILS.length} cases fail L3`);
+  } finally { rmTree(root); }
+});
+
+test('DRIFT-10 control: the min(speed, 1) taken out of the app (the real-time clock at full pace whatever the speed): 0.5x and 0.25x move as often as 1x, so the slower-speeds pin fails', async () => {
+  const root = makeTree('new', { 'src/app.js': (t) => t.replace('rt += dt * Math.min(SPEEDS[speedIdx], 1);', 'rt += dt;') });
+  try {
+    const one = await movingFrames('1x', { seed: 2, root });
+    const half = await movingFrames('0.5x', { seed: 2, root });
+    const quarter = await movingFrames('0.25x', { seed: 2, root });
+    assert.ok(half.moving > 0.6 * one.moving, `0.5x moves in ${half.moving} of the frames 1x does (${one.moving}): over the 0.6 the pin allows`);
+    assert.ok(quarter.moving > 0.35 * one.moving, `0.25x moves in ${quarter.moving} (${one.moving} at 1x): over the 0.35 the pin allows`);
+    console.log(`CONTROL mutant no min(speed, 1): frames that move 1x ${one.moving}, 0.5x ${half.moving}, 0.25x ${quarter.moving}`);
+  } finally { rmTree(root); }
 });
 
 test('DRIFT-10 control: a mutation that changes nothing is refused (the harness cannot pass a control by matching no text)', () => {

@@ -24,9 +24,17 @@ const MAX_AGE = 2400; // generations (4 min) before a refresh regardless
 // A drawn cell may change at most once in FLIP_GAP steps. Three changes then take 2 * FLIP_GAP = 1.2 s at the least; the meter's second is 17 frame
 // intervals (0.94 s at 18 fps) and a change is painted up to one frame (and a late timer's 16 ms) after it is made, so 1.2 s leaves a margin of more than 0.1 s.
 const FLIP_GAP = 18;
-// ... and at most this share of the cells may change on the screen in one step (1/30 s; a viewer's frame spans one to three), so a reseed that drops a pulsar on a small board
-// arrives over a few steps instead of in one frame, where it would be more than the 30 % of the screen the step rule (L3) allows. At 80x24 that is 153 cells a step.
-const FLIP_SHARE = 0.08;
+// ... and at most this share of the cells may change on the screen in one step (1/30 s), so a reseed that drops a pulsar on a small board arrives over a few steps instead of in one
+// frame, where it would be more than the 30 % of the screen the step rule (L3) allows. At 80x24 that is 153 cells a step.
+export const FLIP_SHARE = 0.08;
+// ... and at most this share of the cells may change between two PAINTED frames, which is what the viewer sees and what L3 meters. A frame holds as many steps as the time since the last
+// paint covers: one at --fps 30, three at 18, four to six at 8 to 12 (the composer steps from a time accumulator and hands step() the count, step(s, n)). So the frame's share is split
+// over its steps, floor(cells * FRAME_SHARE / n) each (never more than FLIP_SHARE, at least one cell so that nothing waiting is stuck for ever): a paint then changes at most
+// FRAME_SHARE of the cells however many steps it holds. Why 0.15, half of the 30 % L3 allows: the viewer reads the screen on its own 18 Hz grid, and a timer that fires late (the Windows
+// tick, 15.625 ms) followed by one on time puts TWO paints between two reads, at any --fps from 8 to 30 (the gap between paints is at least 1 / fps - 15.6 ms, over half the read
+// interval). Two paints of 15 % are 30 %, the limit. (At 0.24, the cap that three 8 % steps made at 18 fps, q156 at --fps 10 still read 45 % on a 10x4 board.) The cap is not derived from
+// MIN_FPS or the step rate: tests/life-frame-cap.test.js asserts it for every n up to MAX_STEPS (src/cells.js) and fails if the floor, the step rate or MAX_STEPS moves it out of reach.
+export const FRAME_SHARE = 0.15;
 
 const PATTERNS = [
   ['.#.', '..#', '###'], // glider
@@ -131,10 +139,10 @@ function generation(s) {
 }
 
 // Brings the drawn picture up to the board, under the per-cell limit. Visits every cell of the visible grid once, only while something is waiting.
-function follow(s) {
+function follow(s, n) {
   if (!s.dirty) return;
   const { w, h, cells, shown, lastFlip, sub } = s;
-  let waiting = false, budget = Math.max(1, Math.floor(w * h * FLIP_SHARE));
+  let waiting = false, budget = Math.max(1, Math.floor(w * h * Math.min(FLIP_SHARE, FRAME_SHARE / Math.max(1, n))));
   for (let r = 0; r < h; r++) {
     const y = (r + sub) % h; // a different row first each step, so what has to wait is not always the bottom of the screen
     if (budget === 0) { waiting = true; break; }
@@ -153,11 +161,12 @@ function follow(s) {
   s.dirty = waiting;
 }
 
-function step(s) {
+// n: the number of steps the composer runs for this painted frame (src/cells.js), 1 when the caller gives none (renderScene, a test)
+function step(s, n = 1) {
   s.sub++;
   if (s.w === 0 || s.H2 === 0) return;
   if (s.sub % SUBSTEPS === 0) generation(s);
-  follow(s);
+  follow(s, n);
 }
 
 function draw(s, params) {

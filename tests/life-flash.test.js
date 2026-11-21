@@ -9,7 +9,7 @@
 //                 of the shell (src/shell/ui.js lines 137-139: 'list' from 40x10, 'compact' from 78x24, 'full' from 88x39): 40x10, 41x11, 78x24, 79x25, 88x39, 89x40.
 //                 Life itself reads none of those breakpoints (it draws its whole grid); the number of patterns it seeds steps with the area (patternCount in src/scenes/life.js:
 //                 area / 2200, rounded), which these sizes cross as well. 20x6 and 10x4 are far below the smallest layout: there a reseed alone would change more than 30 % of the screen in
-//                 one frame (L3) without the per-step share limit in src/scenes/life.js, which tests/life-flash-controls.test.js takes out.
+//                 one frame (L3) without the share limits in src/scenes/life.js (per step and per painted frame), which tests/life-flash-controls.test.js takes out. The low frame rates are tests/life-flash-fps.test.js.
 //   inverted arm 80x24 and 120x40, seeds 1 to 8, both colour modes, with the config's invert on (what the `i` key leaves).
 //   rate arm      `--fps` 8, 12, 24 and 30 on the exact clock (256 colours, 80x24, seeds 2, 4, 8), the meter reading at that rate.
 //   clock arms    q156 and jitter (the clock seed is the app seed), 1x, 256 colours at 80x24 on seeds 1, 2, 3, 4, 8 (the seeds the old Life failed worst on) and truecolor at 120x40 on seed 2,

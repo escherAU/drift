@@ -26,8 +26,25 @@ const DEF_FG = 0xcccccc, DEF_BG = 0x0c0c0c;
 // the keys of a speed plan: `+` pressed n times, the first `at` seconds in, 0.2 s apart (the plan of PLAN_4X in helpers-flash-app.js is four presses at 1 s)
 export const plusKeys = (n, at = 1) => Array.from({ length: n }, (_, i) => ({ at: at + 0.2 * i, key: '+' }));
 // SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4]: from 1x, one press is 1.5x, two are 2x, three 3x, four 4x
-export const PLAN = { '1x': [], '2x': plusKeys(2), '4x': plusKeys(4) };
-export const SPEED_OF = { '1x': 1, '2x': 2, '4x': 4 };
+// `-` pressed n times from the first frame (SPEEDS: from 1x, one press is 0.75x, two 0.5x, three 0.25x)
+export const minusKeys = (n, at = 0) => Array.from({ length: n }, (_, i) => ({ at: at + 0.2 * i, key: '-' }));
+export const PLAN = { '1x': [], '2x': plusKeys(2), '4x': plusKeys(4), '0.5x': minusKeys(2), '0.25x': minusKeys(3) };
+export const SPEED_OF = { '1x': 1, '2x': 2, '4x': 4, '0.5x': 0.5, '0.25x': 0.25 };
+
+// How many of the metered frames show a different screen from the frame before: a count of how often Life moves in the 30 real seconds of the run at `speed` (a key of PLAN).
+// Life steps from the real-time clock, which runs at min(speed, 1) of real time (src/app.js rt), so it moves about half as often at 0.5x and a quarter as often at 0.25x.
+export async function movingFrames(speed, o = {}) {
+  let prev = null, moving = 0;
+  const r = await runLife({
+    cols: 80, rows: 24, mode: '256', clock: 'grid', seconds: 36, keys: PLAN[speed], sceneSeconds: 30 * SPEED_OF[speed], ...o,
+    grab: (k, screen) => {
+      const g = screen.glyphs.slice();
+      if (prev) for (let i = 0; i < g.length; i++) if (g[i] !== prev[i]) { moving++; break; }
+      prev = g;
+    },
+  });
+  return { moving, r };
+}
 
 // Runs Life in the real app and returns { rep, frames, endedAt, ids, app-less facts }. `root`: a copy of the tree (src/) to run instead of this one (the controls).
 // feedAll: meter every frame of the run (the dissolves and the scenes after Life too); the tests never do, the README's "not covered" figures come from it.
@@ -85,13 +102,15 @@ export async function runLife({
 const HERE = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
 const SRC = path.join(HERE, '..', 'src');
 export const OLD_LIFE_FILE = path.join(HERE, 'fixtures', 'life-before-drift10.js');
-// life: 'old' (the fixture), 'new' (this tree's), or a function (text) -> text that edits the new one (it must change it: a mutation that matches nothing throws).
+export const V1_LIFE_FILE = path.join(HERE, 'fixtures', 'life-before-fps-fix.js'); // DRIFT-10's first fix (33f8142): the flip gap and a per-STEP share only, no per-frame cap
+// life: 'old' (the fixture), 'v1' (the first DRIFT-10 fix, fixture), 'new' (this tree's), or a function (text) -> text that edits the new one (it must change it: a mutation that matches nothing throws).
 // edits: { 'src/app.js': (text) => text, ... } the same for any other file of src/.
 export function makeTree(life = 'new', edits = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-life-tree-'));
   fs.cpSync(SRC, path.join(root, 'src'), { recursive: true });
   const file = path.join(root, 'src', 'scenes', 'life.js');
   if (life === 'old') fs.copyFileSync(OLD_LIFE_FILE, file);
+  else if (life === 'v1') fs.copyFileSync(V1_LIFE_FILE, file);
   else if (typeof life === 'function') {
     const before = fs.readFileSync(file, 'utf8');
     const after = life(before);

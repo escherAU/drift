@@ -159,10 +159,10 @@ export function createCellComposer({ scenes, cols, rows, seed = 1, cmode = 'true
     stateOf(st.a);
     if (dissolving) stateOf(st.b);
     const nA = scenes[st.a].realClock === true ? nR : n;
-    for (let k = 0; k < nA; k++) if (states[st.a]) scenes[st.a].step(states[st.a]);
+    for (let k = 0; k < nA; k++) if (states[st.a]) scenes[st.a].step(states[st.a], nA); // n: how many steps this frame runs (Life shares its per-frame cap over them)
     if (dissolving) {
       const nB = scenes[st.b].realClock === true ? nR : n;
-      for (let k = 0; k < nB; k++) if (states[st.b]) scenes[st.b].step(states[st.b]);
+      for (let k = 0; k < nB; k++) if (states[st.b]) scenes[st.b].step(states[st.b], nB);
     }
     c.stepsLastFrame = n;
     c.stepsTotal += n;
