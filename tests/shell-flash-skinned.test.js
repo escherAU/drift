@@ -8,7 +8,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { FLASH_FRACTION, changedFraction, snap, lstarTable, brightnessJumps, SHADE_STEP_LSTAR } from './helpers-flash.js';
+import { FLASH_FRACTION, changedFraction, snap, lstarTable, brightnessJumps, SHADE_STEP_LSTAR, failedRules, X1_RULE_IDS } from './helpers-flash.js';
+import { shownMeter } from './helpers-flash-modes.js';
+import { clockedShell, tickStats, FPS_APP } from './helpers-clock-app.js';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
 import { mkShell, makeRoot, DT } from './helpers-shell.js';
 import { INSERT_END } from '../src/shell/insert.js';
 import { BOOT_END } from '../src/shell/boot.js';
@@ -19,7 +22,7 @@ const SIZES = [[120, 40], [80, 24], [240, 67]];
 
 function recorder(c, cols) {
   const frames = [], keySteps = new Set(), screens = [];
-  const grab = () => { const s = c.app.screenshot(); if (s) { frames.push({ ...snap(s), L: lstarTable(s.palette) }); screens.push(c.sh() ? c.sh().screen : 'classic'); } };
+  const grab = () => { const s = c.app.screenshot(); if (s) { tickStats.frames++; frames.push({ ...snap(s), L: lstarTable(s.palette) }); screens.push(c.sh() ? c.sh().screen : 'classic'); } };
   return {
     frames, keySteps, screens, cols,
     press(k) { c.key(k); keySteps.add(frames.length); },
@@ -171,3 +174,50 @@ test('flash helper control: the audit runner above does see a planted jump (a fu
   r.keySteps.add(1);
   assert.doesNotThrow(() => assertSafe(r, 'planted, key step'));
 });
+
+// ---- DRIFT-9 item 4: the clocks. The skinned flow above (library, insert, boot, running, eject, library) at 120x40 with the app stepped by a clock (tests/helpers-clock-app.js): the file's own
+// recorder and step rule on the clock's real steps (assertFlash: 30 % a step outside the key steps; assertRamps with the skinned boot allowance), at their old limits, and the screens read
+// through the flash meter on the viewer's 18 Hz grid and judged by the five 1x rules at their own limits. One q156 arm and one jitter arm, a control per clock (the same flow with a
+// white/black strobe in place of the screen, which must fail L1 and L3) and the cost by count.
+async function clockSkinned(clock, { cols = 120, rows = 40, strobe = false } = {}) {
+  const c0 = mkShell({ startScreen: { screen: 'library' }, cols, rows, root: skinnedRoot() });
+  try {
+    c0.app.start();
+    c0.goto('fixture');
+    const k = clockedShell(c0, { clock, meter: shownMeter(cols, rows, FPS_APP), cols, rows, strobe });
+    const c = k.c;
+    const r = recorder(c, cols);
+    r.run(0.5);
+    r.press('\r');
+    await c.settle();
+    r.run(INSERT_END + 0.05);
+    assert.equal(c.sh().screen, 'boot', `${clock.mode}: the insert ran`);
+    r.run(BOOT_END - INSERT_END + 0.3);
+    await c.settle();
+    r.run(1);
+    assert.equal(c.sh().screen, 'running', `${clock.mode}: the boot ran`);
+    r.press('\x1b'); r.run(1);
+    r.press('e'); r.run(2.2);
+    assert.equal(c.sh().screen, 'library', `${clock.mode}: ejected`);
+    r.run(1);
+    return { r, rep: k.report() };
+  } finally { c0.done(); }
+}
+const CLOCKS = [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }];
+for (const clock of CLOCKS) {
+  test(`flash on the ${clock.mode} clock, 120x40, skinned cartridge with a console block at ink 3: insert, boot, running, eject pass the step rule, the ramps and the five 1x rules`, async () => {
+    const { r, rep } = await clockArm(() => clockSkinned(clock), tickStats);
+    const worst = assertSafe(r, `skinned ${clock.mode} 120x40`, 0.02);
+    console.log(`CLOCK STEP ${clock.mode} 120x40 skinned: worst non-key step ${(worst * 100).toFixed(1)} % (limit ${FLASH_FRACTION * 100} %)`);
+    judgeX1(rep, `skinned ${clock.mode} 120x40`);
+  });
+  test(`flash clock control (${clock.mode}): the same skinned flow with a white/black strobe in place of the screen fails L1 and L3, so the arm above can fail`, async () => {
+    const kept = tickStats.frames; // the control is not an arm and not one of the file's other arms: it is not counted
+    try {
+      const { rep } = await clockSkinned(clock, { strobe: true });
+      const bad = failedRules(rep, { only: X1_RULE_IDS });
+      assert.ok(bad.includes('l1.x1') && bad.includes('l3'), `${clock.mode}: the strobe failed ${bad.join(',')}`);
+    } finally { tickStats.frames = kept; }
+  });
+}
+test('DRIFT-9 clock arms cost: skinned flash clock arms read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('skinned flash', undefined, tickStats); });

@@ -12,7 +12,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkShell, DT } from './helpers-shell.js';
 import { dirs, pct, HARD_CEILING } from './helpers-night-drive-shell.js';
-import { changedFraction } from './helpers-flash.js';
+import { changedFraction, failedRules, X1_RULE_IDS } from './helpers-flash.js';
+import { shownMeter } from './helpers-flash-modes.js';
+import { clockedShell, tickStats, FPS_APP } from './helpers-clock-app.js';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
+import { createRun } from './helpers-clock.js';
 import { INSERT_END } from '../src/shell/insert.js';
 import { sizeTier } from '../src/shell/ui.js';
 
@@ -21,7 +25,7 @@ const TINY_SIZES = [[39, 11], [30, 8], [40, 9]];
 const BIG_SIZES = [[80, 24], [120, 40], [79, 25]];
 const CARTS = ['night-drive', 'delza'];
 
-const grab = (c) => { const f = c.app.screenshot(); return { g: f.glyphs.slice(), s: f.shades.slice(), fg: f.fg ? f.fg.slice() : null, bg: f.bg ? f.bg.slice() : null, p: f.palette }; };
+const grab = (c) => { tickStats.frames++; const f = c.app.screenshot(); return { g: f.glyphs.slice(), s: f.shades.slice(), fg: f.fg ? f.fg.slice() : null, bg: f.bg ? f.bg.slice() : null, p: f.palette }; };
 const diff = (a, b) => changedFraction(a.g, b.g, a.s, b.s);
 
 // Library settled for `lead` seconds (the idle clock), the cursor on `id`, then Enter and `n` frames of `step` seconds each.
@@ -168,4 +172,80 @@ for (const [cols, rows] of [[41, 11], [40, 12], [40, 10], [39, 11], [30, 8], [80
     // the library and the insert share one palette: no jump in it anywhere in the dissolve
     assert.equal(first.p, lib.p); assert.equal(mid.p, lib.p); assert.equal(last.p, lib.p);
   });
+}
+
+
+// ---- DRIFT-9 item 4: the clocks. The key frame (the first tick after Enter) is the step a clock changes most: its dt is the loop's real step, not 1 / 18 s, so the share of the dissolve it
+// carries is not 0.055 / 0.3 any more. The arm runs insertSeries' flow at 41x11 (night-drive: the library settled, Enter, 20 frames) with the app stepped by a clock
+// (tests/helpers-clock-app.js): the key frame and every step after it held to the same 40 % ceiling (HARD_CEILING), and the screens read through the flash meter on the viewer's 18 Hz grid
+// and judged by the five 1x rules at their own limits. One q156 arm and one jitter arm, a control per clock (a white/black strobe in place of the screen, which must fail L1 and L3) and
+// the cost by count. (The linear-dissolve and shell-seam arms above read the dissolve at fixed times of the scene, not at steps of a loop: no clock reaches them, see the item 4 note in the report.)
+async function clockInsert(clock, { cols = 41, rows = 11, strobe = false } = {}) {
+  const c0 = mkShell({ dirs, cols, rows, startScreen: { screen: 'library' } });
+  try {
+    c0.app.start();
+    c0.tick(2);
+    assert.ok(c0.goto('night-drive'), 'the cursor reached night-drive');
+    c0.tick(2);
+    const k = clockedShell(c0, { clock, meter: shownMeter(cols, rows, FPS_APP), cols, rows, strobe });
+    const c = k.c;
+    const pre = grab(c);
+    c.key('\r');
+    const steps = [];
+    let prev = pre;
+    for (let n = 0; n < 20; n++) { c.tick(DT); const f = grab(c); steps.push(diff(f, prev)); prev = f; }
+    assert.equal(c.sh().screen, 'insert', `${clock.mode}: the insert is running`);
+    return { steps, rep: k.report() };
+  } finally { c0.done(); }
+}
+const CLOCKS = [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }];
+for (const clock of CLOCKS) {
+  test(`insert key frame on the ${clock.mode} clock, 41x11, night-drive: the key frame and every step after it change ${pct(HARD_CEILING)} or less, and the five 1x rules pass`, async () => {
+    const { steps, rep } = await clockArm(() => clockInsert(clock), tickStats);
+    const worst = Math.max(...steps);
+    assert.ok(steps[0] <= HARD_CEILING && worst <= HARD_CEILING, `${clock.mode} 41x11: key frame ${pct(steps[0])}, worst step ${pct(worst)} (ceiling ${pct(HARD_CEILING)})`);
+    console.log(`CLOCK STEP ${clock.mode} 41x11 insert: key frame ${pct(steps[0])}, worst step ${pct(worst)} (ceiling ${pct(HARD_CEILING)})`);
+    judgeX1(rep, `insert key frame ${clock.mode} 41x11`);
+  });
+  test(`insert clock control (${clock.mode}): the same flow with a white/black strobe in place of the screen fails L1 and L3, so the arm above can fail`, async () => {
+    const kept = tickStats.frames; // the control is not an arm and not one of the file's other arms: it is not counted
+    try {
+      const { rep } = await clockInsert(clock, { strobe: true });
+      const bad = failedRules(rep, { only: X1_RULE_IDS });
+      assert.ok(bad.includes('l1.x1') && bad.includes('l3'), `${clock.mode}: the strobe failed ${bad.join(',')}`);
+    } finally { tickStats.frames = kept; }
+  });
+}
+test('DRIFT-9 clock arms cost: insert key-frame clock arms read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('insert dissolve', undefined, tickStats); });
+
+// Why no arm for the rest of this file: the dissolve's shape (linear, 0.1 s < 0.2 s < 0.3 s, ending at the insert picture), the speeds-1-to-4 key frames, the hard cut at 78x24 and up and the
+// shell seam all read the insert at a TIME since Enter (or at a step the test chooses), not at the steps of a loop. The proof: the frame after n steps of a clock is the frame after ONE
+// tick of their sum, cell for cell and palette for palette, on every clock, so the insert picture is a function of the elapsed time alone and a clock changes only WHICH times a loop samples
+// (the arm above); and the control: one tick of a different total (the sum and 50 ms more) is a different picture, so the equality can fail.
+async function insertAfter(ticks) {
+  const c = mkShell({ dirs, cols: 41, rows: 11, startScreen: { screen: 'library' } });
+  try {
+    c.app.start(); c.tick(2);
+    assert.ok(c.goto('night-drive')); c.tick(2);
+    c.key('\r');
+    ticks(c);
+    return grab0(c);
+  } finally { c.done(); }
+}
+const grab0 = (c) => { const f = c.app.screenshot(); return { g: [...f.glyphs], s: [...f.shades], p: f.palette ? f.palette.sgr.join('|') : null }; };
+for (const mode of ['grid', 'q156', 'jitter']) {
+  for (const n of [1, 2, 3]) {
+    test(`insert picture is a function of the elapsed time on the ${mode} clock: ${n} clock step${n > 1 ? 's' : ''} after Enter equal one tick of their sum (41x11), and a tick of 50 ms more is a different picture`, async () => {
+      const run = createRun({ clock: { mode, seed: 3 }, fps: 18 });
+      const viaClock = await insertAfter((c) => { const s = run.sh(c.app); for (let i = 0; i < n; i++) s.tick(DT); });
+      const sum = run.t();
+      assert.ok(sum > 0 && sum <= 0.25, `${mode}: ${n} steps took ${sum} s`);
+      if (mode === 'grid') assert.ok(Math.abs(sum - n * DT) < 1e-9, 'the grid clock steps are exactly 1 / 18 s');
+      else if (n === 3) assert.ok(Math.abs(sum - 3 * DT) > 1e-6, `${mode}: the clock's steps are not the grid's (sum ${sum})`);
+      const once = await insertAfter((c) => c.app.tick(sum));
+      assert.deepEqual(viaClock, once, `${mode} ${n} steps: the insert picture differs from one tick of ${sum} s`);
+      const other = await insertAfter((c) => c.app.tick(sum + 0.05));
+      assert.notDeepEqual(viaClock, other, `${mode} ${n} steps: the control: 50 ms more must change the picture`);
+    });
+  }
 }

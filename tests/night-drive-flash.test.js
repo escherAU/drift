@@ -19,11 +19,21 @@ import { createCellComposer } from '../src/cells.js';
 import { Scheduler } from '../src/compose.js';
 import { makeSkinPalette } from '../src/cartridge/palette.js';
 import { parseHex } from '../src/color.js';
-import { FLASH_FRACTION, changedFraction, lstarTable, brightnessJumps } from './helpers-flash.js';
+import { FLASH_FRACTION, changedFraction, lstarTable, brightnessJumps, failedRules, X1_RULE_IDS } from './helpers-flash.js';
 import { mkShell, DT } from './helpers-shell.js';
+import { shownMeter } from './helpers-flash-modes.js';
+import { clockedShell, tickStats, FPS_APP } from './helpers-clock-app.js';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
+import { createRun } from './helpers-clock.js';
 
 const FPS = 18;
 const pct = (x) => (x * 100).toFixed(2) + '%';
+// DRIFT-9 item 4: the times (seconds of wall time) at which the app's loop paints on a clock (tests/helpers-clock.js), from 0 to `wallSeconds`; a replay that runs a scene at speed S shows
+// it at S times these. The old replays step k / FPS exactly (the grid); the clock arms below step these.
+function paintTimes(clk, wallSeconds) {
+  const run = createRun({ clock: clk, fps: FPS });
+  return run.timeline(Math.ceil(wallSeconds * FPS * 1.5) + 20).filter((ms) => ms <= wallSeconds * 1000 + 1e-6).map((ms) => ms / 1000);
+}
 const dedupe = (sizes) => { const seen = new Set(); return sizes.filter(([w, h]) => { const k = `${w}x${h}`; if (seen.has(k)) return false; seen.add(k); return true; }); };
 
 // ---- the cartridge: read through the real loader, like the other night-drive tests
@@ -52,12 +62,14 @@ const PAIRS = ORDER.map((a, k) => [a, ORDER[nextOf(k)]]); // every consecutive p
 
 // Runs `seconds` of the scene through the composer, the clock advancing `speed` frames' worth each frame, and returns the worst
 // frame-to-frame share and the time it came at. Frame 0 is compared with nothing; every frame after it counts.
-function shareRun(scene, w, h, speed, seconds) {
+function shareRun(scene, w, h, speed, seconds, clk = null) {
   const cc = createCellComposer({ scenes: [scene], cols: w, rows: h, seed: 1 });
   let pg = null, pc = null, worst = 0, where = 0, n = 0;
-  const total = Math.ceil((seconds * FPS) / speed);
+  const times = clk ? paintTimes(clk, seconds / speed) : null;
+  const total = times ? times.length - 1 : Math.ceil((seconds * FPS) / speed);
   for (let k = 0; k <= total; k++) {
-    const t = (k * speed) / FPS;
+    const t = times ? times[k] * speed : (k * speed) / FPS;
+    tickStats.frames++;
     const f = cc.frame({ a: 0, b: 0, p: 0 }, t);
     if (pg) {
       const x = changedFraction(f.glyphs, pg, f.shades, pc);
@@ -93,17 +105,19 @@ test('flash (a) overdrive: all 90 s through the composer at 1x and 4x, every fra
 const pairCache = new Map();
 // A -> B through a two-scene composer under a Scheduler with the tape's real holds (a scene's own `seconds` if the program gives it one), to the end of the dissolve plus 2 s.
 // The worst frame is taken over the WHOLE run (the sims' real phases, the dissolve window and the tail).
-function pairRun(idA, idB, w, h, speed) {
-  const key = `${idA}>${idB} ${w}x${h} ${speed}x`;
-  if (pairCache.has(key)) return pairCache.get(key);
-  const cc = createCellComposer({ scenes: [byId(idA).scene, byId(idB).scene], cols: w, rows: h, seed: 1 });
+function pairRun(idA, idB, w, h, speed, clk = null, scenes = null) {
+  const key = `${idA}>${idB} ${w}x${h} ${speed}x${clk ? ` ${clk.mode}` : ''}`;
+  if (pairCache.has(key) && !scenes) return pairCache.get(key);
+  const cc = createCellComposer({ scenes: scenes || [byId(idA).scene, byId(idB).scene], cols: w, rows: h, seed: 1 });
   const holdA = holdOf(idA), holdB = holdOf(idB);
   const sched = new Scheduler({ count: 2, durationSec: holdA, fadeSec: FADE, start: 0, durations: [holdA, holdB] });
-  const total = Math.ceil(((holdA + FADE + 2) * FPS) / speed);
+  const times = clk ? paintTimes(clk, (holdA + FADE + 2) / speed) : null;
+  const total = times ? times.length - 1 : Math.ceil(((holdA + FADE + 2) * FPS) / speed);
   let pg = null, pc = null, worst = 0, where = 0;
   for (let k = 0; k <= total; k++) {
-    sched.advance(speed / FPS);
-    const t = (k * speed) / FPS;
+    sched.advance(times && k > 0 ? speed * (times[k] - times[k - 1]) : speed / FPS);
+    const t = times ? times[k] * speed : (k * speed) / FPS;
+    tickStats.frames++;
     const f = cc.frame(sched.state(), t);
     if (pg) {
       const x = changedFraction(f.glyphs, pg, f.shades, pc);
@@ -112,7 +126,7 @@ function pairRun(idA, idB, w, h, speed) {
     pg.set(f.glyphs); pc.set(f.shades);
   }
   const r = { key, worst, where };
-  pairCache.set(key, r);
+  if (!scenes) pairCache.set(key, r);
   return r;
 }
 
@@ -180,15 +194,17 @@ test('flash coverage: the scenes, the tape order, the (b) pairs and the (c)/(d) 
 // the worst share of bright solid cells (█ or ▓ at L* 60 or more), blank cells not in colour 0 (glyph 32 must be colour 0), and the
 // colour indexes outside the palette.
 const SOLID = new Set([0x2588, 0x2593]);
-function scan(scene, kind, w, h, speed) {
+function scan(scene, kind, w, h, speed, clk = null) {
   const seconds = kind === 'sim' ? 90 : 60;
   const cc = createCellComposer({ scenes: [scene], cols: w, rows: h, seed: 1 });
   const n = w * h;
-  const total = Math.ceil((seconds * FPS) / speed);
+  const times = clk ? paintTimes(clk, seconds / speed) : null;
+  const total = times ? times.length - 1 : Math.ceil((seconds * FPS) / speed);
   let prev = null;
   const out = { jumps: 0, firstJump: null, bright: 0, brightAt: 0, blankBad: 0, firstBlankBad: null, outOfPalette: 0 };
   for (let k = 0; k <= total; k++) {
-    const t = (k * speed) / FPS;
+    const t = times ? times[k] * speed : (k * speed) / FPS;
+    tickStats.frames++;
     const f = cc.frame({ a: 0, b: 0, p: 0 }, t);
     const cur = { g: f.glyphs.slice(), c: f.shades.slice(), L: LTAB };
     let hot = 0;
@@ -274,7 +290,7 @@ test('flash (d) bright solid coverage: no frame of any scene has more than 25% o
 // tiers the shell now dissolves into the insert picture over 0.3 s, so the key frame is held to the same ceiling as every other step, at every size.
 const SHELL_SIZES = [[89, 40], [79, 25], [120, 40], [80, 24], [41, 11]];
 const HARD_CEILING = 0.4;
-const grab = (c) => { const f = c.app.screenshot(); return { g: f.glyphs.slice(), s: f.shades.slice(), p: f.palette }; };
+const grab = (c) => { tickStats.frames++; const f = c.app.screenshot(); return { g: f.glyphs.slice(), s: f.shades.slice(), p: f.palette }; };
 const bgCache = new Map();
 const bgsOf = (p) => {
   if (!p) return '(none)';
@@ -289,13 +305,17 @@ const shellSteps = (cols, rows) => {
   return shellCache.get(key);
 };
 
-async function runShellSteps(cols, rows) {
-  const c = mkShell({ dirs, cols, rows, startScreen: { screen: 'library' } });
+// DRIFT-9 item 4: `clk` ({ mode, seed, strobe }) runs the same flow with the app stepped by that clock (tests/helpers-clock-app.js) and the screens read through the flash meter;
+// it returns { steps, rep } instead of steps.
+async function runShellSteps(cols, rows, clk = null) {
+  const c0 = mkShell({ dirs, cols, rows, startScreen: { screen: 'library' } });
+  let c = c0, kit = null;
   const steps = {};
   try {
-    c.app.start();
-    c.tick(2);
-    assert.ok(c.goto('night-drive'), 'the cursor reaches night-drive');
+    c0.app.start();
+    c0.tick(2);
+    assert.ok(c0.goto('night-drive'), 'the cursor reaches night-drive');
+    if (clk) { kit = clockedShell(c0, { clock: clk, meter: shownMeter(cols, rows, FPS_APP), cols, rows, strobe: !!clk.strobe }); c = kit.c; }
     let prev = grab(c), n = 0;
     const record = async (name, isKey) => {
       c.tick(DT);
@@ -331,8 +351,8 @@ async function runShellSteps(cols, rows) {
     await record('eject', true);
     for (let k = 0; k < 3 * 18; k++) await record('eject', false);
     assert.equal(c.sh().screen, 'library', 'eject lands in the library');
-  } finally { c.app.quit(0); }
-  return steps;
+  } finally { c0.app.quit(0); }
+  return clk ? { steps, rep: kit.report() } : steps;
 }
 
 for (const [cols, rowsN] of SHELL_SIZES) {
@@ -366,3 +386,67 @@ test('flash (e) shell insert key frame 41x11: the frame that carries Enter on th
   41x11 insert key frame ${pct(steps.insert.keyStep)}`);
   assert.ok(steps.insert.keyStep <= HARD_CEILING, `41x11: the insert key frame changed ${pct(steps.insert.keyStep)}`);
 });
+
+
+// ---- DRIFT-9 item 4: the clocks. Every rule above judges a step of an exact 18 fps grid, and a loop on a real clock paints steps of 46.9 or 62.5 ms (the 15.6 ms Windows tick) or up to 16 ms late
+// (tests/helpers-clock.js). Each group has one q156 arm and one jitter arm on its worst known case, at the SAME limits (nothing is loosened: STRICTLY under 30 % for (a) and (b), one shade
+// step for (c), 25 % bright solid and the one background for (d), 30 % outside the key frame and 40 % for (e)), the replays stepping the clock's paint times instead of k / 18 and (e) running
+// the app stepped by the clock and also read through the flash meter and judged by the five 1x rules; a control per group; and the cost by count (every frame a replay or the app paints).
+const CLK = [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }];
+// the controls and nothing else are not counted: they are not arms, and they are not frames the other arms read
+async function uncounted(fn) { const kept = tickStats.frames; try { return await fn(); } finally { tickStats.frames = kept; } }
+
+for (const clk of CLK) {
+  test(`flash (a) overdrive on the ${clk.mode} clock: 90 s at 4x through the composer at 60x18, every painted step changes strictly under 30% of the cells; the unguarded control goes over on this clock too`, async () => {
+    const r = await clockArm(async () => shareRun(overdrive, 60, 18, 4, 90, clk), tickStats);
+    console.log(`CLOCK STEP (a) ${clk.mode} 60x18 4x: worst ${pct(r.worst)} at ${r.where.toFixed(2)} s (${r.n} steps; limit strictly under ${pct(FLASH_FRACTION)})`);
+    assert.ok(r.worst < FLASH_FRACTION, `${clk.mode} 60x18 4x: worst ${pct(r.worst)} at ${r.where.toFixed(2)} s`);
+    const off = await uncounted(async () => shareRun(createOverdrive({ ringLimit: false }), 120, 40, 4, 90, clk));
+    assert.ok(off.worst > FLASH_FRACTION, `${clk.mode}: the control (no ring guard) changed only ${pct(off.worst)} at 120x40 4x: this arm would not notice a missing guard`);
+  });
+
+  for (const [a, b, w, h] of [['sundown', 'coast', 41, 11], ['redlight', 'diner', 80, 24]]) {
+    test(`flash (b) dissolve ${a} > ${b} on the ${clk.mode} clock at ${w}x${h}, 4x: the worst painted step of the whole run is strictly under 30%; two scenes that flip every cell each frame are over it on this clock too`, async () => {
+      const r = await clockArm(async () => pairRun(a, b, w, h, 4, clk), tickStats);
+      console.log(`CLOCK STEP (b) ${clk.mode} ${a}>${b} ${w}x${h} 4x: worst ${pct(r.worst)} at ${r.where.toFixed(2)} s (limit strictly under ${pct(FLASH_FRACTION)})`);
+      assert.ok(r.worst < FLASH_FRACTION, `${r.key}: worst ${pct(r.worst)} at ${r.where.toFixed(2)} s`);
+      const flip = (o) => { const f = (t, ww, hh, p) => { const on = (Math.floor(t * FPS) + o) % 2 === 1; p.glyphs.fill(0x2588); p.colours.fill(on ? BRIGHTEST : DARKEST); }; f.id = `flip${o}`; f.kind = 'cells'; return f; };
+      const bad = await uncounted(async () => pairRun('x', 'y', 41, 11, 4, clk, [flip(0), flip(1)]));
+      assert.ok(bad.worst > FLASH_FRACTION, `${clk.mode}: the control (every cell flips each frame) changed only ${pct(bad.worst)}`);
+    });
+  }
+
+  test(`flash (c)+(d) overdrive on the ${clk.mode} clock: 90 s at 1x at 80x24, no cell that keeps its glyph moves more than one shade step in a painted step, never over 25% bright solid, blank cells in colour 0, colours in the palette; the controls fail on this clock too`, async () => {
+    const r = await clockArm(async () => scan(overdrive, 'sim', 80, 24, 1, clk), tickStats);
+    console.log(`CLOCK STEP (c)(d) ${clk.mode} overdrive 80x24 1x: ${r.jumps} jumps, worst bright solid ${pct(r.bright)} at ${r.brightAt.toFixed(2)} s, ${r.blankBad} bad blanks, ${r.outOfPalette} out of palette (limits 0, ${pct(0.25)}, 0, 0)`);
+    assert.equal(r.jumps, 0, `${clk.mode}: ${r.jumps} brightness jumps, first ${JSON.stringify(r.firstJump)}`);
+    assert.ok(r.bright <= 0.25, `${clk.mode}: bright solid ${pct(r.bright)} at ${r.brightAt.toFixed(2)} s`);
+    assert.equal(r.blankBad, 0, `${clk.mode}: blank cells not in colour 0, first ${JSON.stringify(r.firstBlankBad)}`);
+    assert.equal(r.outOfPalette, 0, `${clk.mode}: colour indexes outside the palette`);
+    const flip = fake((t, w, h, p) => { const on = Math.floor(t * FPS) % 2 === 1; p.glyphs.fill(0x2588); p.colours.fill(on ? BRIGHTEST : DARKEST); });
+    const fill = fake((t, w, h, p) => { p.glyphs.fill(32); p.colours.fill(0); const n = Math.floor(w * h * 0.4); for (let i = 0; i < n; i++) { p.glyphs[i] = 0x2588; p.colours[i] = BRIGHT_COLOUR; } });
+    const [cj, cb] = await uncounted(async () => [scan(flip, 'cells', 40, 12, 1, clk), scan(fill, 'cells', 120, 40, 1, clk)]);
+    assert.ok(cj.jumps > 0, `${clk.mode}: the ramp control (darkest to brightest under one glyph) must produce a jump`);
+    assert.ok(cb.bright > 0.25, `${clk.mode}: the coverage control (a 40% fill) must read over 25%, read ${pct(cb.bright)}`);
+  });
+
+  test(`flash (e) shell steps on the ${clk.mode} clock, 79x25: insert, boot, menu, running and eject change 30% or less of the cells outside the key frame (never over 40%) and pass the five 1x rules`, async () => {
+    const { steps, rep } = await clockArm(() => runShellSteps(79, 25, clk), tickStats);
+    const lines = [], bad = [];
+    for (const name of ['insert', 'boot', 'menu', 'running', 'eject']) {
+      const st = steps[name];
+      assert.ok(st, `79x25: no frames for step ${name}`);
+      lines.push(`${name} worst ${pct(st.worst)} key ${pct(st.keyStep)}`);
+      if (!(st.worst <= FLASH_FRACTION) || st.worst > HARD_CEILING || st.keyStep > HARD_CEILING) bad.push(`${clk.mode} 79x25 ${name}: worst ${pct(st.worst)} (frame ${st.at} of ${st.frames}), key frame ${pct(st.keyStep)}`);
+    }
+    console.log(`CLOCK STEP (e) ${clk.mode} 79x25: ${lines.join('; ')} (limits ${pct(FLASH_FRACTION)} and ${pct(HARD_CEILING)})`);
+    assert.deepEqual(bad, [], 'a step over 30% outside its key frame, or over 40%');
+    judgeX1(rep, `night-drive shell ${clk.mode} 79x25`);
+  });
+  test(`flash (e) clock control (${clk.mode}): the same flow with a white/black strobe in place of the screen fails L1 and L3, so the arm above can fail`, async () => {
+    const { rep } = await uncounted(() => runShellSteps(79, 25, { ...clk, strobe: true }));
+    const bad = failedRules(rep, { only: X1_RULE_IDS });
+    assert.ok(bad.includes('l1.x1') && bad.includes('l3'), `${clk.mode}: the strobe failed ${bad.join(',')}`);
+  });
+}
+test('DRIFT-9 clock arms cost: night-drive flash clock arms read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('night-drive flash', undefined, tickStats); });
