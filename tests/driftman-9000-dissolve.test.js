@@ -9,8 +9,10 @@ import assert from 'node:assert/strict';
 import { discoverCartridges, loadScenes, INSTALL_DIR } from '../src/cartridge/loader.js';
 import { createCellComposer } from '../src/cells.js';
 import { Scheduler } from '../src/compose.js';
-import { createFlashMeter, failedRules, X1_RULE_IDS } from './helpers-flash.js';
+import { createFlashMeter, failedRules, X1_RULE_IDS, meterStats } from './helpers-flash.js';
 import { flashRig, frameAtSpeed } from './helpers-flash-controls.js';
+import { createRun } from './helpers-clock.js';
+import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
 
 const FPS = 18, FADE = 2, LEAD = 4, TAIL = 4;
 const pc = (x) => (x * 100).toFixed(1);
@@ -30,7 +32,9 @@ const HOLD = PROGRAM.sceneSeconds;
 const PAIRS = [];
 for (const a of ORDER) for (const b of ORDER) if (a !== b) PAIRS.push([a, b]);
 
-function pairRun(idA, idB, cols, rows, { speed = 1, reduce256 = false, seed = 1, scenes = null } = {}) {
+// DRIFT-9 item 4: `clock` ('q156' or 'jitter', tests/helpers-clock.js) runs the same window with the loop's real steps: every loop step advances the scheduler and the scene clock by speed x its
+// dt (the grid's step is speed / 18), the picture is drawn at each paint from 4 s of scene time before the dissolve, and the meter reads the viewer's 18 Hz grid; none is the old exact grid.
+function pairRun(idA, idB, cols, rows, { speed = 1, reduce256 = false, seed = 1, scenes = null, clock = null } = {}) {
   const [sa, sb] = scenes || [byId(idA).scene, byId(idB).scene];
   const rig = flashRig([sa, sb], cols, rows, { seed, mode: reduce256 ? '256' : 'truecolor' }); // a 256 run gets a 256 composer (scenes see params.cmode)
   const cc = rig.cc;
@@ -39,6 +43,19 @@ function pairRun(idA, idB, cols, rows, { speed = 1, reduce256 = false, seed = 1,
   const step = speed / FPS;
   cc.frame(sched.state(), 0); // A's t0 is 0
   const t0 = HOLD - LEAD, t1 = HOLD + FADE + TAIL;
+  if (clock) {
+    const run = createRun({ clock, fps: FPS });
+    let tc = 0, raw = null, meterC = null;
+    const sh = run.sh({ tick(dt) { sched.advance(dt * speed); tc += dt * speed; } });
+    while (tc <= t1) {
+      sh.tick(1 / FPS);
+      if (tc < t0 - 1e-9) continue;
+      if (!meterC) { raw = createFlashMeter(cols, rows, FPS); meterC = run.meter(raw); } // its place on the viewer's grid starts where the window does
+      const s = rig.show(frameAtSpeed(cc, sched.state(), tc, speed));
+      meterC.push(s.frame, s.palette);
+    }
+    return raw.report();
+  }
   for (let t = 0; t < t0 - 1e-9; t += step) sched.advance(step);
   // now at (about) t0: step on, drawing
   let t = Math.ceil(t0 / step - 1e-9) * step;
@@ -101,3 +118,26 @@ test('9000 dissolves control: a dissolve between two planted scenes that swap ev
   const ok = pairRun('rosette', 'bloomfall', 60, 20, {});
   assert.ok(ok.pass, show(ok));
 });
+
+// ---- DRIFT-9 item 4: the same window on the q156 and the jitter clock (pairRun's `clock`): Bloomfall > Rosette (the pair that read highest in the app arms) at 80x24 on 256-colour output at shell speeds 1x
+// and 4x, and in truecolor at 1x; the five 1x rules at their own limits. One arm per clock, a control (two scenes that swap every cell between black and white each frame fail L1 on this clock too) and the cost by count.
+const ARM_CASES = [{ reduce256: true, speed: 1 }, { reduce256: true, speed: 4 }, { reduce256: false, speed: 1 }];
+for (const clock of [{ mode: 'q156', seed: 1 }, { mode: 'jitter', seed: 3 }]) {
+  test(`9000 dissolves on the ${clock.mode} clock: bloomfall>rosette at 80x24, 256 colours at 1x and 4x and truecolor at 1x, passes the five 1x rules`, async () => {
+    for (const c of ARM_CASES) {
+      const rep = await clockArm(async () => pairRun('bloomfall', 'rosette', 80, 24, { speed: c.speed, reduce256: c.reduce256, clock }));
+      judgeX1(rep, `dissolve bloomfall>rosette 80x24 ${c.reduce256 ? '256' : 'truecolor'} ${c.speed}x ${clock.mode}`);
+    }
+  });
+  test(`9000 dissolves control on the ${clock.mode} clock: two planted scenes that swap every cell between black and white each frame fail the meter, and the real pair passes the same run`, () => {
+    const kept = meterStats.frames; // not an arm, and not one of the file's other arms: not counted
+    try {
+      const flip = (o) => { const f = (t, w, h, p) => { const k = Math.round(t * FPS) % 2; for (let i = 0; i < w * h; i++) { p.glyphs[i] = 32; p.colours[i] = 255; const c = (i + k + o) % 2 ? 0xffffff : 0x000000; p.fg[i] = c; p.bg[i] = c; } }; f.id = 'flip' + o; f.kind = 'cells'; f.rgb = true; return f; };
+      const bad = pairRun('x', 'y', 60, 20, { scenes: [flip(0), flip(1)], clock });
+      assert.ok(failed(bad).includes('l1.x1'), `${clock.mode}: the planted flicker failed ${failed(bad).join(',')}`);
+      const ok = pairRun('rosette', 'bloomfall', 60, 20, { clock });
+      assert.deepEqual(failedRules(ok, { only: X1_RULE_IDS }), [], show(ok));
+    } finally { meterStats.frames = kept; }
+  });
+}
+test('DRIFT-9 clock arms cost: 9000 dissolves clock arms read at most 15 % of the frames the other arms of this file read (by count)', () => { assertArmCost('9000 dissolves'); });
