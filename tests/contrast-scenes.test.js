@@ -11,9 +11,9 @@ import { PLAYLISTS, findScene, allSceneIds } from '../src/scenes/index.js';
 import { renderScene, createCellComposer } from '../src/cells.js';
 import { createApp, parseOptions } from '../src/app.js';
 import { runCaptureModes } from '../tools/capture.mjs';
-import wire, { phaseAt, PHASE_SECONDS } from '../src/scenes/wire.js';
+import wire, { ideal as wireIdeal, phaseAt, PHASE_SECONDS } from '../src/scenes/wire.js';
 import tunnel, { TUNNEL_GLYPHS } from '../src/scenes/tunnel.js';
-import blocktype, { BLOCK_WORDS, SLOT_SECONDS, TRANSITION_SECONDS, wordIndexAt } from '../src/scenes/blocktype.js';
+import blocktype, { ideal as blockIdeal, BLOCK_WORDS, SLOT_SECONDS, TRANSITION_SECONDS, wordIndexAt } from '../src/scenes/blocktype.js';
 import { FONT, GLYPH_W, GLYPH_H } from '../src/scenes/blockfont.js';
 import maze, { generateMaze } from '../src/scenes/maze.js';
 import { fakeStdin, fakeStdout, fakeProc, fakeStderr } from './helpers.js';
@@ -62,44 +62,51 @@ test('contrast set: the playlist holds life, tunnel, wire, maze, blocktype in th
 // ---------------------------------------------------------------- G: wire
 test('G wire: the frame is non-empty, rotates (t vs t+0.3 differ) and uses only braille dots', () => {
   for (const t of [1.5, 5, 14, 20]) {
-    const f = renderScene(wire, t, 120, 40, 1);
+    const f = renderScene(wireIdeal, t, 120, 40, 1);
     assert.ok(litN(f) > 40, `lit ${litN(f)} at ${t}`);
     for (const g of f.glyphs) assert.ok(g === 32 || (g > 0x2800 && g <= 0x28ff), `U+${g.toString(16)}`);
-    const g = renderScene(wire, t + 0.3, 120, 40, 1);
+    const g = renderScene(wireIdeal, t + 0.3, 120, 40, 1);
     assert.notDeepEqual(Array.from(f.glyphs), Array.from(g.glyphs), `frames at ${t} and ${t + 0.3} differ`);
+  }
+  // DRIFT-11: what is SHOWN (the sim, src/scenes/wire.js) is the ideal picture on a 0.6 s beat, so it turns over a second apart, not a third of a second
+  for (const t of [1.5, 5, 14, 20]) {
+    const f = renderScene(wire, t, 120, 40, 1), g = renderScene(wire, t + 1.2, 120, 40, 1);
+    assert.ok(litN(f) > 40, `shown lit ${litN(f)} at ${t}`);
+    for (const v of f.glyphs) assert.ok(v === 32 || (v > 0x2800 && v <= 0x28ff), `shown U+${v.toString(16)}`);
+    assert.notDeepEqual(Array.from(f.glyphs), Array.from(g.glyphs), `shown frames at ${t} and ${t + 1.2} differ`);
   }
 });
 
 test('G wire connectedness: the cube is ONE 8-neighbour component at every t of its phase (its 12 edges meet at the corners); the torus is at most 2 (its rings cross)', () => {
   for (const t of [1.5, 2, 3.7, 6, 8.4, 11]) {
     assert.equal(phaseAt(t), 'cube');
-    assert.equal(components(renderScene(wire, t, 120, 40, 1)), 1, `cube t=${t}`);
+    assert.equal(components(renderScene(wireIdeal, t, 120, 40, 1)), 1, `cube t=${t}`);
   }
   for (const t of [PHASE_SECONDS + 1.5, PHASE_SECONDS + 4, PHASE_SECONDS + 7.3, PHASE_SECONDS + 10]) {
     assert.equal(phaseAt(t), 'torus');
-    const n = components(renderScene(wire, t, 120, 40, 1));
+    const n = components(renderScene(wireIdeal, t, 120, 40, 1));
     assert.ok(n >= 1 && n <= 2, `torus t=${t}: ${n} components`);
   }
 });
 
 test('G wire fits: 120x40 (not clipped: a margin on every side), 30x10 and 3x2 never throw and stay in range, both phases', () => {
   for (const t of [3, 6, 15, 18, 21]) {
-    const f = renderScene(wire, t, 120, 40, 1);
+    const f = renderScene(wireIdeal, t, 120, 40, 1);
     const b = bbox(f);
     assert.ok(b.x0 >= 1 && b.y0 >= 1 && b.x1 <= 118 && b.y1 <= 38, `${t}: ${JSON.stringify(b)} touches the edge`);
     for (const [w, h] of [[30, 10], [3, 2], [1, 1], [0, 0], [240, 67]]) {
-      const g = renderScene(wire, t, w, h, 1);
+      const g = renderScene(wireIdeal, t, w, h, 1);
       assert.equal(g.glyphs.length, w * h);
       for (const v of g.glyphs) assert.ok(v === 32 || (v > 0x2800 && v <= 0x28ff));
     }
   }
-  assert.ok(litN(renderScene(wire, 3, 30, 10, 1)) > 5, 'a small screen still shows the shape');
+  assert.ok(litN(renderScene(wireIdeal, 3, 30, 10, 1)) > 5, 'a small screen still shows the shape');
 });
 
 test('G wire aspect: a cell is 1:2, and braille dots make a square grid; the cube is about as wide as it is tall (dots) on average', () => {
   let sum = 0, n = 0;
   for (let t = 1; t <= 11; t += 0.5) {
-    const b = bbox(renderScene(wire, t, 120, 40, 1));
+    const b = bbox(renderScene(wireIdeal, t, 120, 40, 1));
     sum += ((b.x1 - b.x0 + 1) * 2) / ((b.y1 - b.y0 + 1) * 4);
     n++;
   }
@@ -112,19 +119,19 @@ test('G wire phases: a cube phase and a torus phase both occur within 60 s, with
   for (let t = 0; t < 60; t += 1) seen.add(phaseAt(t));
   assert.deepEqual([...seen].sort(), ['cube', 'torus']);
   assert.equal(phaseAt(0), 'cube');
-  const cube = hist(renderScene(wire, 6, 120, 40, 1)), torus = hist(renderScene(wire, PHASE_SECONDS + 6, 120, 40, 1));
+  const cube = hist(renderScene(wireIdeal, 6, 120, 40, 1)), torus = hist(renderScene(wireIdeal, PHASE_SECONDS + 6, 120, 40, 1));
   assert.ok(histDist(cube, torus) > 100, `histograms differ by ${histDist(cube, torus)}`);
-  assert.ok(litN(renderScene(wire, PHASE_SECONDS + 6, 120, 40, 1)) > litN(renderScene(wire, 6, 120, 40, 1)), 'torus has more lines than the cube');
+  assert.ok(litN(renderScene(wireIdeal, PHASE_SECONDS + 6, 120, 40, 1)) > litN(renderScene(wireIdeal, 6, 120, 40, 1)), 'torus has more lines than the cube');
   // across each switch the shape shrinks and grows, so no frame loses or gains a quarter of the screen
   for (const T0 of [PHASE_SECONDS, 2 * PHASE_SECONDS, 3 * PHASE_SECONDS]) {
     let prev = null;
     for (let k = -FPS; k <= FPS; k++) {
-      const g = renderScene(wire, T0 + k / FPS, 120, 40, 1).glyphs;
+      const g = renderScene(wireIdeal, T0 + k / FPS, 120, 40, 1).glyphs;
       if (prev) { let sw = 0; for (let i = 0; i < g.length; i++) if ((g[i] !== 32) !== (prev[i] !== 32)) sw++; assert.ok(sw / g.length < 0.25, `switch at ${T0}`); }
       prev = g.slice();
     }
   }
-  for (const t of [0, 5, 13, 30]) assert.ok(renderScene(wire, t, 120, 40, 1).colours.every((v) => v === 0));
+  for (const t of [0, 5, 13, 30]) assert.ok(renderScene(wireIdeal, t, 120, 40, 1).colours.every((v) => v === 0));
 });
 
 // ---------------------------------------------------------------- H: tunnel

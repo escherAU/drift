@@ -4,12 +4,20 @@
 // so nothing ever cuts.
 //
 // Strictly two-tone: colour index 0 only. Every lit cell is a braille glyph (U+2801..U+28FF).
-// kind 'cells', pure in t and seed (the seed only sets the starting orientation).
+//
+// DRIFT-11, the flash rules. `ideal(t, w, h, params)` below is the picture as it was (pure in t and seed; the seed only sets the starting orientation) and is what the
+// scene WANTS on the screen. The scene is a sim (kind 'sim', stepped from the real-time clock: realClock, src/cells.js): it computes that picture ten times a second as its
+// target and DRAWS a copy that follows it under the limits of src/scenes/follow.js (a cell changes at most once every 0.6 s, so no cell changes three times in a second;
+// and a share of the cells a step and a share a painted frame). Every line that sweeps over a cell would otherwise flip it on and off each pass: 22 polylines on the torus
+// (L1 40.7 %, L2 98.6 % of the screen's fields on the old scene). What it looks like now: the shape still turns, but each dot lingers about half a second, so a moving
+// edge leaves a short soft trail, and a cell takes its new state a moment late. ROTATION scales the turning rate down so the trail stays short.
 import { seedOf, timeOf, smooth } from './util.js';
+import { createFollow, follow } from './follow.js';
 
 export const PHASE_SECONDS = 13;
 const GROW = 0.8; // seconds to grow in, and to shrink out
 const DIST = 7; // camera distance (the model sits at the origin, radius 1.5)
+const ROTATION = 0.5; // the turning rate as a share of the old scene's (the trail of a moving edge is as long as the edge moves in 0.6 s)
 const REACH = 1.9; // generous bound on the projected radius, for fitting the screen
 
 export function phaseAt(t) {
@@ -70,7 +78,7 @@ function line(g, W, Wd, Hd, x0, y0, x1, y1) {
   }
 }
 
-export default function wire(t, w, h, params) {
+export function ideal(t, w, h, params) {
   const W = w > 0 ? Math.floor(w) : 0, H = h > 0 ? Math.floor(h) : 0;
   const g = params.glyphs, col = params.colours;
   g.fill(32);
@@ -84,9 +92,9 @@ export default function wire(t, w, h, params) {
   const Wd = W * 2, Hd = H * 4;
   const S = (0.5 * 0.92 * Math.min(Wd, Hd) / REACH) * grow;
   const off = s * 1.3;
-  const ax = (cube ? 0.43 : 0.31) * T + off + (cube ? 0 : 1.1);
-  const ay = (cube ? 0.66 : 0.52) * T + off * 0.7;
-  const az = 0.19 * T + off * 0.3;
+  const ax = (cube ? 0.43 : 0.31) * T * ROTATION + off + (cube ? 0 : 1.1);
+  const ay = (cube ? 0.66 : 0.52) * T * ROTATION + off * 0.7;
+  const az = 0.19 * T * ROTATION + off * 0.3;
   const ca = Math.cos(ax), sa = Math.sin(ax), cb = Math.cos(ay), sb = Math.sin(ay), cc = Math.cos(az), sc = Math.sin(az);
   // R = Rz * Ry * Rx
   const m00 = cc * cb, m01 = cc * sb * sa - sc * ca, m02 = cc * sb * ca + sc * sa;
@@ -118,5 +126,41 @@ export default function wire(t, w, h, params) {
     }
   }
 }
-wire.id = 'wire';
-wire.kind = 'cells';
+
+// ---- the sim: the target (ideal, ten times a second) and the shown picture that follows it
+const SUBSTEPS = 18;
+const STEP_HZ = 30;
+
+function init(w, h, seed) {
+  const W = w > 0 ? Math.floor(w) : 0, H = h > 0 ? Math.floor(h) : 0;
+  const s = { w: W, h: H, seed: seed | 0, sub: 0, F: createFollow(W, H), params: null, targets: 0 };
+  s.params = { seed: s.seed, glyphs: s.F.target, colours: new Uint8Array(W * H) };
+  retarget(s);
+  s.F.shown.set(s.F.target); // the first picture is what the target shows at t = 0: nothing is waiting
+  s.F.dirty = false;
+  return s;
+}
+
+function retarget(s) {
+  if (s.w === 0 || s.h === 0) return;
+  ideal(s.sub / STEP_HZ, s.w, s.h, s.params); // fills F.target in full
+  s.targets++;
+  s.F.dirty = true;
+}
+
+// n: the number of steps the composer runs for this painted frame (src/cells.js), 1 when the caller gives none (renderScene, a test)
+function step(s, n = 1) {
+  s.sub++;
+  if (s.w === 0 || s.h === 0) return;
+  if (s.sub % SUBSTEPS === 0) retarget(s);
+  follow(s.F, s.sub, n);
+}
+
+function draw(s, params) {
+  params.glyphs.set(s.F.shown);
+  params.colours.fill(0);
+}
+
+export default { id: 'wire', kind: 'sim', realClock: true, init, step, draw };
+ideal.id = 'wire-ideal'; // renderScene(ideal, ...) is the picture the scene wants at t (a pure 'cells' scene), which the tests of the look read
+ideal.kind = 'cells';

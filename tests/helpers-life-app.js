@@ -102,10 +102,13 @@ export async function runLife({
 const HERE = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
 const SRC = path.join(HERE, '..', 'src');
 export const OLD_LIFE_FILE = path.join(HERE, 'fixtures', 'life-before-drift10.js');
+export const OLD_WIRE_FILE = path.join(HERE, 'fixtures', 'wire-before-drift11.js'); // DRIFT-11: wire.js and blocktype.js as they were at 7c2f34c (pure in t, kind 'cells')
+export const OLD_BLOCKTYPE_FILE = path.join(HERE, 'fixtures', 'blocktype-before-drift11.js');
 export const V1_LIFE_FILE = path.join(HERE, 'fixtures', 'life-before-fps-fix.js'); // DRIFT-10's first fix (33f8142): the flip gap and a per-STEP share only, no per-frame cap
 // life: 'old' (the fixture), 'v1' (the first DRIFT-10 fix, fixture), 'new' (this tree's), or a function (text) -> text that edits the new one (it must change it: a mutation that matches nothing throws).
 // edits: { 'src/app.js': (text) => text, ... } the same for any other file of src/.
-export function makeTree(life = 'new', edits = {}) {
+// scenes: { wire, blocktype } each 'old' (the DRIFT-11 fixture), 'new' (this tree's) or a function (text) -> text that edits this tree's file (it must change it).
+export function makeTree(life = 'new', edits = {}, scenes = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-life-tree-'));
   fs.cpSync(SRC, path.join(root, 'src'), { recursive: true });
   const file = path.join(root, 'src', 'scenes', 'life.js');
@@ -116,6 +119,15 @@ export function makeTree(life = 'new', edits = {}) {
     const after = life(before);
     if (after === before) throw new Error('makeTree: the mutation changed nothing');
     fs.writeFileSync(file, after);
+  }
+  for (const [name, how] of Object.entries(scenes)) {
+    const f = path.join(root, 'src', 'scenes', name + '.js');
+    if (how === 'old') fs.copyFileSync(name === 'wire' ? OLD_WIRE_FILE : OLD_BLOCKTYPE_FILE, f);
+    else if (typeof how === 'function') {
+      const before = fs.readFileSync(f, 'utf8'), after = how(before);
+      if (after === before) throw new Error(`makeTree: the mutation of ${name}.js changed nothing`);
+      fs.writeFileSync(f, after);
+    }
   }
   for (const [rel, fn] of Object.entries(edits)) {
     const f = path.join(root, rel);
