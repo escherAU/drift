@@ -4,9 +4,7 @@
 // the three clocks (grid, q156, jitter), in every mode, with the shrink in a scene hold and in a dissolve and several gaps (none a whole number of frames).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { measurePause, pauseViolations, startCard, MODES } from './helpers-size-card.js';
-import { RGB_CELL } from '../src/renderer.js';
-import { PLAYLISTS } from '../src/scenes/index.js';
+import { measurePause, pauseViolations, heldViolations, startCard, MODES } from './helpers-size-card.js';
 
 const CLOCKS = ['grid', 'q156', 'jitter'];
 
@@ -40,31 +38,8 @@ test('6 what the scene clock does after resuming is the clock of the app that ne
   assert.equal(shrunk.sceneIndex, still.sceneIndex);
 });
 
-// an injected full-colour Classic scene: the only way for the 256-colour paint cap to hold time back in Classic (no shipped Classic scene is full colour)
-function rgbScene(t, w, h, p) {
-  for (let i = 0; i < w * h; i++) { p.glyphs[i] = 0x23; p.fg[i] = 0x123456; p.bg[i] = 0x000000; }
-}
-rgbScene.rgb = true;
-
-test('6 held time: time held back by the 256-colour paint cap when the window shrinks does not leak a leap when it grows back', async () => {
-  const playlists = { ...PLAYLISTS, chaos: [rgbScene, rgbScene] };
-  const h = await startCard({ cols: 80, rows: 24, startMode: 'chaos', cmode: '256', clock: 'tick', playlists });
-  try {
-    assert.ok(h.app.getState().mode === 'chaos');
-    h.app.tick(0.01); // paints the first frame (full colour), then 0.01 + 0.01 + 0.01 are held: the cap paints no sooner than every 1/18 s
-    h.app.tick(0.01); h.app.tick(0.01); h.app.tick(0.01);
-    const t0 = h.app.getState().t;
-    assert.ok(t0 > 0 && t0 < 0.02, `t is ${t0}: the later ticks were held, not stepped`);
-    h.resize(30, 8);
-    h.app.tick(5); h.app.tick(5); h.app.tick(0.3);
-    assert.equal(h.app.getState().t, t0, 'no time passes on the card (5 s ticks do not count)');
-    h.resize(80, 24);
-    assert.equal(h.app.getState().t, t0, 'growing back does not move t');
-    h.app.tick(0.05); h.app.tick(0.05);
-    const grown = h.app.getState().t - t0;
-    assert.ok(grown > 0 && grown <= 0.2, `after resuming t moved ${grown} s: what was held plus the steps taken, never the time on the card`);
-    assert.ok(RGB_CELL === 255);
-  } finally { h.close(); }
+test('6 held time: time held back by the 256-colour paint cap when the window shrinks does not leak a leap when it grows back (a full-colour Classic scene is injected: no shipped one is)', async () => {
+  assert.deepEqual(await heldViolations(), []);
 });
 
 test('6 pausing and the card: p stays honest under the card (a paused app stays paused when the card goes) and help open does not move the clock either', async () => {

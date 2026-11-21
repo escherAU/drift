@@ -5,6 +5,7 @@
 //
 // What the card must be is written out HERE, independently of src/: the words, the greedy wrap and the centring are the shell's card (src/shell/ui.js drawTooSmall)
 // restated by hand, so a change in the source cannot move the expectation with it.
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -187,4 +188,88 @@ export function pauseViolations(m) {
   const grown = m.later.state.t - m.before.state.t;
   if (!(grown >= 1 - dt && grown <= 1 + dt)) bad.push(`one second after resuming the scene clock had moved ${grown.toFixed(4)} s (a leap, or a stall)`);
   return bad;
+}
+
+// an injected full-colour Classic scene: the only way for the 256-colour paint cap to hold time back in Classic (no shipped Classic scene is full colour)
+function rgbScene(t, w, h, p) {
+  for (let i = 0; i < w * h; i++) { p.glyphs[i] = 0x23; p.fg[i] = 0x123456; p.bg[i] = 0x000000; }
+}
+rgbScene.rgb = true;
+
+// Time held back by the 256-colour paint cap when the window shrinks must not leak a leap when it grows back. Returns what is wrong (empty = nothing).
+export async function heldViolations({ root = null } = {}) {
+  const { PLAYLISTS } = await import(root ? pathToFileURL(path.join(root, 'src', 'scenes', 'index.js')).href : '../src/scenes/index.js');
+  const playlists = { ...PLAYLISTS, chaos: [rgbScene, rgbScene] };
+  const h = await startCard({ cols: 80, rows: 24, startMode: 'chaos', cmode: '256', clock: 'tick', playlists, root });
+  const bad = [];
+  try {
+    h.app.tick(0.01); // paints the first frame (full colour); the next three ticks are held: the cap paints no sooner than every 1/18 s
+    h.app.tick(0.01); h.app.tick(0.01); h.app.tick(0.01);
+    const t0 = h.app.getState().t;
+    if (!(t0 > 0 && t0 < 0.02)) bad.push(`setup: t is ${t0}, the later ticks should have been held`);
+    h.resize(30, 8);
+    h.app.tick(5); h.app.tick(5); h.app.tick(0.3);
+    if (h.app.getState().t !== t0) bad.push(`time passed on the card: ${t0} -> ${h.app.getState().t}`);
+    h.resize(80, 24);
+    if (h.app.getState().t !== t0) bad.push('growing back moved t');
+    h.app.tick(0.05); h.app.tick(0.05);
+    const grown = h.app.getState().t - t0;
+    if (!(grown > 0 && grown <= 0.2)) bad.push(`after resuming t moved ${grown} s: not what was held plus the steps taken`);
+    return bad;
+  } finally { h.close(); }
+}
+
+// ---- the checks the mutants must fail (tests/classic-size-card-mutation.test.js); each throws on the first thing wrong. root: a copy of the tree, or null for this one.
+
+export async function checkCardAtSmallSizes(root) {
+  for (const startMode of MODES) for (const [cols, rows] of [[39, 10], [40, 9], [10, 4]]) {
+    const h = await startCard({ cols, rows, startMode, root });
+    try { h.advance(1); assert.equal(h.text(), expectedCardText(cols, rows), `${startMode} ${cols}x${rows}`); } finally { h.close(); }
+  }
+}
+
+export async function checkBoundary(root) {
+  for (const startMode of MODES) for (const [small, big] of [[[39, 10], [40, 10]], [[40, 9], [40, 10]]]) {
+    const h = await startCard({ cols: small[0], rows: small[1], startMode, root });
+    try {
+      h.advance(1);
+      assert.equal(h.text(), expectedCardText(...small), `${startMode}: the card at ${small.join('x')}`);
+      h.resize(...big);
+      assert.notEqual(h.text(), expectedCardText(...big), `${startMode}: not the card at ${big.join('x')}`);
+      assert.ok(inkOf(h.screen) > 0 && !h.text().includes('window bigger'), `${startMode}: the art at ${big.join('x')}`);
+    } finally { h.close(); }
+  }
+}
+
+export async function checkResizeStaircase(root) {
+  const seq = [[80, 24], [60, 16], [40, 10], [39, 10], [30, 8], [39, 10], [40, 10], [80, 24]];
+  for (const startMode of MODES) {
+    const h = await startCard({ cols: 80, rows: 24, startMode, root });
+    try {
+      h.advance(2.2);
+      let art = null;
+      for (let k = 0; k < seq.length; k++) {
+        const [cols, rows] = seq[k];
+        if (k > 0) h.resize(cols, rows);
+        if (isCardSize(cols, rows)) assert.equal(h.text(), expectedCardText(cols, rows), `${startMode} step ${k} ${cols}x${rows}: the card`);
+        else {
+          assert.ok(!h.text().includes('window bigger') && inkOf(h.screen) > 0, `${startMode} step ${k}: the art`);
+          if (art && art.cols === cols && art.rows === rows) assert.equal(h.text(), art.text, `${startMode} step ${k}: the art after resuming is the art before shrinking`);
+        }
+        h.advance(0.3);
+        if (!isCardSize(cols, rows)) art = { cols, rows, text: h.text() };
+      }
+    } finally { h.close(); }
+  }
+}
+
+export async function checkTwoTone(root) {
+  for (const cmode of CMODES) for (const invert of [false, true]) {
+    const h = await startCard({ cols: 30, rows: 8, startMode: 'contrast', cmode, invert, root });
+    try {
+      h.advance(1);
+      const want = twoToneOf(cmode, invert);
+      assert.deepEqual([...colourPairs(h.screen)], [`${want.fg}/${want.bg}`], `contrast ${cmode}${invert ? ' inverted' : ''}: one pair of colours`);
+    } finally { h.close(); }
+  }
 }
