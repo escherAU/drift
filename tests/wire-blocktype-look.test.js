@@ -149,7 +149,7 @@ test('DRIFT-11 wire shows the cube then the torus: 12 steps (0.4 s) after every 
   for (const [W, H] of [[80, 24], [120, 40], [41, 11], [20, 6], [10, 4]]) {
     for (const seed of [1, 2, 3]) {
       sim(wire, W, H, seed, 28 * 30, (s, k) => {
-        if (k < 60 || k % 18 !== 12) return;
+        if (k < 60 || k % 18 !== 0) return;
         const beat = k - 12, T = beat / 30;
         const ideal = renderScene(wireIdeal, T, W, H, seed).glyphs;
         let same = 0;
@@ -168,7 +168,7 @@ test('DRIFT-11 wire turns: the shown picture changes between beats about every 0
   const W = 80, H = 24;
   let prev = null, changes = 0, beats = 0, blankSteps = 0;
   sim(wire, W, H, 1, 28 * 30, (s, k) => {
-    if (k % 18 === 17) { // just before the next beat: the picture has settled on this one
+    if (k % 18 === 5) { // just before the next beat: the picture has settled on this one
       const cur = Array.from(s.F.shown).join(',');
       if (prev !== null && cur !== prev) changes++;
       prev = cur; beats++;
@@ -245,7 +245,7 @@ for (const [name, sc] of Object.entries(SCENES)) {
       const s = sim(sc, W, H, 1, steps);
       assert.ok(s.F.visits <= steps * cells, `${name} ${W}x${H}: ${s.F.visits} cells visited, at most one visit of every cell each step (${steps * cells})`);
       assert.ok(s.F.flips <= steps * (Math.floor(cells * FLIP_SHARE) + 1), `${name} ${W}x${H}: ${s.F.flips} cells changed, at most ${FLIP_SHARE} of the cells a step`);
-      if (name === 'wire') assert.equal(s.targets, 1 + Math.floor(steps / 18), 'one target at the start and one on every beat of 18 steps');
+      if (name === 'wire') assert.equal(s.targets, 2 + Math.floor((steps - 6) / 18), 'one target at the start and one on every beat of 18 steps (at steps 6, 24, 42, ...)');
       else assert.ok(s.targets <= 8 * (Math.round(TRANSITION_SECONDS * 30) + 3), `${s.targets} targets: only while a transition plays and when a slot begins`);
       assert.ok(s.F.flips < cells * 40, `${name} ${W}x${H}: ${s.F.flips} cells changed in 40 s, under 40 changes a cell`);
     }

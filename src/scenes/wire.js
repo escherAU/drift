@@ -128,7 +128,8 @@ export function ideal(t, w, h, params) {
 }
 
 // ---- the sim: the target (ideal, ten times a second) and the shown picture that follows it
-const SUBSTEPS = 18;
+const SUBSTEPS = 18; // sim steps per beat (0.6 s): the ideal picture is worked out once a beat, so a cell is asked to change at most once every 0.6 s by the picture itself
+const BEAT_AT = 6; // the beat falls at steps 6, 24, 42, ... (not at multiples of 18): a still taken on a whole second (renderScene, the captures at 3 s and 12 s) is 12 steps after a beat, with the picture settled
 const STEP_HZ = 30;
 
 function init(w, h, seed) {
@@ -152,7 +153,7 @@ function retarget(s) {
 function step(s, n = 1) {
   s.sub++;
   if (s.w === 0 || s.h === 0) return;
-  if (s.sub % SUBSTEPS === 0) retarget(s);
+  if (s.sub % SUBSTEPS === BEAT_AT % SUBSTEPS) retarget(s);
   follow(s.F, s.sub, n);
 }
 
