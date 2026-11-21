@@ -194,8 +194,8 @@ export const MANIFEST = [
   ['tunnel-flash-controls', 'mutant: realClock removed from the tunnel', 'control: mutant, no realClock on the tunnel', 'grid', C256, '80x24', '1x, 2x, 4x', '18', '1-3'],
   ['tunnel-flash-controls', 'mutant: the old flow (FLY 0.9', 'control: mutant, the old flow on the q156 clock at --fps 10', 'q156', C256, '40x10, 41x11', '1x, 4x', '10', '1-8'],
   ['tunnel-flash-controls', 'the real-time clock alone is not enough', 'control: the old flow and turn on the real-time clock fail L3 on q156 at --fps 10', 'q156', C256, '40x10, 41x11', '1x', '10', '1-8'],
-  ['tunnel-flash-controls', 'mutant: ${name}: the whole cycle reads L2 over the limit', 'control: mutants of the dissolve mechanisms (no cross-fade scaling, no realTime composer, neither): the whole cycle fails L2', 'grid', C256, '41x11, 40x10, 79x25', '2x, 4x', '18', '1-3'],
-  ['tunnel-flash-controls', 'mutant: the contrast composer does not step its sims from the real-time clock: the maze at 4x', 'control: mutant, no realTime composer (the maze at 4x, L3 on q156)', 'q156', C256, '41x11', '4x', '18', '1-8'],
+  ['tunnel-flash-controls', 'mutant: ${name}: the whole cycle reads L2 over the limit', 'control: mutants of the dissolve mechanisms (no cross-fade scaling, no realTimeIds, neither): the whole cycle fails L2', 'grid', C256, '41x11, 40x10, 79x25', '2x, 4x', '18', '1-3'],
+  ['tunnel-flash-controls', 'mutant: the contrast composer does not step the maze from the real-time clock: the maze at 4x', 'control: mutant, no realTimeIds (the maze at 4x, L3 on q156)', 'q156', C256, '41x11', '4x', '18', '1-8'],
   ['tunnel-flash-controls', 'tunnel mutant: the picture strobes', 'control: strobe mutant must fail L1, L2, L3', 'grid', C256, '80x24', '1x', '18', '1'],
   ['classic-dissolve-real-time', 'contrast: the first dissolve lasts 2 real seconds', 'Classic contrast dissolves last 2 real seconds at 1x, 2x, 4x and at --fps 8 and 30; calm and chaos unchanged', 'grid', C256, '80x24', '1x, 2x, 4x', '8, 18, 30', '1'],
 ];

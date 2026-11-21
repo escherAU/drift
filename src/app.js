@@ -207,7 +207,7 @@ export function createApp(o) {
     return scheds[mode];
   }
   function cells(mode) {
-    if (!cellComps[mode]) cellComps[mode] = createCellComposer({ scenes: playlists[mode], cols: artCols, rows: artRows, seed, cmode, realTime: mode === 'contrast' });
+    if (!cellComps[mode]) cellComps[mode] = createCellComposer({ scenes: playlists[mode], cols: artCols, rows: artRows, seed, cmode, realTimeIds: mode === 'contrast' ? ['maze'] : [] });
     return cellComps[mode];
   }
   // Is the size card (not the art) what Classic shows now? Never while the console owns the screen.

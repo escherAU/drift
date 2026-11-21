@@ -71,10 +71,10 @@ export function renderScene(scene, t, w, h, seed = 1, glyphs = null, colours = n
   return { glyphs: g, colours: c, fg: F, bg: B, cols: W, rows: H };
 }
 
-// realTime (DRIFT-12): every sim of this composer is stepped from the real-time clock (tc), as the sims that ask for realClock are, so a faster speed key does not make any scene of the playlist
-// (or either scene of a dissolve) change at two or four times its pace. The app sets it for Classic high contrast, whose whole cycle is held to the five flash rules at every speed; its maze did not
-// ask for realClock and read L3 over the limit at 4x on the q156 clock (31.71 % at 41x11), and the file is not edited for it. At 1x the two clocks are the same count: the bytes do not change.
-export function createCellComposer({ scenes, cols, rows, seed = 1, cmode = 'truecolor', realTime = false }) {
+// realTimeIds (DRIFT-12): the ids of scenes that are stepped from the real-time clock (tc) although they do not ask for realClock, so a faster speed key does not make them change at two or four
+// times their pace, in the playlist or inside a dissolve. The app names the maze for Classic high contrast, whose whole cycle is held to the five flash rules at every speed: the maze is the one
+// sim of the mode without realClock and read L3 over the limit at 4x on the q156 clock (31.71 % at 41x11); its file is left as it was. At 1x the two clocks are the same count: the bytes do not change.
+export function createCellComposer({ scenes, cols, rows, seed = 1, cmode = 'truecolor', realTimeIds = [] }) {
   const c = {
     cmode: cmode === '256' ? '256' : 'truecolor', // handed to every scene as params.cmode
     cols: 0, rows: 0, glyphs: null, shades: null, fg: null, bg: null,
@@ -161,10 +161,10 @@ export function createCellComposer({ scenes, cols, rows, seed = 1, cmode = 'true
     if (nR > MAX_STEPS) { nR = MAX_STEPS; accR = 0; } else accR -= nR * STEP_DT;
     stateOf(st.a);
     if (dissolving) stateOf(st.b);
-    const nA = scenes[st.a].realClock === true || realTime ? nR : n;
+    const nA = scenes[st.a].realClock === true || realTimeIds.includes(scenes[st.a].id) ? nR : n;
     for (let k = 0; k < nA; k++) if (states[st.a]) scenes[st.a].step(states[st.a], nA); // n: how many steps this frame runs (Life shares its per-frame cap over them)
     if (dissolving) {
-      const nB = scenes[st.b].realClock === true || realTime ? nR : n;
+      const nB = scenes[st.b].realClock === true || realTimeIds.includes(scenes[st.b].id) ? nR : n;
       for (let k = 0; k < nB; k++) if (states[st.b]) scenes[st.b].step(states[st.b], nB);
     }
     c.stepsLastFrame = n;

@@ -65,7 +65,7 @@ test('DRIFT-12 the old tunnel (1cb2b62) fails the five rules in the real app at 
   } finally { rmTree(root); }
 });
 
-test('DRIFT-12 the whole cycle as it was at 1cb2b62 (the old tunnel, the dissolve at scene speed, no realTime composer) fails at 2x and 4x on the grid (80x24, seed 1, 256 colours) with the numbers measured, and passes at 1x', async () => {
+test('DRIFT-12 the whole cycle as it was at 1cb2b62 (the old tunnel, the dissolve at scene speed, no realTimeIds) fails at 2x and 4x on the grid (80x24, seed 1, 256 colours) with the numbers measured, and passes at 1x', async () => {
   const root = makeTree('new', BEFORE12_EDITS, { tunnel: 'old' });
   try {
     for (const [speed, ids, l2, l3] of [['1x', [], '15.28', '13.44'], ['2x', ['l2.x1'], '46.76', '18.75'], ['4x', ['l2.x1', 'l3'], '100.00', '31.15']]) {
@@ -151,15 +151,15 @@ test('DRIFT-12 the spokes\' turn (TURN 0.08, 0.12 before) is not a mechanism by 
 // ---- (2b) the cycle at speed: the dissolve in real time, and the maze on the real-time clock (two mechanisms, each pinned on its own, and both removed)
 // With the tunnel fixed the whole cycle still read over the limit at 2x and 4x. Two lines fix it, in src/app.js: (1) the scheduler's cross-fade runs in real time in contrast mode (the fadeScale of
 // advance: at 4x a 0.5 s dissolve put the outgoing scene's last change, the cell's flip and the incoming scene's first change inside one second, rule L2) and (2) the contrast composer steps
-// every sim from the real-time clock (realTime, src/cells.js; the maze did not ask for realClock, its file is not edited, and at 4x it read L3 over the limit on the q156 clock and, with a faster
+// the maze from the real-time clock (realTimeIds, src/cells.js; the maze is the one sim of the mode that did not ask for realClock, its file is left as it was, and at 4x it read L3 over the limit on the q156 clock and, with a faster
 // dissolve, L2 in its dissolves). Each alone leaves an arm over the limit (cycle, grid, 256 colours, seeds 1 to 3): without (1) 4x on 41x11 reads L2 30.36 %; without (2) 4x on 41x11 reads L2 28.57 %
 // and, on the q156 clock at 18 fps over seeds 1 to 8, L3 31.71 % (the maze alone, 4x: the erase wipe four times as fast); without both, 2x on 40x10 reads L2 30.36 % and 4x on 79x25 39.09 %.
 const must = (text, from, to) => { if (!text.includes(from)) throw new Error('mutation matches nothing: ' + from); return text.replace(from, to); };
 const FS_LINE = "advance(d, shown.mode === 'contrast' ? Math.min(SPEEDS[speedIdx], 1) / SPEEDS[speedIdx] : 1);";
-const RT_LINE = "realTime: mode === 'contrast'";
+const RT_LINE = "realTimeIds: mode === 'contrast' ? ['maze'] : []";
 const NO_FADE_SCALE = { 'src/app.js': (t) => must(t, FS_LINE, 'advance(d);') };
-const NO_REAL_TIME = { 'src/app.js': (t) => must(t, RT_LINE, 'realTime: false') };
-const NEITHER = { 'src/app.js': (t) => must(must(t, FS_LINE, 'advance(d);'), RT_LINE, 'realTime: false') };
+const NO_REAL_TIME = { 'src/app.js': (t) => must(t, RT_LINE, 'realTimeIds: []') };
+const NEITHER = { 'src/app.js': (t) => must(must(t, FS_LINE, 'advance(d);'), RT_LINE, 'realTimeIds: []') };
 async function cycleWorst(speed, cols, rows, root, o = {}) {
   const worst = { l2: 0, l3: 0 }, ids = new Set();
   for (const seed of o.seeds || [1, 2, 3]) {
@@ -172,7 +172,7 @@ async function cycleWorst(speed, cols, rows, root, o = {}) {
 }
 for (const [name, edits, arms] of [
   ['the scheduler\'s cross-fade is not scaled to real time', NO_FADE_SCALE, [['4x', 41, 11, '30.36']]],
-  ['the contrast composer does not step its sims from the real-time clock', NO_REAL_TIME, [['4x', 41, 11, '28.57']]],
+  ['the contrast composer does not step the maze from the real-time clock', NO_REAL_TIME, [['4x', 41, 11, '28.57']]],
   ['neither mechanism', NEITHER, [['2x', 40, 10, '30.36'], ['4x', 79, 25, '39.09']]],
 ]) {
   test(`DRIFT-12 mutant: ${name}: the whole cycle reads L2 over the limit (${arms.map((a) => `${a[0]} ${a[1]}x${a[2]} ${a[3]} %`).join(', ')}, seeds 1 to 3, grid, 256 colours); the shipped tree passes the same arms`, async () => {
@@ -188,7 +188,7 @@ for (const [name, edits, arms] of [
     } finally { rmTree(root); }
   });
 }
-test('DRIFT-12 mutant: the contrast composer does not step its sims from the real-time clock: the maze at 4x reads L3 31.71 % on the q156 clock at 18 fps on 41x11 (seeds 1 to 8, the whole cycle); the shipped tree passes', async () => {
+test('DRIFT-12 mutant: the contrast composer does not step the maze from the real-time clock: the maze at 4x reads L3 31.71 % on the q156 clock at 18 fps on 41x11 (seeds 1 to 8, the whole cycle); the shipped tree passes', async () => {
   const root = makeTree('new', NO_REAL_TIME);
   try {
     const bad = await cycleWorst('4x', 41, 11, root, { clock: 'q156', seeds: [1, 2, 3, 4, 5, 6, 7, 8] });

@@ -12,7 +12,7 @@
 // --tree before11 (DRIFT-11) runs a copy of src/ with the wire and blocktype scenes as they were at 7c2f34c (tests/fixtures/wire-before-drift11.js, blocktype-before-drift11.js) and everything else as shipped:
 // the control for --scene wire, --scene blocktype and --whole-cycle. --fps takes a list (8,10,12,...): one line per fps.
 // --tree before12 (DRIFT-12) runs a copy of src/ as Classic high contrast was at 1cb2b62: the tunnel scene (tests/fixtures/tunnel-before-drift12.js, pure in t: its flow follows the speed keys), the
-// scheduler's cross-fade at scene speed and the composer without realTime (BEFORE12_EDITS in tests/helpers-life-app.js): the control for --scene tunnel and --whole-cycle at 2x and 4x.
+// scheduler's cross-fade at scene speed and the composer without realTimeIds (BEFORE12_EDITS in tests/helpers-life-app.js): the control for --scene tunnel and --whole-cycle at 2x and 4x.
 // DRIFT-12: sizes below 40x10 are the size card (Classic's minimum window): the tool runs them as such and says so on stderr; the old small-board readings are not reachable.
 // A speed's runs hold the Life scene for 30 REAL seconds (the scheduler's scene length is 30 s of scene time, which runs `speed` times faster: sceneSeconds = 30 * speed).
 import { runLife, makeTree, rmTree, nums, PLAN, SPEED_OF, isCardBoard, BEFORE12_EDITS } from '../tests/helpers-life-app.js';

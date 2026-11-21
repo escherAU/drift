@@ -100,7 +100,7 @@ test('DRIFT-12 life-matrix: the boards below 40x10 are not reachable: Classic sh
 });
 
 // DRIFT-12: the tunnel and the whole cycle at 2x and 4x. The old looks are the control (--tree before12: a copy of src/ as it was at 1cb2b62 where DRIFT-12 changed it: tests/fixtures/tunnel-before-drift12.js,
-// the dissolve at scene speed and no realTime composer: BEFORE12_EDITS in tests/helpers-life-app.js)
+// the dissolve at scene speed and no realTimeIds: BEFORE12_EDITS in tests/helpers-life-app.js)
 test('DRIFT-12 life-matrix --scene tunnel at 1x, 2x and 4x: the shipped tunnel passes (exit 0; the three speeds read the same, as the real-time clock runs the same flow); --tree before12 reads L2 50.46 and 100.00 and L3 31.09 at 2x and 4x and exits 1', () => {
   const o = { scene: 'tunnel', seeds: '1,2,3', clocks: 'grid', modes: '256', speeds: '1x,2x,4x', sizes: '80x24,40x10' };
   const flags = (x) => Object.entries(x).flatMap(([k, v]) => ['--' + k, v]);

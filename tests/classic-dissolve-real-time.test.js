@@ -2,12 +2,12 @@
 // (DISSOLVE_SECONDS, src/app.js): half a real second at 4x, which put a cell's last change in the outgoing scene, its flip and its first change in the incoming one inside one second (rule L2: with
 // the tunnel fixed the whole cycle read L2 39.09 % at 4x on 79x25 and 30.36 % at 2x on 40x10, tests/tunnel-flash-controls.test.js). And the maze, the one sim of the mode that does not ask for
 // realClock, ran at the scene clock (read L3 31.71 % at 4x on the q156 clock at 41x11). Now the scheduler's cross-fade is scaled by min(speed, 1) / speed in contrast mode only (the Driftman 9000's
-// runtime does the same, src/shell/runtime.js) and the contrast composer steps every sim from the real-time clock (realTime, src/cells.js, set in src/app.js).
+// runtime does the same, src/shell/runtime.js) and the contrast composer steps the maze, the one sim of the mode that does not ask for realClock, from the real-time clock (realTimeIds, src/cells.js, set in src/app.js).
 // What this file pins (the real app on the exact clock, frames counted by the scene id the app reports):
 //   contrast    the first dissolve lasts 2 s (36 frames at 18 fps, one frame either way; 2 x fps at 8 and 30) at 1x, 2x and 4x (real `+` presses); at 0.5x (real `-` presses) it lasts 4 s as before
 //   unchanged   calm (15 s cross-fade, 3.75 s at 4x) and chaos (2 s, 0.5 s at 4x) dissolve as before: the change is Classic high contrast's alone
 //   turn        the speed keys still shorten a scene's turn: a scene length of 30 scene seconds ends at about 30, 15 and 7.5 real seconds at 1x, 2x and 4x
-//   composer    counted steps, no app: with realTime every sim steps at the real-time count (in and out of a dissolve), without it at the scene clock's
+//   composer    counted steps, no app: a scene named in realTimeIds (or with realClock) steps at the real-time count, in and out of a dissolve; any other at the scene clock's
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runLife, PLAN, SPEED_OF } from './helpers-life-app.js';
@@ -62,24 +62,24 @@ test('DRIFT-12 contrast: the speed keys still shorten the scene\'s turn: with a 
 
 // the composer by itself: counted steps, no app, no clock
 import { createCellComposer } from '../src/cells.js';
-function stepCounts(realTime, p) {
+function stepCounts(ids, p) {
   const counts = { a: 0, b: 0, rt: 0 };
   const mk = (name, realClock) => ({
     id: name, kind: 'sim', ...(realClock ? { realClock: true } : {}), init: () => ({}), step: () => { counts[name]++; },
     draw: (s, params) => { params.glyphs.fill(32); params.colours.fill(0); },
   });
-  const comp = createCellComposer({ scenes: [mk('a'), mk('b'), mk('rt', true)], cols: 4, rows: 2, realTime });
+  const comp = createCellComposer({ scenes: [mk('a'), mk('b'), mk('rt', true)], cols: 4, rows: 2, realTimeIds: ids });
   const st = { a: 0, b: 1, p, fading: p > 0 };
   for (let k = 0; k <= 18 * 4; k++) { const t = k / 18; comp.frame(st, t, t / 4); } // 4 scene seconds at 4x: 1 real second
   return counts;
 }
-test('DRIFT-12 composer: with realTime every sim is stepped at the real-time count (30 in a real second, in a dissolve or out of one; a realClock scene always), without it at the scene clock\'s (120 in 4 scene seconds)', () => {
+test('DRIFT-12 composer: a scene named in realTimeIds is stepped at the real-time count (30 in a real second at 4x, in a dissolve or out of one), a scene that is not at the scene clock\'s (120 in 4 scene seconds); a realClock scene is at the real-time count either way', () => {
   const near = (v, want) => assert.ok(Math.abs(v - want) <= 2, `${v} steps, want about ${want}`);
-  const on = stepCounts(true, 0.5), onIdle = stepCounts(true, 0), off = stepCounts(false, 0.5), offIdle = stepCounts(false, 0);
+  const on = stepCounts(['a', 'b'], 0.5), onIdle = stepCounts(['a', 'b'], 0), off = stepCounts([], 0.5), offIdle = stepCounts([], 0), onlyA = stepCounts(['a'], 0.5);
   near(on.a, 30); near(on.b, 30); near(onIdle.a, 30);
   near(off.a, 120); near(off.b, 120); near(offIdle.a, 120);
-  for (const c of [on, onIdle, off, offIdle]) assert.ok(c.rt === 0, 'the third scene is never drawn or stepped here');
-  // a scene that asks for realClock is at the real-time count either way
-  const rtOnly = (flag) => { let n = 0; const s = { id: 'r', kind: 'sim', realClock: true, init: () => ({}), step: () => { n++; }, draw: (_, p) => { p.glyphs.fill(32); p.colours.fill(0); } }; const comp = createCellComposer({ scenes: [s], cols: 4, rows: 2, realTime: flag }); for (let k = 0; k <= 72; k++) { const tt = k / 18; comp.frame({ a: 0, b: 0, p: 0, fading: false }, tt, tt / 4); } return n; };
-  near(rtOnly(false), 30); near(rtOnly(true), 30);
+  near(onlyA.a, 30); near(onlyA.b, 120); // only the scene that is named
+  for (const c of [on, onIdle, off, offIdle, onlyA]) assert.ok(c.rt === 0, 'the third scene is never drawn or stepped here');
+  const rtOnly = (ids) => { let n = 0; const s = { id: 'r', kind: 'sim', realClock: true, init: () => ({}), step: () => { n++; }, draw: (_, p) => { p.glyphs.fill(32); p.colours.fill(0); } }; const comp = createCellComposer({ scenes: [s], cols: 4, rows: 2, realTimeIds: ids }); for (let k = 0; k <= 72; k++) { const tt = k / 18; comp.frame({ a: 0, b: 0, p: 0, fading: false }, tt, tt / 4); } return n; };
+  near(rtOnly([]), 30); near(rtOnly(['r']), 30);
 });

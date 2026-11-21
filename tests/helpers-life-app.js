@@ -158,11 +158,11 @@ export function makeTree(life = 'new', edits = {}, scenes = {}) {
 }
 export const rmTree = (root) => fs.rmSync(root, { recursive: true, force: true });
 
-// DRIFT-12: the app as it was at 1cb2b62 where DRIFT-12 changed it: the scheduler's cross-fade at scene speed (no fadeScale) and the contrast composer without realTime. With the old tunnel
+// DRIFT-12: the app as it was at 1cb2b62 where DRIFT-12 changed it: the scheduler's cross-fade at scene speed (no fadeScale) and the contrast composer without realTimeIds. With the old tunnel
 // (makeTree('new', BEFORE12_EDITS, { tunnel: 'old' })) this is the whole Classic high contrast mode as it was; tools/life-matrix.mjs --tree before12 runs it. Strict: an edit that matches nothing throws.
 const must = (text, from, to) => { if (!text.includes(from)) throw new Error('BEFORE12_EDITS: no match for ' + from); return text.replace(from, to); };
 export const BEFORE12_EDITS = {
-  'src/app.js': (t) => must(must(t, "advance(d, shown.mode === 'contrast' ? Math.min(SPEEDS[speedIdx], 1) / SPEEDS[speedIdx] : 1);", 'advance(d);'), ", realTime: mode === 'contrast' }", ' }'),
+  'src/app.js': (t) => must(must(t, "advance(d, shown.mode === 'contrast' ? Math.min(SPEEDS[speedIdx], 1) / SPEEDS[speedIdx] : 1);", 'advance(d);'), ", realTimeIds: mode === 'contrast' ? ['maze'] : [] })", ' })'),
 };
 
 // the five rules' worst readings in per cent (X1 views: the viewer's own second), and the rules that fail
