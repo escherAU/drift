@@ -7,7 +7,14 @@ import { checkCardAtSmallSizes, checkBoundary, checkResizeStaircase, checkTwoTon
 
 const fails = async (fn, label) => { await assert.rejects(fn, undefined, label); };
 const mutant = (edit) => makeTree('new', { 'src/app.js': edit });
-const swap = (from, to) => (text) => { if (!text.includes(from)) throw new Error(`the mutation matches nothing: ${from}`); return text.replace(from, to); };
+// (a checkout or an export may carry CRLF line ends: the edit is made on LF text and the line ends put back)
+const swap = (from, to) => (text) => {
+  const crlf = text.includes('\r\n');
+  const lf = crlf ? text.replace(/\r\n/g, '\n') : text;
+  if (!lf.includes(from)) throw new Error(`the mutation matches nothing: ${from}`);
+  const out = lf.replace(from, to);
+  return crlf ? out.replace(/\n/g, '\r\n') : out;
+};
 
 test('8 control: the unmutated tree passes every check the mutants are held to', async () => {
   await checkCardAtSmallSizes(null);
