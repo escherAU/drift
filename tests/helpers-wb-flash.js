@@ -16,7 +16,7 @@ import { PHASE_SECONDS } from '../src/scenes/wire.js';
 import { SLOT_SECONDS, TRANSITION_SECONDS } from '../src/scenes/blocktype.js';
 
 export const SCENES = ['wire', 'blocktype'];
-export const SCENE_INDEX = { wire: 2, blocktype: 4 }; // the contrast playlist in src/scenes/index.js: life, tunnel, wire, maze, blocktype
+export const SCENE_INDEX = { tunnel: 1, wire: 2, blocktype: 4 }; // the contrast playlist in src/scenes/index.js: life, tunnel, wire, maze, blocktype
 export const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 export const MODES = ['truecolor', '256'];
 // the small boards (40 to 125 cells). DRIFT-12: all of them are below Classic's 40x10 minimum, where Classic shows the size card and neither scene runs: a run at one of these sizes is a run of
