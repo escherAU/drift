@@ -9,9 +9,8 @@
 // are wire-flash-fps and blocktype-flash-fps; the whole high-contrast cycle is wire-blocktype-cycle.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SCENES, SEEDS, MODES, passes, coverage } from './helpers-wb-flash.js';
+import { SCENES, SEEDS, MODES, passes, coverage, go, whole } from './helpers-wb-flash.js';
 import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
-import { go, whole } from './helpers-wb-flash.js';
 
 test('DRIFT-11 what a 30 s run covers: wire both phases and both switches, blocktype every transition kind in at least three slots in a row', () => {
   const c = coverage();

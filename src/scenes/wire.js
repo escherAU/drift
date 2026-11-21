@@ -6,18 +6,19 @@
 // Strictly two-tone: colour index 0 only. Every lit cell is a braille glyph (U+2801..U+28FF).
 //
 // DRIFT-11, the flash rules. `ideal(t, w, h, params)` below is the picture as it was (pure in t and seed; the seed only sets the starting orientation) and is what the
-// scene WANTS on the screen. The scene is a sim (kind 'sim', stepped from the real-time clock: realClock, src/cells.js): it computes that picture ten times a second as its
+// scene WANTS on the screen. The scene is a sim (kind 'sim', stepped from the real-time clock: realClock, src/cells.js): it computes that picture once every 0.6 s (a beat) as its
 // target and DRAWS a copy that follows it under the limits of src/scenes/follow.js (a cell changes at most once every 0.6 s, so no cell changes three times in a second;
-// and a share of the cells a step and a share a painted frame). Every line that sweeps over a cell would otherwise flip it on and off each pass: 22 polylines on the torus
-// (L1 40.7 %, L2 98.6 % of the screen's fields on the old scene). What it looks like now: the shape still turns, but each dot lingers about half a second, so a moving
-// edge leaves a short soft trail, and a cell takes its new state a moment late. ROTATION scales the turning rate down so the trail stays short.
+// and a share of the cells a step and a share a painted frame). The beat alone also keeps a cell to one change per 0.6 s; the gap is what holds if a deferred cell is late. Every line that sweeps over a cell would otherwise flip it on and off each pass: 22 polylines on the torus
+// (L1 40.7 %, L2 98.6 % of the screen's fields on the old scene). What it looks like now: the shape still turns, but in steps: a clean new pose every beat (the follower takes about 0.4 s to put it on the screen, the pose
+// settles cell for cell), so it reads as a ratchet, not a smooth spin. ROTATION scales the turning rate down to half, so a step is a small turn (5 to 11 degrees an axis).
+// (A continuous picture with the follower alone, a target every 0.1 s, was measured and smears: a moving edge leaves a half-second trail of stale dots.)
 import { seedOf, timeOf, smooth } from './util.js';
 import { createFollow, follow } from './follow.js';
 
 export const PHASE_SECONDS = 13;
 const GROW = 0.8; // seconds to grow in, and to shrink out
 const DIST = 7; // camera distance (the model sits at the origin, radius 1.5)
-const ROTATION = 0.5; // the turning rate as a share of the old scene's (the trail of a moving edge is as long as the edge moves in 0.6 s)
+const ROTATION = 0.5; // the turning rate as a share of the old scene's: the pose changes by half as much from one beat to the next
 const REACH = 1.9; // generous bound on the projected radius, for fitting the screen
 
 export function phaseAt(t) {
@@ -127,7 +128,7 @@ export function ideal(t, w, h, params) {
   }
 }
 
-// ---- the sim: the target (ideal, ten times a second) and the shown picture that follows it
+// ---- the sim: the target (ideal, once a beat) and the shown picture that follows it
 const SUBSTEPS = 18; // sim steps per beat (0.6 s): the ideal picture is worked out once a beat, so a cell is asked to change at most once every 0.6 s by the picture itself
 const BEAT_AT = 6; // the beat falls at steps 6, 24, 42, ... (not at multiples of 18): a still taken on a whole second (renderScene, the captures at 3 s and 12 s) is 12 steps after a beat, with the picture settled
 const STEP_HZ = 30;
