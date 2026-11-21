@@ -8,7 +8,7 @@
 //                 Life); held by helpers-clock-arms to 15 % of the frames this file's grid arms meter (the last test).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runLife, PLAN, SPEED_OF } from './helpers-life-app.js';
+import { runLife, PLAN, SPEED_OF, isCardBoard, cardRun } from './helpers-life-app.js';
 import { failedRules, ruleOf, X1_RULE_IDS } from './helpers-flash.js';
 import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
 
@@ -16,8 +16,12 @@ const FPS_LIST = [8, 10, 12, 15];
 const SIZES = [[10, 4], [13, 4], [15, 5], [20, 6], [25, 5], [80, 24]];
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 const line = (rep) => X1_RULE_IDS.map((id) => `${id} ${(ruleOf(rep, id).worstFraction * 100).toFixed(2)}`).join(' ');
-const go = (o) => runLife({ seconds: 36, keys: PLAN[o.speed], sceneSeconds: 30 * SPEED_OF[o.speed], ...o });
+// DRIFT-12: five of the six sizes (10x4, 13x4, 15x5, 20x6, 25x5) are below Classic's 40x10 minimum, where Classic shows the size card and Life never runs: a run there is a run of the CARD
+// (go() says so to runLife; whole() asserts the card run: static, the five rules, no dissolve ever reached). Only 80x24 still runs Life; the low-frame-rate cap on the small boards is pinned on the
+// composer directly by tests/life-frame-cap.test.js (and its must-fail controls are in tests/life-flash-controls.test.js, see mutantOnCard there).
+const go = (o) => runLife({ seconds: 36, keys: PLAN[o.speed], sceneSeconds: 30 * SPEED_OF[o.speed], ...o, card: isCardBoard(o.cols, o.rows) });
 function whole(r, label, o) {
+  if (r.card) { cardRun(r, o.cols, o.rows, label); return; }
   assert.ok(r.speedMax === SPEED_OF[o.speed], `${label}: the key presses reached ${SPEED_OF[o.speed]}x (top speed ${r.speedMax}x)`);
   assert.ok(r.frames >= 30 * o.fps - 2, `${label}: Life was on for its whole 30 real seconds (${r.frames} frames at ${o.fps} fps, ended at ${r.endedAt} s)`);
 }

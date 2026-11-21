@@ -11,13 +11,28 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createApp as realCreateApp } from '../src/app.js';
+import { createApp as realCreateApp, CLASSIC_MIN_COLS, CLASSIC_MIN_ROWS } from '../src/app.js';
 import { createScreen } from './helpers-ansi.js';
 import { createFlashMeter } from './helpers-flash.js';
 import { createClock } from './helpers-clock.js';
 import { fakeStdin, fakeStdout, fakeProc, fakeStderr } from './helpers.js';
 import { rgbOf } from './helpers-flash-app.js';
 import assert from 'node:assert/strict';
+import { expectedCardText } from './helpers-size-card.js';
+import { failedRules, X1_RULE_IDS } from './helpers-flash.js';
+
+// DRIFT-12: below 40x10 Classic shows the size card, never a scene (src/app.js CLASSIC_MIN_COLS x CLASSIC_MIN_ROWS). A run at such a size is a run of the CARD: runLife refuses it unless the
+// caller says `card: true` (so no test can pass on a board it believes is running Life), and then checks every frame it meters is the card. `cardRun` is what a test asserts of one.
+export const isCardBoard = (cols, rows) => cols < CLASSIC_MIN_COLS || rows < CLASSIC_MIN_ROWS;
+export function cardRun(r, cols, rows, label) {
+  assert.equal(r.card, true, `${label}: a run of the size card`);
+  assert.equal(r.endedAt, null, `${label}: the scene clock stands still under the card, so the scheduler never reaches the dissolve`);
+  assert.ok(r.frames > 0, `${label}: frames were metered`);
+  assert.deepEqual(failedRules(r.rep, { only: X1_RULE_IDS }), [], `${label}: the five rules pass on the card`);
+  const ch = (id) => r.rep[id.split('.')[0]][id.split('.')[1] || 'x1'];
+  for (const id of ['l1.x1', 'l2.x1']) assert.equal(ch(id).worstFraction, 0, `${label}: a static card does not change (${id})`);
+  assert.equal(r.rep.l3.worstFraction, 0, `${label}: a static card does not change (l3)`);
+}
 
 export const LIFE_FPS = 18;
 export const LIFE_SECONDS_FRAMES = 30 * LIFE_FPS; // a whole 30 s scene read at 18 fps, 1x
@@ -51,8 +66,10 @@ export async function movingFrames(speed, o = {}) {
 // `grab(k, screen, app)` is called on every frame the meter reads, for the look tests (lit counts, glyphs). `forceDead(app)` is not offered: quiet states use the scene directly.
 export async function runLife({
   cols = 80, rows = 24, mode = '256', seed = 1, seconds = 32, keys = [], clock = 'grid', clockSeed = 1, root = null, fps = LIFE_FPS,
-  sceneSeconds = 30, invert = false, grab = null, startMode = 'contrast', stopAtDissolve = true, feedAll = false, scene = 'life', startScene = 0,
+  sceneSeconds = 30, invert = false, grab = null, startMode = 'contrast', stopAtDissolve = true, feedAll = false, scene = 'life', startScene = 0, card = false,
 } = {}) {
+  const tiny = isCardBoard(cols, rows);
+  if (tiny && !card) throw new Error(`runLife: ${cols}x${rows} is below Classic's 40x10 minimum, where Classic shows the size card and no scene (DRIFT-12); pass card: true to run the card knowingly`);
   const createApp = root ? (await import(pathToFileURL(path.join(root, 'src', 'app.js')).href)).createApp : realCreateApp;
   const useClock = clock && clock !== 'tick';
   const c = useClock ? createClock({ mode: clock, seed: clockSeed }) : null;
@@ -81,6 +98,7 @@ export async function runLife({
       if (c) c.advanceTo(((k + 1) * 1000) / fps); else app.tick(1 / fps);
       for (const w of stdout.writes.splice(0)) screen.feed(w);
       if (k % 8 === 0) await new Promise((r) => setImmediate(r));
+      if (tiny && screen.text() !== expectedCardText(cols, rows)) throw new Error(`runLife ${cols}x${rows} frame ${k}: the screen is not the size card`);
       const st = app.getState();
       speedMax = Math.max(speedMax, st.speed);
       ids.push(st.fading ? 'fading' : st.sceneId);
@@ -91,7 +109,7 @@ export async function runLife({
       frames++;
       if (grab) grab(k, screen, app, f);
     }
-    return { rep: meter.report(), frames, endedAt, ids, speedMax, state: app.getState(), exits: proc.exits.slice() };
+    return { rep: meter.report(), frames, endedAt, ids, speedMax, card: tiny, state: app.getState(), exits: proc.exits.slice() };
   } finally {
     try { proc.emit('exit'); } catch { /* ignore */ }
     fs.rmSync(tmp, { recursive: true, force: true });

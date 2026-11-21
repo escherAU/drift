@@ -49,6 +49,25 @@ async function mutant(name, { life = 'new', edits = {}, scenes = {} }, scene, o,
   } finally { rmTree(root); }
 }
 
+// DRIFT-12: the small boards these controls used (10x4 to 25x5, and 20x6) are below Classic's 40x10 minimum, where Classic shows the size card and neither scene runs (go() tells runLife, and
+// whole() asserts the card run). Measured over seeds 1 to 8 at 40x10 and 41x11 (grid at 8 and 18 fps, q156 at 10 and 12 fps): the per-frame cap removed, the cap and the share removed, and
+// (blocktype, 4x, q156) realClock removed ALL pass the five rules, so no art size is left where those mutants fail; the old looks, the beat, the gap, the wave, the scroll and realClock on
+// wire still fail at 40x10 and above. So the controls that needed a small board now assert what is true (mutantOnCard): the mutant shows the card at the old boards, passes at 40x10; the caps
+// are pinned on the composer by tests/life-frame-cap.test.js and the scenes' own tests.
+async function mutantOnCard(name, mk, scene, boards, art) {
+  const root = mk();
+  try {
+    for (const o of boards) {
+      const oo = { ...o, seed: 1, clockSeed: 1, root };
+      const r = await go(scene, oo);
+      whole(r, `${name} ${scene} ${JSON.stringify(o)}`, oo);
+      assert.equal(r.card, true, `${name}: ${JSON.stringify(o)} is the size card`);
+    }
+    const ok = await over(scene, art, SEEDS, root);
+    assert.deepEqual(ok.ids, [], `${name} ${scene}: the mutant passes at ${JSON.stringify(art)} (${JSON.stringify(ok.worst)})`);
+  } finally { rmTree(root); }
+}
+
 // ---- (1) the old looks
 const OLD = { wire: 'old', blocktype: 'old' };
 const OLD_ARMS = [
@@ -78,14 +97,14 @@ test('DRIFT-11 the old wire and blocktype (7c2f34c) fail the five rules in the r
   } finally { rmTree(root); }
 });
 
-test('DRIFT-11 the old wire and blocktype also fail on the small boards at --fps 8 (the shipped ones pass the same arm: tests/wire-flash-fps.test.js, blocktype-flash-fps.test.js)', async () => {
+test('DRIFT-11 the old wire and blocktype also fail on the small boards at --fps 8 (DRIFT-12: the smallest board Classic shows, 40x10, since 20x6 is the size card now; the shipped ones pass the same arm: tests/wire-flash-fps.test.js, blocktype-flash-fps.test.js)', async () => {
   const root = makeTree('new', {}, OLD);
   try {
     for (const scene of ['wire', 'blocktype']) {
-      const bad = await over(scene, { cols: 20, rows: 6, mode: '256', clock: 'grid', fps: 8 }, [1, 2, 3], root);
-      assert.ok(bad.ids.includes('l2.x1'), `old ${scene} 20x6 fps 8: ${JSON.stringify(bad)}`);
-      const good = await over(scene, { cols: 20, rows: 6, mode: '256', clock: 'grid', fps: 8 }, [1, 2, 3], null);
-      assert.deepEqual(good.ids, [], `shipped ${scene} 20x6 fps 8: ${JSON.stringify(good.worst)}`);
+      const bad = await over(scene, { cols: 40, rows: 10, mode: '256', clock: 'grid', fps: 8 }, [1, 2, 3], root);
+      assert.ok(bad.ids.includes('l2.x1'), `old ${scene} 40x10 fps 8: ${JSON.stringify(bad)}`);
+      const good = await over(scene, { cols: 40, rows: 10, mode: '256', clock: 'grid', fps: 8 }, [1, 2, 3], null);
+      assert.deepEqual(good.ids, [], `shipped ${scene} 40x10 fps 8: ${JSON.stringify(good.worst)}`);
     }
   } finally { rmTree(root); }
 });
@@ -104,24 +123,19 @@ test('DRIFT-11 wire pair: either limit alone holds L1 and L2 (the gap with the b
   for (const [name, edits, scenes] of [['beat removed, gap 18', {}, BEAT_3], ['gap removed, beat 18', GAP(0), {}]]) {
     const root = makeTree('new', edits, scenes);
     try {
-      for (const o of [W, { ...W, speed: '4x' }, { cols: 20, rows: 6, mode: '256', clock: 'q156', fps: 12 }]) {
+      for (const o of [W, { ...W, speed: '4x' }, { cols: 40, rows: 10, mode: '256', clock: 'q156', fps: 12 }]) {
         const r = await over('wire', o, [1, 2, 3, 4], root);
         assert.deepEqual(r.ids, [], `${name} ${JSON.stringify(o)}: ${JSON.stringify(r.worst)}`);
       }
     } finally { rmTree(root); }
   }
 });
-test('DRIFT-11 wire mutant: the per-frame cap removed reads L3 over the limit at --fps 8 to 12 on small boards on q156 and the grid (the per-step share alone lets a pose change through in one painted frame)', async () => {
-  for (const [o, seeds] of [[{ cols: 10, rows: 4, mode: '256', clock: 'q156', fps: 10 }, SEEDS], [{ cols: 15, rows: 5, mode: '256', clock: 'grid', fps: 8 }, SEEDS], [{ cols: 13, rows: 4, mode: '256', clock: 'q156', fps: 10 }, SEEDS]]) {
-    const bad = await mutant('no frame cap', { edits: NO_CAP }, 'wire', o, seeds, ['l3']);
-    assert.ok(bad.worst.l3 > 30, `${JSON.stringify(o)}: L3 ${pc(bad.worst.l3)}`);
-  }
+test('DRIFT-12 wire mutant: the per-frame cap removed used to read L3 over the limit at --fps 8 to 12 on small boards; those boards are the size card now, so it cannot fail through the app and passes at 40x10', async () => {
+  await mutantOnCard('no frame cap', () => makeTree('new', NO_CAP), 'wire', [{ cols: 10, rows: 4, clock: 'q156', fps: 10 }, { cols: 15, rows: 5, clock: 'grid', fps: 8 }, { cols: 13, rows: 4, clock: 'q156', fps: 10 }], { cols: 40, rows: 10, mode: '256', clock: 'q156', fps: 10 });
 });
-test('DRIFT-11 wire mutant: the share and the cap both removed (a whole change in one step) reads L3 over the limit on small boards even at --fps 18 on the grid', async () => {
-  for (const o of [{ cols: 20, rows: 6, mode: '256', clock: 'grid', fps: 18 }, { cols: 10, rows: 4, mode: '256', clock: 'grid', fps: 8 }]) {
-    const bad = await mutant('no limits', { edits: NO_LIMITS }, 'wire', o, SEEDS, ['l3']);
-    assert.ok(bad.worst.l3 > 30, `${JSON.stringify(o)}: L3 ${pc(bad.worst.l3)}`);
-  }
+test('DRIFT-12 wire mutant: the share and the cap both removed used to read L3 over the limit on small boards; those boards are the size card now (unreachable) and the mutant passes at 40x10 at 8 and 18 fps', async () => {
+  await mutantOnCard('no limits', () => makeTree('new', NO_LIMITS), 'wire', [{ cols: 20, rows: 6, clock: 'grid', fps: 18 }, { cols: 10, rows: 4, clock: 'grid', fps: 8 }], { cols: 40, rows: 10, mode: '256', clock: 'grid', fps: 8 });
+  await mutantOnCard('no limits', () => makeTree('new', NO_LIMITS), 'wire', [], { cols: 40, rows: 10, mode: '256', clock: 'grid', fps: 18 });
 });
 test('DRIFT-11 wire mutant: realClock removed, so the speed keys turn the shape and its beat faster: L2 over the limit at 2x and 4x; the pair at 1x (the same tree) passes', async () => {
   const root = makeTree('new', {}, NO_REALCLOCK('wire'));
@@ -137,39 +151,28 @@ test('DRIFT-11 wire mutant: realClock removed, so the speed keys turn the shape 
 
 // ---- (2) blocktype: its pictures, the per-frame limits and the clock
 const B = { cols: 80, rows: 24, mode: '256', clock: 'grid' };
-test('DRIFT-11 blocktype mutant: the wave ripples with the front again (a column changes with every step of the ripple, as the old wave did) reads L2 over the limit at 80x24, 120x40 and 20x6', async () => {
+test('DRIFT-11 blocktype mutant: the wave ripples with the front again (a column changes with every step of the ripple, as the old wave did) reads L2 over the limit at 80x24, 120x40 and 40x10 (20x6 until DRIFT-12: it is the size card now)', async () => {
   const scenes = { blocktype: (t) => at(t, 'Math.round(amp * Math.sin(x * 0.55))', 'Math.round(amp * Math.sin((x - front) * 0.55))') };
-  for (const o of [B, { ...B, cols: 120, rows: 40 }, { ...B, cols: 20, rows: 6 }]) {
+  for (const o of [B, { ...B, cols: 120, rows: 40 }, { ...B, cols: 40, rows: 10 }]) {
     const bad = await mutant('wave moves', { scenes }, 'blocktype', o, [1, 2, 3], ['l2.x1']);
     assert.ok(bad.worst.l2 > 25, `${JSON.stringify(o)}: L2 ${pc(bad.worst.l2)}`);
   }
 });
-test('DRIFT-11 blocktype mutant: the scroll slides smoothly again (every pixel of the letters\' travel is a change) reads L2 over the limit at 80x24, 120x40 and 20x6', async () => {
+test('DRIFT-11 blocktype mutant: the scroll slides smoothly again (every pixel of the letters\' travel is a change) reads L2 over the limit at 80x24, 120x40 and 40x10 (20x6 until DRIFT-12: it is the size card now)', async () => {
   const scenes = { blocktype: (t) => at(at(t, 'dy: -half }', 'dy: -Math.round(travel * e) }'), 'dy: travel - half }', 'dy: Math.round(travel * (1 - e)) }') };
-  for (const o of [B, { ...B, cols: 120, rows: 40 }, { ...B, cols: 20, rows: 6 }]) {
+  for (const o of [B, { ...B, cols: 120, rows: 40 }, { ...B, cols: 40, rows: 10 }]) {
     const bad = await mutant('scroll slides', { scenes }, 'blocktype', o, [1, 2, 3], ['l2.x1']);
     assert.ok(bad.worst.l2 > 25, `${JSON.stringify(o)}: L2 ${pc(bad.worst.l2)}`);
   }
 });
-test('DRIFT-11 blocktype mutant: the per-frame cap removed reads L3 over the limit on a 13x4 board at --fps 12 on q156', async () => {
-  const bad = await mutant('no frame cap', { edits: NO_CAP }, 'blocktype', { cols: 13, rows: 4, mode: '256', clock: 'q156', fps: 12 }, SEEDS, ['l3']);
-  assert.ok(bad.worst.l3 > 30, `L3 ${pc(bad.worst.l3)}`);
+test('DRIFT-12 blocktype mutant: the per-frame cap removed used to read L3 over the limit on a 13x4 board at --fps 12 on q156; that board is the size card now (unreachable) and the mutant passes at 40x10', async () => {
+  await mutantOnCard('no frame cap', () => makeTree('new', NO_CAP), 'blocktype', [{ cols: 13, rows: 4, clock: 'q156', fps: 12 }], { cols: 40, rows: 10, mode: '256', clock: 'q156', fps: 12 });
 });
-test('DRIFT-11 blocktype mutant: the share and the cap both removed reads L3 over the limit on small boards', async () => {
-  let any = false;
-  for (const o of [{ cols: 10, rows: 4, mode: '256', clock: 'grid', fps: 8 }, { cols: 20, rows: 6, mode: '256', clock: 'grid', fps: 8 }, { cols: 13, rows: 4, mode: '256', clock: 'q156', fps: 12 }]) {
-    const root = makeTree('new', NO_LIMITS);
-    try {
-      const bad = await over('blocktype', o, SEEDS, root);
-      if (bad.ids.includes('l3')) any = true;
-    } finally { rmTree(root); }
-  }
-  assert.ok(any, 'the unlimited follower reads L3 over 30 % on at least one of the small-board arms');
+test('DRIFT-12 blocktype mutant: the share and the cap both removed used to read L3 over the limit on small boards; those boards are the size card now (unreachable) and the mutant passes at 40x10', async () => {
+  await mutantOnCard('no limits', () => makeTree('new', NO_LIMITS), 'blocktype', [{ cols: 10, rows: 4, clock: 'grid', fps: 8 }, { cols: 20, rows: 6, clock: 'grid', fps: 8 }, { cols: 13, rows: 4, clock: 'q156', fps: 12 }], { cols: 40, rows: 10, mode: '256', clock: 'grid', fps: 8 });
 });
-test('DRIFT-11 blocktype mutant: realClock removed reads L3 over the limit at 4x on a 10x4 board on q156 at --fps 18 (80x24 still passes: the clock is not what holds L2 here)', async () => {
-  const o = { cols: 10, rows: 4, mode: '256', clock: 'q156', fps: 18, speed: '4x' };
-  const bad = await mutant('no realClock', { scenes: NO_REALCLOCK('blocktype') }, 'blocktype', o, SEEDS, ['l3']);
-  assert.ok(bad.worst.l3 > 30, `L3 ${pc(bad.worst.l3)}`);
+test('DRIFT-12 blocktype mutant: realClock removed used to read L3 over the limit at 4x on a 10x4 board on q156 at --fps 18; that board is the size card now (unreachable); at 40x10 and at 80x24 the mutant passes', async () => {
+  await mutantOnCard('no realClock', () => makeTree('new', {}, NO_REALCLOCK('blocktype')), 'blocktype', [{ cols: 10, rows: 4, clock: 'q156', fps: 18, speed: '4x' }], { cols: 40, rows: 10, mode: '256', clock: 'q156', fps: 18, speed: '4x' });
   const root = makeTree('new', {}, NO_REALCLOCK('blocktype'));
   try {
     const big = await over('blocktype', { ...B, speed: '4x' }, [1, 2, 3], root);

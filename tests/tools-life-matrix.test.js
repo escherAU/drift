@@ -78,22 +78,23 @@ test('DRIFT-11 life-matrix --whole-cycle: the shipped cycle (Life, tunnel, wire,
   assert.match(old.stdout.trim(), /^before11 cycle +grid .* L1 +43\.52 L2 +99\.54 .*FAIL l1\.x1 l2\.x1$/);
 });
 
-test('DRIFT-11 life-matrix --fps takes a list: one line per fps, the rate in the line, and the smallest boards at --fps 8 pass for both scenes', () => {
+test('DRIFT-11 life-matrix --fps takes a list: one line per fps, the rate in the line, and the smallest boards at --fps 8 pass for both scenes (DRIFT-12: they are the size card there, and the tool says so)', () => {
   for (const scene of ['wire', 'blocktype']) {
     const r = run('--scene', scene, '--seeds', '1,2', '--clocks', 'q156', '--modes', '256', '--speeds', '1x', '--sizes', '10x4,25x5', '--fps', '8,12', '--summary-only');
     assert.equal(r.status, 0, r.stdout);
     const lines = r.stdout.trim().split('\n');
     assert.equal(lines.length, 4, 'two fps x two sizes');
+    assert.match(r.stderr, /10x4 is below Classic's 40x10 minimum/);
     assert.deepEqual(lines.map((l) => /fps +(\d+)/.exec(l)[1]), ['8', '8', '12', '12']);
   }
 });
 
-test('DRIFT-11 life-matrix: the cycle is NOT clean on the smallest boards, and the cause is not the DRIFT-11 scenes: tunnel and maze alone read L2 over the limit at 10x4 on the grid (pinned: the README says so)', () => {
-  const t = worst('tunnel', { sizes: '10x4' }), m = worst('maze', { sizes: '10x4' });
-  assert.equal(t.status, 1, t.line);
-  assert.ok(t.l2 > 25, t.line);
-  assert.equal(m.status, 1, m.line);
-  assert.ok(m.l2 > 25, m.line);
-  for (const scene of ['wire', 'blocktype', 'life']) assert.equal(worst(scene, { sizes: '10x4' }).status, 0, scene);
-  console.log('NOT COVERED (pinned): ' + [t, m].map((x) => x.line.replace(/ +/g, ' ')).join(' || '));
+test('DRIFT-12 life-matrix: the boards below 40x10 are not reachable: Classic shows the size card there, every scene reads 0 on every rule at 10x4 (the tunnel and maze L2 readings of 37.50 and 50.00 per cent the README used to cite are history), and the tool says so', () => {
+  for (const scene of ['wire', 'blocktype', 'life', 'tunnel', 'maze']) {
+    const w = worst(scene, { sizes: '10x4' });
+    assert.equal(w.status, 0, w.line);
+    assert.equal(w.l1 + w.l2 + w.l3, 0, `${scene}: a static card does not change: ${w.line}`);
+  }
+  const r = run('--scene', 'tunnel', '--seeds', '1', '--clocks', 'grid', '--modes', '256', '--speeds', '1x', '--sizes', '10x4', '--summary-only');
+  assert.match(r.stderr, /note: 10x4 is below Classic's 40x10 minimum: Classic shows the size card there/);
 });

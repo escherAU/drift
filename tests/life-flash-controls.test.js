@@ -8,9 +8,10 @@
 //   first fix       src/scenes/life.js as it was at 33f8142 (tests/fixtures/life-before-fps-fix.js: the flip gap and a share per STEP, nothing per painted frame): fails L3 at the low frame rates on
 //                   small boards (tests/life-flash-fps.test.js's runs)
 // A passing control prints its numbers only after the assertion that it fails has passed.
+// DRIFT-12: the three controls that needed boards below 40x10 (both share limits out, the first fix, no per-frame cap) now find the size card there; see mutantOnCard.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runLife, movingFrames, makeTree, rmTree, nums, PLAN, SPEED_OF } from './helpers-life-app.js';
+import { runLife, movingFrames, makeTree, rmTree, nums, PLAN, SPEED_OF, isCardBoard, cardRun } from './helpers-life-app.js';
 import { failedRules, X1_RULE_IDS } from './helpers-flash.js';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -94,50 +95,50 @@ test('DRIFT-10 control: the speed lever removed from the app (the real-time cloc
   assert.equal(failed.length, 3);
 });
 
-test('DRIFT-10 control: both share limits taken out (per step and per painted frame): a reseed on a 20x6 board moves more than 30 % of the screen in one frame (L3)', async () => {
-  // the per-frame cap alone (FRAME_SHARE 0.15 over the frame's steps) also holds this 18 fps case, so both go
-  const noShare = (t) => t.replace('const FLIP_SHARE = 0.08;', 'const FLIP_SHARE = 1;').replace('const FRAME_SHARE = 0.15;', 'const FRAME_SHARE = 1;');
-  const failed = await mutantFails('FLIP_SHARE 1 and FRAME_SHARE 1', noShare, {}, SEEDS.map((seed) => ({ seed, clock: 'grid', cols: 20, rows: 6 })));
-  assert.ok(failed.some((f) => f.b.includes('l3')), 'L3 is the rule that fails');
-  // and the real one passes the same runs
+// DRIFT-12: the boards these three controls needed (20x6 and the 10x4 to 25x5 boards of the low frame rates) are below Classic's 40x10 minimum, where Classic shows the size card and Life never runs.
+// The mutants cannot fail through the app any more: measured over seeds 1 to 8 (256 colours, grid at 18 and 8 fps, q156 at 10, 12 and 15 fps) at 40x10 and 41x11, the first fix, the
+// no-per-frame-cap mutant and the no-share-limits mutant each pass every run (0 of 8 seeds fail), so there is no art size left where they fail. What is asserted now: each mutant shows the
+// card at the old boards and passes the five rules there (so the controls say what is true: unreachable, not "still failing"), and passes at 40x10; the caps themselves are pinned on the
+// composer directly by tests/life-frame-cap.test.js, which is where their must-fail evidence lives now.
+async function mutantOnCard(label, root, cases) {
+  for (const c of cases) {
+    assert.equal(isCardBoard(c.cols, c.rows), true, `${label}: ${c.cols}x${c.rows} is below the minimum`);
+    const r = await go(root, { ...c, seed: 2, clockSeed: 2, card: true });
+    cardRun(r, c.cols, c.rows, `${label} ${JSON.stringify(c)}`);
+  }
   for (const seed of SEEDS) {
-    const r = await runLife({ cols: 20, rows: 6, seed, mode: '256', clock: 'grid', seconds: 32 });
-    assert.deepEqual(bad(r.rep), [], `the real Life, 20x6 seed ${seed}: ${fmt(r.rep)}`);
+    const r = await go(root, { cols: 40, rows: 10, seed, clock: 'grid' });
+    assert.deepEqual(bad(r.rep), [], `${label}: 40x10 seed ${seed} passes (${fmt(r.rep)})`);
+  }
+}
+
+test('DRIFT-12 control: both share limits taken out: a 20x6 board is the size card now (unreachable, not failing), and 40x10 passes', async () => {
+  const noShare = (t) => t.replace('const FLIP_SHARE = 0.08;', 'const FLIP_SHARE = 1;').replace('const FRAME_SHARE = 0.15;', 'const FRAME_SHARE = 1;');
+  const root = makeTree(noShare);
+  try { await mutantOnCard('no share limits', root, [{ cols: 20, rows: 6, clock: 'grid' }]); } finally { rmTree(root); }
+  // and the real one: the card at 20x6 too
+  for (const seed of SEEDS) {
+    const r = await runLife({ cols: 20, rows: 6, seed, mode: '256', clock: 'grid', seconds: 32, card: true });
+    cardRun(r, 20, 6, `the real Life, 20x6 seed ${seed}`);
   }
 });
 
 // ---- the first DRIFT-10 fix (33f8142: flip gap + a share per STEP, nothing per painted frame) against tests/life-flash-fps.test.js's runs
-// Measured on 33f8142 (worst of seeds 1 to 8, 256 colours): fps 8 grid 13x4 30.77, 15x5 32.00, 25x5 32.00; fps 10 q156 10x4 45.00, 20x6 45.00; fps 12 q156 10x4 37.50; fps 15 q156 15x5 32.00.
+// Measured on 33f8142 BEFORE DRIFT-12 (worst of seeds 1 to 8, 256 colours): fps 8 grid 13x4 30.77, 15x5 32.00, 25x5 32.00; fps 10 q156 10x4 45.00, 20x6 45.00; fps 12 q156 10x4 37.50; fps 15 q156 15x5 32.00.
+// These boards are below Classic's minimum now (see mutantOnCard above); the list is the boards the controls used to run.
 const V1_FAILS = [
   { clock: 'grid', fps: 8, cols: 13, rows: 4 }, { clock: 'grid', fps: 8, cols: 15, rows: 5 }, { clock: 'grid', fps: 8, cols: 25, rows: 5 },
   { clock: 'q156', fps: 10, cols: 10, rows: 4 }, { clock: 'q156', fps: 10, cols: 20, rows: 6 }, { clock: 'q156', fps: 12, cols: 10, rows: 4 }, { clock: 'q156', fps: 15, cols: 15, rows: 5 },
 ];
-test('DRIFT-10 control: the first fix (a share per step only, 33f8142) fails L3 at the low frame rates on small boards: grid --fps 8, q156 --fps 10, 12 and 15', async () => {
+test('DRIFT-12 control: the first fix (a share per step only, 33f8142) failed L3 on the low-frame-rate small boards; those boards are the size card now (unreachable, not failing), and 40x10 passes', async () => {
   const root = makeTree('v1');
-  try {
-    const out = [];
-    for (const c of V1_FAILS) {
-      const failed = [];
-      for (const seed of SEEDS) {
-        const r = await go(root, { ...c, seed, clockSeed: seed });
-        if (bad(r.rep).length) { assert.ok(bad(r.rep).includes('l3'), `${JSON.stringify(c)} seed ${seed}: L3 is the rule that fails (${bad(r.rep)})`); failed.push(seed); }
-      }
-      assert.ok(failed.length >= 1, `the first fix fails ${JSON.stringify(c)} on some seed of 1 to 8`);
-      out.push(`${c.clock} fps ${c.fps} ${c.cols}x${c.rows} [${failed}]`);
-    }
-    console.log(`CONTROL first fix (33f8142) fails L3 on seeds: ${out.join('; ')}`);
-  } finally { rmTree(root); }
+  try { await mutantOnCard('first fix 33f8142', root, V1_FAILS); } finally { rmTree(root); }
 });
 
-test('DRIFT-10 control: the per-frame cap taken out of this Life (the count of steps ignored, so only the per-step share is left): fails L3 at the low frame rates', async () => {
+test('DRIFT-12 control: the per-frame cap taken out: the same small boards are the size card now (unreachable, not failing), and 40x10 passes', async () => {
   const noFrame = (t) => t.replace('FRAME_SHARE / Math.max(1, n)', '1');
   const root = makeTree(noFrame);
-  try {
-    let failing = 0;
-    for (const c of V1_FAILS) for (const seed of SEEDS) { const r = await go(root, { ...c, seed, clockSeed: seed }); if (bad(r.rep).includes('l3')) { failing++; break; } }
-    assert.equal(failing, V1_FAILS.length, 'every listed case fails without the cap');
-    console.log(`CONTROL mutant no frame cap: ${failing} of ${V1_FAILS.length} cases fail L3`);
-  } finally { rmTree(root); }
+  try { await mutantOnCard('no per-frame cap', root, V1_FAILS); } finally { rmTree(root); }
 });
 
 test('DRIFT-10 control: the min(speed, 1) taken out of the app (the real-time clock at full pace whatever the speed): 0.5x and 0.25x move as often as 1x, so the slower-speeds pin fails', async () => {

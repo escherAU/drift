@@ -10,7 +10,7 @@
 //   blocktype   five words and five transitions in a row: wipe (4.2 to 6 s), scroll (10.2 to 12 s), wave (16.2 to 18 s), wipe (22.2 to 24 s), scroll (28.2 to 30 s), each after a hold of
 //               4.2 s (SLOT_SECONDS 6, TRANSITION_SECONDS 1.8); every kind, three slots in a row at least, and five words of the seed's order
 import assert from 'node:assert/strict';
-import { runLife, PLAN, SPEED_OF } from './helpers-life-app.js';
+import { runLife, PLAN, SPEED_OF, isCardBoard, cardRun } from './helpers-life-app.js';
 import { failedRules, ruleOf, X1_RULE_IDS } from './helpers-flash.js';
 import { PHASE_SECONDS } from '../src/scenes/wire.js';
 import { SLOT_SECONDS, TRANSITION_SECONDS } from '../src/scenes/blocktype.js';
@@ -19,7 +19,9 @@ export const SCENES = ['wire', 'blocktype'];
 export const SCENE_INDEX = { wire: 2, blocktype: 4 }; // the contrast playlist in src/scenes/index.js: life, tunnel, wire, maze, blocktype
 export const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 export const MODES = ['truecolor', '256'];
-export const SMALL = [[10, 4], [13, 4], [15, 5], [20, 6], [25, 5]]; // the small boards (40 to 125 cells)
+// the small boards (40 to 125 cells). DRIFT-12: all of them are below Classic's 40x10 minimum, where Classic shows the size card and neither scene runs: a run at one of these sizes is a run of
+// the CARD (go() says so to runLife, and whole() then asserts the card run instead of a whole 30 s scene), so every test that loops over SMALL still passes the five rules, on the card.
+export const SMALL = [[10, 4], [13, 4], [15, 5], [20, 6], [25, 5]];
 export const BREAKPOINTS = [[40, 10], [41, 11], [78, 24], [79, 25], [88, 39], [89, 40]]; // the shell's layout breakpoints (src/shell/ui.js 137-139) and one cell above each
 
 export const line = (rep) => X1_RULE_IDS.map((id) => `${id} ${(ruleOf(rep, id).worstFraction * 100).toFixed(2)}`).join(' ');
@@ -27,12 +29,13 @@ export const line = (rep) => X1_RULE_IDS.map((id) => `${id} ${(ruleOf(rep, id).w
 // One run: the scene for its whole 30 real seconds at `speed` ('1x', '2x', '4x': real `+` presses). o: { cols, rows, mode, seed, clock, clockSeed, fps, invert, root, ... } as runLife.
 export function go(scene, o = {}) {
   const speed = o.speed || '1x';
-  return runLife({ seconds: 36, keys: PLAN[speed], sceneSeconds: 30 * SPEED_OF[speed], ...o, scene, startScene: SCENE_INDEX[scene] });
+  return runLife({ seconds: 36, keys: PLAN[speed], sceneSeconds: 30 * SPEED_OF[speed], ...o, scene, startScene: SCENE_INDEX[scene], card: isCardBoard(o.cols ?? 80, o.rows ?? 24) });
 }
 
 // the run held the scene for its whole 30 real seconds (a clock whose timer fires late may start the dissolve a frame early; the `+` presses come in the second second, at 1x, so a run at 2x or 4x
 // holds the scene up to a second longer, which is why the upper bound is 32 s) at the speed the key presses reached
 export function whole(r, label, o = {}) {
+  if (r.card) { cardRun(r, o.cols ?? 80, o.rows ?? 24, label); return; } // below 40x10: the size card, static, never the scene (DRIFT-12)
   const speed = o.speed || '1x', fps = o.fps || 18;
   assert.equal(r.speedMax, SPEED_OF[speed], `${label}: the key presses reached ${SPEED_OF[speed]}x (the app's top speed was ${r.speedMax}x)`);
   assert.ok(r.frames >= 30 * fps - 2 && r.frames <= 32 * fps, `${label}: the whole 30 s scene was metered (${r.frames} frames at ${fps} fps, ended at ${r.endedAt} s)`);

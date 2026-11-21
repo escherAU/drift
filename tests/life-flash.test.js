@@ -8,8 +8,8 @@
 //                 reads them back, which is what the flash-256-* files' reducer emulates for the shell), sizes 80x24, 120x40 and the sizes at and just above each layout breakpoint
 //                 of the shell (src/shell/ui.js lines 137-139: 'list' from 40x10, 'compact' from 78x24, 'full' from 88x39): 40x10, 41x11, 78x24, 79x25, 88x39, 89x40.
 //                 Life itself reads none of those breakpoints (it draws its whole grid); the number of patterns it seeds steps with the area (patternCount in src/scenes/life.js:
-//                 area / 2200, rounded), which these sizes cross as well. 20x6 and 10x4 are far below the smallest layout: there a reseed alone would change more than 30 % of the screen in
-//                 one frame (L3) without the share limits in src/scenes/life.js (per step and per painted frame), which tests/life-flash-controls.test.js takes out. The low frame rates are tests/life-flash-fps.test.js.
+//                 area / 2200, rounded), which these sizes cross as well. 20x6 and 10x4 are far below the smallest layout and, since DRIFT-12, below Classic's 40x10 minimum: Classic shows the size card there (runs of the card, asserted as such
+//                 below). Before that a reseed alone would have changed more than 30 % of the screen in one frame (L3) without the share limits in src/scenes/life.js (per step and per painted frame). The low frame rates are tests/life-flash-fps.test.js.
 //   inverted arm 80x24 and 120x40, seeds 1 to 8, both colour modes, with the config's invert on (what the `i` key leaves).
 //   rate arm      `--fps` 8, 12, 24 and 30 on the exact clock (256 colours, 80x24, seeds 2, 4, 8), the meter reading at that rate.
 //   clock arms    q156 and jitter (the clock seed is the app seed), 1x, 256 colours at 80x24 on seeds 1, 2, 3, 4, 8 (the seeds the old Life failed worst on) and truecolor at 120x40 on seed 2,
@@ -17,23 +17,40 @@
 // Speeds above 1x are tests/life-flash-speed.test.js; the old Life failing all of this, and the mutants of the fix, are tests/life-flash-controls.test.js.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runLife, LIFE_SECONDS_FRAMES, wholeScene } from './helpers-life-app.js';
+import { runLife, LIFE_SECONDS_FRAMES, wholeScene, isCardBoard, cardRun } from './helpers-life-app.js';
 import { failedRules, ruleOf, X1_RULE_IDS } from './helpers-flash.js';
 import { clockArm, assertArmCost, judgeX1 } from './helpers-clock-arms.js';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
-const SIZES = [[80, 24], [120, 40], [40, 10], [41, 11], [78, 24], [79, 25], [88, 39], [89, 40], [20, 6], [10, 4]];
+const SIZES = [[80, 24], [120, 40], [40, 10], [41, 11], [78, 24], [79, 25], [88, 39], [89, 40]];
+// DRIFT-12: 20x6 and 10x4 are below Classic's 40x10 minimum: Classic shows the size card there and Life never runs (the share limits those boards needed are pinned on the composer
+// directly by tests/life-frame-cap.test.js). The two sizes stay in this file as what they now are: runs of the card, which must pass the five rules and must not move.
+const CARD_SIZES = [[20, 6], [10, 4]];
 const MODES = ['truecolor', '256'];
 
 const line = (rep) => X1_RULE_IDS.map((id) => `${id} ${(ruleOf(rep, id).worstFraction * 100).toFixed(2)}`).join(' ');
 
 for (const [cols, rows] of SIZES) {
+  assert.equal(isCardBoard(cols, rows), false, `${cols}x${rows} is a size Life runs at`);
   for (const mode of MODES) {
     test(`DRIFT-10 life 1x grid, ${mode}, ${cols}x${rows}, seeds 1 to 8: the five rules pass over the whole 30 s scene`, async () => {
       for (const seed of SEEDS) {
         const r = await runLife({ cols, rows, mode, seed, clock: 'grid', seconds: 32 });
         wholeScene(r, `seed ${seed}`);
         assert.deepEqual(failedRules(r.rep, { only: X1_RULE_IDS }), [], `${mode} ${cols}x${rows} seed ${seed}: ${line(r.rep)}`);
+      }
+    });
+  }
+}
+
+for (const [cols, rows] of CARD_SIZES) {
+  for (const mode of MODES) {
+    test(`DRIFT-12 life 1x grid, ${mode}, ${cols}x${rows}, seeds 1 to 8: below 40x10 Classic shows the size card, never Life: the five rules pass and the screen does not change`, async () => {
+      assert.equal(isCardBoard(cols, rows), true);
+      for (const seed of SEEDS) {
+        const r = await runLife({ cols, rows, mode, seed, clock: 'grid', seconds: 32, card: true });
+        assert.equal(r.frames, 32 * 18, `seed ${seed}: all 32 s were the card (the clock never reached a dissolve)`);
+        cardRun(r, cols, rows, `${mode} ${cols}x${rows} seed ${seed}`);
       }
     });
   }

@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import life from '../src/scenes/life.js';
 import oldLife from './fixtures/life-before-drift10.js';
 import { createCellComposer } from '../src/cells.js';
-import { runLife, PLAN, SPEED_OF } from './helpers-life-app.js';
+import { runLife, PLAN, SPEED_OF, isCardBoard, cardRun } from './helpers-life-app.js';
 import { createFlashMeter, failedRules, ruleOf, X1_RULE_IDS } from './helpers-flash.js';
 
 const GLYPHS = new Set([32, 0x2580, 0x2584, 0x2588]);
@@ -183,11 +183,14 @@ test('DRIFT-10 quiet: empty and tiny grids do not throw and keep their history i
   }
 });
 
-test('DRIFT-10 quiet: the real app at 5x3 and 1x1 runs 20 s in contrast without exiting, at 1x and at 4x', async () => {
+// DRIFT-12: 5x3, 1x1 and 3x2 are below Classic's 40x10 minimum: the real app shows the size card there and Life never runs (the scene itself on every size from 0x0 up is the test above).
+test('DRIFT-10 quiet: the real app at 5x3, 1x1 and 3x2 runs 20 s in contrast without exiting, at 1x and at 4x (DRIFT-12: it is the size card there, static, and the five rules pass)', async () => {
   for (const [cols, rows] of [[5, 3], [1, 1], [3, 2]]) for (const speed of ['1x', '4x']) {
-    const r = await runLife({ cols, rows, seed: 2, mode: '256', seconds: 20, keys: PLAN[speed], sceneSeconds: 30 * SPEED_OF[speed] });
+    assert.equal(isCardBoard(cols, rows), true);
+    const r = await runLife({ cols, rows, seed: 2, mode: '256', seconds: 20, keys: PLAN[speed], sceneSeconds: 30 * SPEED_OF[speed], card: true });
     assert.deepEqual(r.exits, [], `${cols}x${rows} ${speed}: the app did not exit`);
     assert.ok(r.frames > 100, `${cols}x${rows} ${speed}: ${r.frames} frames`);
+    cardRun(r, cols, rows, `${cols}x${rows} ${speed}`);
   }
 });
 
@@ -225,6 +228,12 @@ test('DRIFT-10 quiet: real-app runs with a reseed in them pass the five rules at
     for (let i = 0; i < 900; i++) life.step(s);
     assert.ok(s.reseeds >= 1, `${cols}x${rows} seed ${seed}: the scene reseeds inside its 30 s`);
     for (const speed of ['1x', '4x']) {
+      // DRIFT-12: 20x6 is below Classic's 40x10 minimum: the app shows the size card there (the scene still reseeds, asserted above), so the run is the card
+      if (isCardBoard(cols, rows)) {
+        const r = await runLife({ cols, rows, seed, mode: '256', seconds: 36, keys: PLAN[speed], sceneSeconds: 30 * SPEED_OF[speed], card: true });
+        cardRun(r, cols, rows, `${cols}x${rows} seed ${seed} ${speed}`);
+        continue;
+      }
       const r = await runLife({ cols, rows, seed, mode: '256', seconds: 36, keys: PLAN[speed], sceneSeconds: 30 * SPEED_OF[speed] });
       assert.ok(r.frames >= 538, `${cols}x${rows} seed ${seed} ${speed}: whole scene`);
       assert.deepEqual(failedRules(r.rep, { only: X1_RULE_IDS }), [], `${cols}x${rows} seed ${seed} ${speed}: ${line(r.rep)}`);

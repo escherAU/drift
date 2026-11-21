@@ -11,8 +11,9 @@
 // --tree before runs a copy of src/ with the Life scene as it was at a8b63a3 (tests/fixtures/life-before-drift10.js); after (default) is this tree; a directory runs the src/ in it.
 // --tree before11 (DRIFT-11) runs a copy of src/ with the wire and blocktype scenes as they were at 7c2f34c (tests/fixtures/wire-before-drift11.js, blocktype-before-drift11.js) and everything else as shipped:
 // the control for --scene wire, --scene blocktype and --whole-cycle. --fps takes a list (8,10,12,...): one line per fps.
+// DRIFT-12: sizes below 40x10 are the size card (Classic's minimum window): the tool runs them as such and says so on stderr; the old small-board readings are not reachable.
 // A speed's runs hold the Life scene for 30 REAL seconds (the scheduler's scene length is 30 s of scene time, which runs `speed` times faster: sceneSeconds = 30 * speed).
-import { runLife, makeTree, rmTree, nums, PLAN, SPEED_OF } from '../tests/helpers-life-app.js';
+import { runLife, makeTree, rmTree, nums, PLAN, SPEED_OF, isCardBoard } from '../tests/helpers-life-app.js';
 import { failedRules, X1_RULE_IDS } from '../tests/helpers-flash.js';
 
 const argv = process.argv.slice(2);
@@ -36,8 +37,9 @@ try {
     const worst = { l1: 0, l2: 0, l3: 0, r: 0, c: 0, l1x4: 0, l2x4: 0 };
     const fails = new Set();
     const [cols, rows] = size.split('x').map(Number);
+    if (isCardBoard(cols, rows)) console.error(`note: ${size} is below Classic's 40x10 minimum: Classic shows the size card there, so these runs are the card (static, nothing to flash), not the scene`);
     for (const seed of seeds) {
-      const r = await runLife({ cols, rows, mode, seed, clock, clockSeed: seed, keys: PLAN[speed], seconds, sceneSeconds: 30 * SPEED_OF[speed], root, fps, scene, startScene: SCENE_INDEX[scene], invert, ...(whole ? { feedAll: true, stopAtDissolve: false } : {}) });
+      const r = await runLife({ cols, rows, mode, seed, clock, clockSeed: seed, keys: PLAN[speed], seconds, sceneSeconds: 30 * SPEED_OF[speed], root, fps, scene, startScene: SCENE_INDEX[scene], invert, card: isCardBoard(cols, rows), ...(whole ? { feedAll: true, stopAtDissolve: false } : {}) });
       const n = nums(r.rep), bad = failedRules(r.rep, { only: X1_RULE_IDS });
       n.l1x4 = r.rep.l1.x4.worstFraction * 100; n.l2x4 = r.rep.l2.x4.worstFraction * 100;
       for (const k of Object.keys(worst)) worst[k] = Math.max(worst[k], n[k]);
