@@ -164,6 +164,14 @@ export const MANIFEST = [
   ['wire-blocktype-flash-controls', 'wire mutant: the per-frame cap removed', 'control: mutant, no per-frame cap (wire)', 'grid, q156', C256, '10x4, 13x4, 15x5', '1x', '8, 10', '1-8'],
   ['wire-blocktype-flash-controls', 'blocktype mutant: the wave ripples with the front again', 'control: mutant, wave moves (blocktype)', 'grid', C256, '80x24, 120x40, 20x6', '1x', '18', '1-3'],
   ['wire-blocktype-flash-controls', 'mutant: the picture strobes', 'control: strobe mutant on both scenes must fail L1, L2, L3', 'grid', C256, '80x24', '1x', '18', '1'],
+  // DRIFT-12 part A: Classic's size card (below 40x10), the real app, resized across the threshold (helpers-size-card-flash.js: the window is a fixed canvas, a resize resets nothing)
+  ['classic-size-card-flash', '7a parked on the card, grid, contrast normal and inverted', 'the size card parked for 12 s, contrast normal and inverted', 'grid', BOTH, '39x10, 40x9, 10x4', '1x', '18', '1-3'],
+  ['classic-size-card-flash', '7a parked on the card, grid, calm, chaos and experimental', 'the size card parked for 12 s, calm, chaos and experimental', 'grid', BOTH, '39x10, 40x9', '1x', '18', '1'],
+  ['classic-size-card-flash', '7b crossing the threshold once, grid, contrast normal and inverted', 'art to card (3 s) to art, contrast normal and inverted', 'grid', BOTH, '40x10 to 39x10, 40x10 to 40x9', '1x', '18', '1-3'],
+  ['classic-size-card-flash', '7b crossing the threshold once, grid, calm, chaos and experimental', 'art to card (3 s) to art, calm, chaos, experimental (no worse than the art alone)', 'grid', BOTH, '40x10 to 39x10, 40x10 to 40x9', '1x', '18', '1-3'],
+  ['classic-size-card-flash', '7b2 one swap a second for 3 s', 'one resize a second across the threshold for 3 s, contrast normal and inverted', 'grid', BOTH, '40x10 to 39x10', '1x', '18', '1-3'],
+  ['classic-size-card-flash', '7 clock arm, q156 and jitter', 'clock arm: the card parked and one crossing, contrast', QJ, BOTH, '39x10, 40x10 to 39x10', '1x', '18', 'app seed 2 (clock seed = app seed)'],
+  ['classic-size-card-flash', '7c MEASURED: four swaps a second', 'MEASURED, NOT PASSED: four resizes a second across the threshold for 3 s fails L2 (pinned as failing)', 'grid', C256, '40x10 to 39x10', '1x', '18', '1-3'],
 ];
 
 const rd = (file) => fs.readFileSync(path.join(TESTS_DIR, `${file}.test.js`), 'utf8').split(/\r?\n/);

@@ -111,6 +111,7 @@ export async function startCard({
       feed();
     },
     key(k) { stdin.emit('data', k); feed(); },
+    flush: feed,
     // resize the terminal the way a window drag does; the reader starts afresh at the new size
     resize(cc, rr) {
       feed();
