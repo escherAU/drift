@@ -31,7 +31,7 @@ const A1 = D('42x12 grid 1x --fps 26 seed 6'), A2 = D('42x12 grid 1x --fps 27'),
 const MUT = {
   noWiring: { 'src/app.js': (t) => must(t, "const painted = shown.mode === 'contrast' ? govern(f) : f;", 'const painted = f;') },
   timeFromT: { 'src/app.js': (t) => must(t, 'gov.govern(f.glyphs, f.shades, wall)', 'gov.govern(f.glyphs, f.shades, t)') },
-  noReadCap: { 'src/governor.js': (t) => must(t, 'STEP_CAP = n > 0 ? Math.max(1, exactCap(n, STEP_LIMIT)) : 0;', 'STEP_CAP = n;') },
+  noReadCap: { 'src/governor.js': (t) => must(t, 'STEP_CAP = n > 0 ? Math.max(1, exactCap(n, READ_CAP)) : 0;', 'STEP_CAP = n;') },
   noCellLimit: { 'src/governor.js': (t) => must(t, 'const W = Math.max(1, win1 / fps);', 'const W = 0;') },
   fps18: { 'src/app.js': (t) => must(t, "createGovernor({ cols, rows, fps, variant: 'nbhd' })", "createGovernor({ cols, rows, fps: 18, variant: 'nbhd' })") },
   beforeHelp: {

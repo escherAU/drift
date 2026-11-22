@@ -4,7 +4,7 @@
 // paint the app writes is read back through the independent terminal reader (tests/helpers-ansi.js) and handed to a governor that holds NOTHING and counts what each rule would hold:
 //   strict   the per-cell rule: a third change of a cell inside W = max(1, round(fps) / fps) seconds
 //   blocks   the relaxed per-block rule (see src/governor.js): the third change is allowed while the cell's block has triple-cell budget
-//   read     the per-read cap: more than floor(0.30 n) distinct cells changed inside one 1 / fps
+//   read     the per-read cap: more than floor(0.25 n) distinct cells (READ_CAP, a margin under the meter's 0.30) changed inside one 1 / fps
 // Output: one JSON line per case and per label (a scene, or "dis:<scene it fades from>") with counts of paints, of paints that change something, of cell changes, and of what each rule
 // would hold (cells, and paints with at least one held cell). `--report <files>` aggregates JSON lines into tables.
 //   --variant blocks|nbhd picks the relaxed rule whose budget is counted (strict is counted whatever the variant; default blocks)

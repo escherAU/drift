@@ -2,7 +2,7 @@
 // mutants) are in tests/governor-adversarial.test.js and tests/governor-mutation.test.js. Everything here is a pure function of its inputs: no clock, no app.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGovernor, exactCap, fieldOf, STEP_LIMIT, FIELD_LIMIT, EPS_T } from '../src/governor.js';
+import { createGovernor, exactCap, fieldOf, STEP_LIMIT, READ_CAP, FIELD_LIMIT, EPS_T } from '../src/governor.js';
 import { fieldSize } from './helpers-flash.js';
 
 const SP = 32, FULL = 0x2588;
@@ -59,13 +59,14 @@ test('DRIFT-13 per cell: no cell ever makes three changes less than W apart (ran
   }
 });
 
-// ---- 2. per read: the union of cells changed inside one 1 / fps is at most floor(0.30 n), exactly
-for (const [cols, rows, cap] of [[40, 10, 120], [80, 24, 576]]) {
+// ---- 2. per read: the union of cells changed inside one 1 / fps is at most floor(0.25 n) (READ_CAP, 5 points under the meter's 0.30), exactly
+for (const [cols, rows, cap] of [[40, 10, 100], [80, 24, 480]]) {
   test(`DRIFT-13 per read: ${cols}x${rows}, a frame that changes every cell paints exactly ${cap} (the cap), catches up, and two paints inside 1/fps share one budget`, () => {
     const fps = 18, R = 1 / fps, n = cols * rows;
     assert.equal(createGovernor({ cols, rows, fps }).limits.stepCap, cap);
-    assert.equal(cap, Math.floor(STEP_LIMIT * n), 'a size where 0.30 n is an integer');
-    assert.ok(cap / n <= STEP_LIMIT && (cap + 1) / n > STEP_LIMIT, 'as the meter compares count / n <= 0.30');
+    assert.equal(cap, Math.floor(READ_CAP * n), 'a size where 0.25 n is an integer');
+    assert.ok(cap / n <= READ_CAP && (cap + 1) / n > READ_CAP, 'as the meter compares count / n, against the cap');
+    assert.ok(cap / n < STEP_LIMIT && READ_CAP === 0.25 && STEP_LIMIT === 0.30, 'and the cap is a margin under the limit of 0.30');
     const gov = createGovernor({ cols, rows, fps });
     const blank = frame(n), full = frame(n, FULL);
     gov.govern(blank.glyphs, blank.shades, -50);
@@ -88,9 +89,11 @@ for (const [cols, rows, cap] of [[40, 10, 120], [80, 24, 576]]) {
 
 test('DRIFT-13 per read: exactCap is the largest count the meter passes (every n up to 6000, and the meter\'s own comparison)', () => {
   for (let n = 1; n <= 6000; n++) {
-    const c = exactCap(n, 0.30);
-    assert.ok(c / n <= 0.30, `n ${n}: ${c} / ${n} <= 0.30`);
-    assert.ok((c + 1) / n > 0.30, `n ${n}: ${c + 1} / ${n} > 0.30`);
+    for (const lim of [0.30, READ_CAP]) {
+      const c = exactCap(n, lim);
+      assert.ok(c / n <= lim, `n ${n}: ${c} / ${n} <= ${lim}`);
+      assert.ok((c + 1) / n > lim, `n ${n}: ${c + 1} / ${n} > ${lim}`);
+    }
   }
   assert.equal(exactCap(0, 0.3), 0);
   assert.equal(exactCap(56, FIELD_LIMIT), 14, 'a 56-cell field may hold 14 hot cells (14 / 56 = 0.25 exactly)');
@@ -100,16 +103,16 @@ test('DRIFT-13 per read: a cell that changed inside the window and changes again
   const fps = 20, R = 0.05, n = 400, gov = createGovernor({ cols: 40, rows: 10, fps });
   const a = frame(n), b = frame(n, FULL);
   gov.govern(a.glyphs, a.shades, -50);
-  gov.govern(b.glyphs, b.shades, 0); // 120 cells now FULL
+  gov.govern(b.glyphs, b.shades, 0); // 100 cells now FULL
   const c = frame(n, 0x41); // everything wants a third value
   gov.govern(c.glyphs, c.shades, 0.01);
-  // the 120 cells already inside the window may change again for free (they stay inside the union); no new cell may
+  // the 100 cells already inside the window may change again for free (they stay inside the union); no new cell may
   const o = gov.govern(c.glyphs, c.shades, 0.01 + 1e-4);
   const changed = count(o.glyphs, 0x41);
-  assert.ok(changed <= 120, `no more than the 120 cells already in the window changed to the new glyph (${changed})`);
+  assert.ok(changed <= 100, `no more than the 100 cells already in the window changed to the new glyph (${changed})`);
   const union = new Set();
   for (let i = 0; i < n; i++) if (o.glyphs[i] !== SP) union.add(i);
-  assert.ok(union.size <= 120, `the union of cells touched inside the window is at most the cap (${union.size})`);
+  assert.ok(union.size <= 100, `the union of cells touched inside the window is at most the cap (${union.size})`);
   void R;
 });
 
@@ -221,10 +224,10 @@ test('DRIFT-13 priority: the cells that wait are spread over the screen, not the
   const o = gov.govern(full.glyphs, full.shades, 0);
   const perRow = new Array(10).fill(0);
   for (let i = 0; i < n; i++) if (o.glyphs[i] === FULL) perRow[Math.floor(i / 40)]++;
-  for (let r = 0; r < 10; r++) assert.ok(perRow[r] >= 4 && perRow[r] <= 22, `row ${r} got ${perRow[r]} of its 40 cells (the cap is 120 of 400: 12 a row on average; lowest-index-first would give 40, 40, 40, 0, ...)`);
+  for (let r = 0; r < 10; r++) assert.ok(perRow[r] >= 4 && perRow[r] <= 22, `row ${r} got ${perRow[r]} of its 40 cells (the cap is 100 of 400: 10 a row on average; lowest-index-first would give 40, 40, 40, 0, ...)`);
   // different paints hold different cells: a second window paints a different set
   const o2 = gov.govern(full.glyphs, full.shades, 1);
-  assert.ok(count(o2.glyphs, FULL) > 120, 'catch-up moves on');
+  assert.ok(count(o2.glyphs, FULL) > 100, 'catch-up moves on');
 });
 
 // ---- the blocks variant's arithmetic
@@ -262,7 +265,7 @@ test('DRIFT-13 cost: at 400x100 a paint examines at most n cells, changes at mos
     const o = gov.govern(f.glyphs, f.shades, -50);
     const g0 = o.glyphs, s0 = o.shades;
     const cap = gov.limits.stepCap;
-    assert.equal(cap, 12000);
+    assert.equal(cap, 10000);
     let t = 0, maxChanged = 0, maxExamined = 0, held = 0;
     for (let k = 0; k < 60; k++) {
       t += 0.056;
@@ -285,7 +288,7 @@ test('DRIFT-13 observe: observe mode holds nothing and counts what the rules wou
   gov.govern(f.glyphs, f.shades, -50);
   const o = gov.govern(full.glyphs, full.shades, 0);
   assert.equal(count(o.glyphs, FULL), n, 'everything is painted');
-  assert.equal(gov.stats.readHeld, n - 120, 'the per-read cap would have held 280 of 400');
+  assert.equal(gov.stats.readHeld, n - 100, 'the per-read cap would have held 300 of 400');
   assert.equal(gov.stats.strictHeld, 0);
   // two more changes of every cell inside one second: the third change of every cell would be held by the strict rule
   gov.govern(f.glyphs, f.shades, 0.5);

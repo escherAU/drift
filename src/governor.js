@@ -44,8 +44,8 @@
 //    most the hot cells of the cell window of rows r0 .. r0 + fh - 1 plus those of rows r0 + 1 .. r0 + fh, each at most K, so at most 2 * K <= 25 % of the 2 * fw * fh pixels.
 //
 // 2. PER READ (rule L3). A read compares the screen with the read before it, 1 / fps earlier; it sees every paint in (T - 1 / fps, T], so the cells it can find changed are the UNION of
-//    the cells changed by all paints inside a window of 1 / fps seconds (a read can catch two paints, or none). At most STEP_CAP = floor(0.30 * cols * rows) cells (exact against the
-//    meter's own count / n <= 0.30, see exactCap) may be in that union; a cell that changed already inside the window costs nothing more, a new one costs one. The pixel grid cannot
+//    the cells changed by all paints inside a window of 1 / fps seconds (a read can catch two paints, or none). At most STEP_CAP = floor(0.25 * cols * rows) cells (READ_CAP: a margin of 5 points under the meter's
+//    limit of 0.30, exact against the same count / n comparison, see exactCap) may be in that union; a cell that changed already inside the window costs nothing more, a new one costs one. The pixel grid cannot
 //    exceed the cell fraction (every pixel that moves is a cell that changed, and there are two pixels per cell).
 //    Below 4 cells (cap 0) the cap is held at 1 so a screen never freezes; L3 cannot be met by any change on such a screen (1 cell of 1 is 100 %), and Classic never runs there (40x10).
 //
@@ -65,6 +65,7 @@
 // would hold). The counts are against the history of the UNgoverned frames, so they are what the rule would face on the frames the scenes make.
 
 export const STEP_LIMIT = 0.30; // the meter's L3 limit (STEP_FRACTION in tests/helpers-flash.js)
+export const READ_CAP = 0.25; // the governor's own per-read cap, 5 points under STEP_LIMIT so L3 never sits on the limit (DRIFT-13 phase 3: it costs nothing at 12 fps and up, and little below)
 export const FIELD_LIMIT = 0.25; // the meter's field limit (FIELD_FRACTION)
 export const EPS_T = 1e-9; // seconds, see "Tolerance" above
 export const VARIANTS = ['strict', 'blocks', 'nbhd'];
@@ -112,7 +113,7 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
 
   function resize(cols2, rows2) {
     C = Math.max(0, Math.floor(cols2)); R = Math.max(0, Math.floor(rows2)); n = C * R;
-    STEP_CAP = n > 0 ? Math.max(1, exactCap(n, STEP_LIMIT)) : 0;
+    STEP_CAP = n > 0 ? Math.max(1, exactCap(n, READ_CAP)) : 0;
     const f = fieldOf(C, R); FW = f.w; FH = f.h;
     const BY = Math.max(1, Math.ceil(R / FH)); BX = Math.max(1, Math.ceil(C / FW)); NB = BX * BY;
     K = exactCap(FW * FH, FIELD_LIMIT);

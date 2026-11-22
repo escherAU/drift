@@ -3,8 +3,8 @@
 // mutant must FAIL at least one probe, and the unbroken copy must pass all of them (so a probe that checks nothing, or a mutation that changes nothing, cannot pass for a kill).
 //   per-cell limit 3 -> 4 changes        the third-to-last change is replaced by the fourth-to-last in the per-cell test
 //   W halved                             a cell waits half as long between its changes
-//   per-read cap 0.30 -> 0.31            the L3 limit of the cap
-//   per-read cap one cell too many       the exact cap plus one (121 of 400 is 30.25 %)
+//   per-read cap 0.25 -> 0.31            the cap moved past the meter's L3 limit of 0.30 (the margin itself, 0.25 against 0.30, is pinned by tests/governor.test.js, not by the meter)
+//   per-read cap one cell over the limit the meter's own limit of 0.30 plus one cell (121 of 400 is 30.25 %)
 //   read window 0                        two paints inside one 1 / fps no longer share a budget
 //   first-paint exemption on every paint every paint is treated as a fresh screen
 //   budgets: nbhd cap doubled; blocks cap K instead of K / 4   the relaxed variants' budgets
@@ -50,8 +50,8 @@ const MUTANTS = [
   { label: 'per-cell limit 3 -> 4 changes (nbhd)', variant: 'nbhd', probes: PER_CELL, edits: [['if (t2[i] <= age) candE', 'if (t3[i] <= age) candE']] },
   { label: 'W halved (strict)', variant: 'strict', probes: PER_CELL, edits: [['const W = Math.max(1, win1 / fps);', 'const W = Math.max(1, win1 / fps) / 2;']] },
   { label: 'W halved (nbhd)', variant: 'nbhd', probes: PER_CELL, edits: [['const W = Math.max(1, win1 / fps);', 'const W = Math.max(1, win1 / fps) / 2;']] },
-  { label: 'per-read cap 0.30 -> 0.31', variant: 'strict', probes: PER_READ, edits: [['export const STEP_LIMIT = 0.30;', 'export const STEP_LIMIT = 0.31;']] },
-  { label: 'per-read cap one cell too many', variant: 'strict', probes: PER_READ, edits: [['STEP_CAP = n > 0 ? Math.max(1, exactCap(n, STEP_LIMIT)) : 0;', 'STEP_CAP = n > 0 ? Math.max(1, exactCap(n, STEP_LIMIT)) + 1 : 0;']] },
+  { label: 'per-read cap 0.25 -> 0.31', variant: 'strict', probes: PER_READ, edits: [['export const READ_CAP = 0.25;', 'export const READ_CAP = 0.31;']] },
+  { label: 'per-read cap one cell over the meter limit', variant: 'strict', probes: PER_READ, edits: [['STEP_CAP = n > 0 ? Math.max(1, exactCap(n, READ_CAP)) : 0;', 'STEP_CAP = n > 0 ? Math.max(1, exactCap(n, STEP_LIMIT)) + 1 : 0;']] },
   { label: 'read window dropped to 0 (two paints inside 1/fps no longer share)', variant: 'strict', probes: PER_READ, edits: [['const READ_WINDOW = 1 / fps;', 'const READ_WINDOW = 0;']] },
   { label: 'first-paint exemption extended to every paint', variant: 'strict', probes: PER_CELL, edits: [['if (first) {', 'if (first || true) {']] },
   { label: 'nbhd budget doubled', variant: 'nbhd', probes: BUDGET, edits: [['CON_CAP = K;', 'CON_CAP = K * 2;']] },
