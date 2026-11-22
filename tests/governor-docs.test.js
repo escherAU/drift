@@ -217,3 +217,12 @@ test('DRIFT-13 README: the flip aftermath numbers are the committed series\' (to
   assert.equal(Object.keys(E.configs).length, 9, 'the engagement baseline is 3 sizes x 3 rates');
   for (const f of ['../tools/governor-flip-series.mjs', './governor-flip.test.js', './governor-engage.test.js', './governor-playlist.test.js']) assert.ok(fs.existsSync(new URL(f, import.meta.url)), `${f} exists`);
 });
+
+test('DRIFT-13 README: the hold after a return is disclosed (27 to 29 % of the screen on average and up to 57 % in the first second, up to 6.4 % at 1.5 to 3 s, not a whole-screen freeze; a scratch script outside the repo, no test runs it; the leaving change is a follow-up)', () => {
+  for (const need of [
+    '**The hold after a return:**', 'for the first second after any return to high contrast, from another mode or from the console', 'holds back 27 to 29 % of the screen on average and up to 57 % at the most',
+    'from 1.5 to 3 s after the return up to 6.4 % is still held', 'it is not a whole-screen freeze', 'a trip of 0.3 s and one of 3 s read alike', '`freeze2.mjs`, a scratch script outside the repo that no test runs',
+    'a follow-up ticket will record the leaving change at the moment of leaving, to reduce it',
+  ]) assert.ok(S.includes(need), `the README says: ${need}`);
+  assert.ok(S.indexOf('**The hold after a return:**') > S.indexOf('and a 0.6 s trip passes.'), 'it sits next to the trip tail');
+});
