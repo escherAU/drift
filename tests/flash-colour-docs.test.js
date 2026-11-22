@@ -129,7 +129,7 @@ test('r2 README: the dissolve claims name the app-driven arm (seeds 1 to 16, rea
 
 test('DRIFT-12 the flash audit sees the new tunnel files (they run the meter and judge the shared rule list)', () => {
   const users = FILES.filter(([n, t]) => !METER_FILES.has(n) && USES_METER.test(t)).map(([n]) => n);
-  for (const need of ['tunnel-flash.test.js', 'tunnel-flash-sizes.test.js', 'tunnel-flash-fps.test.js', 'tunnel-flash-fps-256.test.js', 'tunnel-cycle.test.js', 'tunnel-flash-controls.test.js', 'tunnel-look.test.js', 'classic-dissolve-real-time.test.js']) {
+  for (const need of ['tunnel-flash.test.js', 'tunnel-flash-sizes.test.js', 'tunnel-flash-fps.test.js', 'tunnel-flash-fps-256.test.js', 'tunnel-cycle.test.js', 'tunnel-flash-controls.test.js', 'tunnel-look.test.js', 'classic-dissolve-real-time.test.js', 'tunnel-cycle-edge.test.js']) {
     assert.ok(users.includes(need) || FILES.some(([n, t]) => n === need && JUDGES_SHARED_LIST.test(t)), `the audit sees ${need}`);
   }
   assert.deepEqual(auditFlashFiles(FILES), []);
@@ -138,7 +138,7 @@ test('DRIFT-12 the flash audit sees the new tunnel files (they run the meter and
 test('DRIFT-12 README: Classic high contrast tunnel and the whole cycle are asserted at 1x, 2x and 4x, the files and each file\'s clock-arm cost line are named, and the old "tunnel fails at speed" sentences are gone', () => {
   const t = flat(README);
   for (const need of [
-    '**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules (asserted since DRIFT-12).**',
+    '**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules at the listed sizes and rates (asserted since DRIFT-12; not at every reachable size or frame rate, see "Not covered" above and the measured failures there).**',
     'at 1x, 2x and 4x (Life since DRIFT-10, wire and blocktype since DRIFT-11, tunnel and the whole cycle at speed since DRIFT-12',
     '`tunnel-flash` 12.3 % (12 runs), `tunnel-flash-sizes` 4.1 % (16 runs), `tunnel-flash-fps` 12.7 % and `tunnel-flash-fps-256` 12.5 % (112 runs each), `tunnel-cycle` 7.4 % (18 runs)',
     '`tunnel-look`', '`classic-dissolve-real-time`', '`tunnel-flash-controls`', '`--tree before12`',
@@ -155,5 +155,37 @@ test('DRIFT-12 README: Classic high contrast tunnel and the whole cycle are asse
     assert.ok(text.includes('clock' + 'Arm(() =>') || text.includes('clock' + 'Arm(async'), `${file} runs clock arms`);
   }
   // control: the check notices a README without the section
-  assert.ok(!flat(README.replace('**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules (asserted since DRIFT-12).**', 'x')).includes('**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules (asserted since DRIFT-12).**'));
+  assert.ok(!flat(README.replace('**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules at the listed sizes and rates (asserted since DRIFT-12; not at every reachable size or frame rate, see "Not covered" above and the measured failures there).**', 'x')).includes('**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules at the listed sizes and rates (asserted since DRIFT-12; not at every reachable size or frame rate, see "Not covered" above and the measured failures there).**'));
 });
+
+// ---- DRIFT-12 correction round 1: the conclusion is narrowed to the listed sizes and rates, Desmond's measured failures are written down as not asserted, and the size card's pause is "the same picture"
+
+test('DRIFT-12 README: the claim is "at the listed sizes and rates", the measured failures (Desmond Hale, by hand, not asserted) and DRIFT-13 are written down, and no sentence says every size', () => {
+  const t = flat(README);
+  for (const need of [
+    'pass the five rules at the listed sizes and rates (asserted since DRIFT-12; not at every reachable size or frame rate',
+    'at 1x, 2x and 4x at the listed sizes and rates only',
+    '**measured by hand, not asserted**',
+    '42x12 at `--fps` 26 reads L2 26.79 % and at `--fps` 27 reads 28.57 % (26.79 % in truecolor at 26)',
+    '45x12 at `--fps` 21 reads L2 26.67 %',
+    '41x12 at `--fps` 9 reads L3 30.28 % (seed 5, the Life to tunnel dissolve)',
+    '1.5x, which is not an asserted speed, 42x12 reads L2 26.79 % at `--fps` 21 (q156), 23 and 25 (grid)',
+    '**pre-dates DRIFT-12**', 'the wire to maze dissolve at about 95 s (seed 6)', 'reads exactly 25.00 %', 'share a 56-cell field', 'The follow-up is DRIFT-13',
+    '`tunnel-cycle-edge`',
+  ]) assert.ok(t.includes(need), `the README says: ${need}`);
+  for (const gone of ['every reachable size pass', 'at every size and every frame rate', 'Nothing fails after.']) assert.ok(!t.includes(gone), `the README no longer says: ${gone}`);
+  // control: the check notices a README without the failures
+  assert.ok(!flat(README.replace('**measured by hand, not asserted**', 'x')).includes('**measured by hand, not asserted**'));
+});
+
+test('DRIFT-12 README: after growing back the size card shows "the very same picture" (glyphs), not "the very frame" or bytes; the tests compare glyphs (screen.text()), and the console card keeps its byte-for-byte claim', () => {
+  const t = flat(README);
+  assert.ok(t.includes('it shows the very same picture it had (the glyphs, which is what the tests compare; the stored colour of a blank cell can differ)'));
+  assert.ok(!t.includes('it shows the very frame it had'));
+  assert.ok(read('./helpers-size-card.js').includes('text: () => screen.text()'), 'the harness text() is the screen glyphs, not the bytes');
+  for (const file of ['classic-size-card.test.js', 'helpers-size-card.js']) {
+    assert.ok(!/resum[^\n]*byte|byte[^\n]*resum/i.test(read(`./${file}`)), `${file} does not claim bytes after resuming`);
+  }
+  assert.ok(read('./classic-size-card-docs.test.js').includes('byte-for-byte what they were'), 'the console card claim is untouched');
+});
+
