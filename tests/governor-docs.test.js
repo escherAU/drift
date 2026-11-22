@@ -208,6 +208,8 @@ test('DRIFT-13 README: the flip aftermath numbers are the committed series\' (to
   assert.equal(F.shipped.latestOverLimitReadSeconds, Math.max(F.shipped.perRun[0].latest, F.shipped.perRun[1].latest));
   assert.ok(S.includes(`in ${F.shipped.runs} runs the latest over-limit read was ${F.shipped.latestOverLimitReadSeconds.toFixed(2)} s after the flip, and ${F.shipped.runsWithOverLimitRead} of the ${F.shipped.runs} runs had one at all`));
   assert.ok(F.shipped.latestOverLimitReadSeconds < 0.25, 'the window the test judges from (0.25 s) is later than the latest shipped over-limit read');
+  assert.ok(F.extended.latestOverLimitReadSeconds > 0.25, 'the wider series found a read over the window: the README must (and does) say the window is not a bound');
+  assert.ok(S.includes(`on ${F.extended.runs} more runs it never saw`) && S.includes(`${F.extended.runsWithOverLimitRead} runs had an over-limit read after the flip and the latest was ${F.extended.latestOverLimitReadSeconds.toFixed(2)} s after it`), 'the README quotes the wider series');
   assert.ok(F.historyCleared.latestOverLimitReadSeconds > 0.25 && F.historyCleared.runsWithOverLimitRead > 10, 'and the governor that forgets its history is over the limit after it, in many runs');
   const E = JSON.parse(read('./fixtures/governor-engagement.json'));
   assert.equal(Object.keys(E.configs).length, 9, 'the engagement baseline is 3 sizes x 3 rates');

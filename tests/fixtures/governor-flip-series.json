@@ -1,5 +1,6 @@
 {
  "note": "DRIFT-13 correction 1: the per-read L2 series after an i press, from tools/governor-flip-series.mjs (the README quotes it; tests/governor-docs.test.js pins the sentence to these numbers). Two runs of the tool on the shipped governor: the defaults (40x10 41x11 42x12 80x24, fps 9 18 30, seeds 1 6, presses 31 45 61 62 63 95) and 43x12 50x16 41x10 45x12 at seeds 2 3 4 7, presses 31 62 94; and the defaults on the governor that forgets its history on every reset.",
  "shipped": { "runs": 288, "runsWithOverLimitRead": 8, "latestOverLimitReadSeconds": 0.22, "perRun": [ { "runs": 144, "over": 5, "latest": 0.22 }, { "runs": 144, "over": 3, "latest": 0.07 } ] },
+ "extended": { "runs": 240, "runsWithOverLimitRead": 4, "latestOverLimitReadSeconds": 0.37, "latestRun": "42x12 fps 30 seed 5 i@31", "note": "DRIFT-13 correction 2: node tools/governor-flip-series.mjs ship 40x10,42x12,61x21,80x24,120x40 9,18,30 5,8 31,45,61,62,63,94,95,121 on the shipped governor: seeds and sizes the 0.25 s window was not tuned on; one run is over it" },
  "historyCleared": { "runs": 144, "runsWithOverLimitRead": 32, "latestOverLimitReadSeconds": 0.57 }
 }

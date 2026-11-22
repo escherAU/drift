@@ -53,7 +53,7 @@ const MUTANTS = [
   { label: 'per-read cap 0.25 -> 0.31', variant: 'strict', probes: PER_READ, edits: [['export const READ_CAP = 0.25;', 'export const READ_CAP = 0.31;']] },
   { label: 'per-read cap one cell over the meter limit', variant: 'strict', probes: PER_READ, edits: [['STEP_CAP = n > 0 ? Math.max(1, exactCap(n, READ_CAP)) : 0;', 'STEP_CAP = n > 0 ? Math.max(1, exactCap(n, STEP_LIMIT)) + 1 : 0;']] },
   { label: 'read window dropped to 0 (two paints inside 1/fps no longer share)', variant: 'strict', probes: PER_READ, edits: [['const READ_WINDOW = 1 / fps;', 'const READ_WINDOW = 0;']] },
-  { label: 'first-paint exemption extended to every paint', variant: 'strict', probes: PER_CELL, edits: [['if (first) {', 'if (first || true) {']] },
+  { label: 'first-paint exemption extended to every paint', variant: 'strict', probes: PER_CELL, edits: [["if (mode === 'hard') {", "if (mode === 'hard' || true) {"]] },
   { label: 'nbhd budget doubled', variant: 'nbhd', probes: BUDGET, edits: [['CON_CAP = K;', 'CON_CAP = K * 2;']] },
   { label: 'blocks budget K instead of K / 4', variant: 'blocks', probes: BUDGET, edits: [['CON_CAP = Math.floor(K / 4);', 'CON_CAP = K;']] },
 ];

@@ -63,6 +63,22 @@
 //          something else in between (another mode, the console), so the meter saw every cell move. The flip FRAME itself cannot be held by any governor (every cell changes luminance at once);
 //          a cell with two changes just before it is hot at it, which is the flip guard's business, not the governor's.
 //
+// RESET STATES (DRIFT-13 correction 2). The reset is ONE state, `mode`, never a set of flags, so no order of calls can leave a request behind. Four states; the paint is the only thing
+// that leaves a pending one.
+//
+//   state    meaning                                   reset({ hard: true }) / resize()   reset({ other: true })   reset()   the next paint
+//   steady   paints are governed                       -> hard                            -> other                 -> soft   governed, stays steady
+//   hard     the next paint is whole, history restarts -> hard                            stays hard               stays hard whole and ungoverned -> steady
+//   other    the next paint is whole, every cell       -> hard                            stays other              stays other whole and ungoverned -> steady
+//            counts as changed, history kept
+//   soft     the next paint is whole, changed cells    -> hard                            -> other                 stays soft whole and ungoverned -> steady
+//            count, history kept
+//
+// Construction, a new size and a change of buffer type start in hard (the governor has nothing painted). Order: hard beats other beats soft, whatever the order of the calls, and a pending
+// state is consumed by exactly one paint, so at most ONE paint after any number of reset calls is ungoverned (stats.ungoverned, pinned over every ordering by
+// tests/governor-reset-states.test.js). Correction 1 kept two flags, `first` (checked first) and `soft` (not cleared by a hard paint), so a soft request made while a hard paint was pending
+// survived it and made the NEXT paint whole as well (a resize while the console was open, then one console frame, left the second art paint ungoverned).
+//
 // COST. One pass over the cells to find what wants to change, then work proportional to the cells that want to change (a 4096-bucket counting sort when something must be chosen);
 // no allocation after the first paint (the buffers, the history and the scratch are made once, per size). Counters: stats.examined (cells looked at), stats.wanted, stats.changed,
 // stats.held, each also for the last paint in stats.last.
@@ -109,7 +125,7 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
   const relaxed = variant !== 'strict';
 
   let C = 0, R = 0, n = 0, STEP_CAP = 0, FW = 1, FH = 1, BX = 1, NB = 1, K = 0, CON_CAP = 0, NCON = 0;
-  let first = true, soft = false, other = false, paintNo = 0, stamp = 0;
+  let mode = 'hard', paintNo = 0, stamp = 0; // mode: the RESET STATES of the header ('steady' | 'hard' | 'soft' | 'other')
   let Gp = null, Sp = null, gType = null, sType = null;
   let t1, t2, t3, tw, blk, bcount, conB, blockCon, candE, candT, fresh, ord, maskStamp, noSlot, hist;
   const out = { glyphs: null, shades: null };
@@ -155,7 +171,7 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
     maskStamp = new Int32Array(n); noSlot = new Int32Array(n); stamp = 0;
     hist = new Int32Array(BUCKETS + 1);
     Gp = Sp = gType = sType = null; out.glyphs = out.shades = null;
-    first = true; soft = false; other = false; paintNo = 0;
+    mode = 'hard'; paintNo = 0;
   }
 
   // list[0..m) in priority order (lowest hash bucket first) into ord[0..m): a counting sort, stable, O(m + BUCKETS)
@@ -192,26 +208,26 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
     if (n === 0) { out.glyphs = glyphs; out.shades = shades; return out; }
     if (!Gp || gType !== glyphs.constructor || sType !== shades.constructor) {
       gType = glyphs.constructor; sType = shades.constructor;
-      Gp = new gType(n); Sp = new sType(n); first = true;
+      Gp = new gType(n); Sp = new sType(n); mode = 'hard';
     }
     out.glyphs = Gp; out.shades = Sp;
-    if (first) {
+    if (mode === 'hard') {
       Gp.set(glyphs); Sp.set(shades);
       t1.fill(now); t2.fill(-Infinity); t3.fill(-Infinity); tw.fill(-Infinity);
-      first = false;
+      mode = 'steady'; // the paint consumes the hard state
       stats.ungoverned++;
       stats.last.examined = 0; stats.last.wanted = 0; stats.last.changed = 0; stats.last.held = 0;
       return out;
     }
-    if (soft) { // a reset that kept the size: the history stays, the paint is whole and ungoverned, and counts as ONE change of each cell that really changed
-      const all = other; // the screen (or its palette) was changed under the governor: every cell counts as changed
+    if (mode !== 'steady') { // soft or other: a reset that kept the size: the history stays, the paint is whole and ungoverned, and counts as ONE change of each cell that really changed
+      const all = mode === 'other'; // the screen (or its palette) was changed under the governor: every cell counts as changed
       let c = 0;
       for (let i = 0; i < n; i++) {
         if (!all && glyphs[i] === Gp[i] && shades[i] === Sp[i]) continue;
         t3[i] = t2[i]; t2[i] = t1[i]; t1[i] = now; tw[i] = now; c++;
       }
       Gp.set(glyphs); Sp.set(shades);
-      soft = false; other = false;
+      mode = 'steady'; // the paint consumes the soft or other state
       stats.ungoverned++; stats.resetChanged += c;
       stats.last.examined = 0; stats.last.wanted = 0; stats.last.changed = 0; stats.last.held = 0;
       return out;
@@ -291,11 +307,11 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
 
   // reset(): the next paint is whole and ungoverned, the per-cell history and the per-read ring are KEPT (the paint counts one change of each cell that differs from what was last painted).
   // reset({ other: true }): the same, but every cell counts as changed (the terminal showed something else, or the palette was swapped: the meter saw every cell move).
-  // reset({ hard: true }) and resize(): a new screen, the history starts again.
+  // reset({ hard: true }) and resize(): a new screen, the history starts again. The transitions are the table in the header (RESET STATES).
   function reset(opts = {}) {
-    if (opts.hard || !Gp) { first = true; soft = false; other = false; return; }
-    soft = true;
-    if (opts.other) other = true;
+    if (opts.hard || !Gp) { mode = 'hard'; return; }
+    if (mode === 'hard') return; // hard dominates any later request before its paint
+    mode = opts.other || mode === 'other' ? 'other' : 'soft';
   }
 
   resize(cols, rows);
