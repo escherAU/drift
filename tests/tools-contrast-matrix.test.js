@@ -121,3 +121,17 @@ test('DRIFT-13 contrast-matrix --jobs and --resume: two workers give the same li
     assert.equal(again.status, 2, 'an existing --out without --resume is refused');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('DRIFT-13 contrast-matrix --tree oldscenes: the governor alone (the DRIFT-10 to 12 scene fixes taken out) holds the old scenes to the limits at 80x24, 4x, seeds 1 and 2, but sitting ON them (L1 24.07, L2 25.00, L3 25.00); before12 (no governor) reads L2 100.00 and fails; the shipped scenes read L2 7.87', () => {
+  const o = ['--sizes', '80x24', '--fps', '18', '--speeds', '4x', '--clocks', 'grid', '--modes', '256', '--seeds', '1-2', '--summary-only'];
+  const worstLine = (r) => r.stdout.split(/\r?\n/).find((l) => l.startsWith('worst of each rule'));
+  const gov = run(...o, '--tree', 'oldscenes');
+  assert.equal(gov.status, 0, gov.stdout + gov.stderr);
+  assert.match(worstLine(gov), /L1 24\.07 {2}L2 25\.00 {2}L3 25\.00 {2}R 0\.00 {2}C 0\.00$/);
+  const none = run(...o, '--tree', 'before12');
+  assert.equal(none.status, 1);
+  assert.match(worstLine(none), /L1 8\.33 {2}L2 100\.00 {2}L3 31\.15 /);
+  const now = run(...o);
+  assert.equal(now.status, 0);
+  assert.match(worstLine(now), /L1 0\.00 {2}L2 7\.87 {2}L3 13\.44 /);
+});

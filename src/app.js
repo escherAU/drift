@@ -270,10 +270,10 @@ export function createApp(o) {
   // repaintAll, and on every console frame and every size card (which put something else on the terminal). A size change makes the governor resize (also a reset).
   // The `i` key swaps the palette, not the indices the governor works on, so the governor has no part in it; the flip guard FLIP_WINDOW_SECONDS bounds how often it happens.
   // THE HELP PANEL is governed like any other change, with NO exemption (the owner's rule is "never loosen"): the panel is composed over the scene, so it is the same picture change as a
-  // scene change, and the per-read cap lets at most 30 % of the cells move per paint. The loop keeps painting while a cell is still held (govPending: see step), even with the clock
+  // scene change, and the per-read cap lets at most 25 % of the cells move per paint. The loop keeps painting while a cell is still held (govPending: see step), even with the clock
   // stopped by pause or help, so the panel finishes at the loop's own rate instead of staying half drawn. How long that takes depends on how busy the scene under it is, because a cell that
-  // changed in the last second may not change again yet (the per-cell limit): at 18 fps, over Life the panel is whole after 1 paint at 80x24 and 2 at 40x10, over the busiest scene (the
-  // tunnel) after 12 paints (0.67 s) at 80x24 and 11 (0.61 s) at 40x10, and after 2 and 3 paints when the clock was paused first and the picture had settled. A panel painted whole instead
+  // changed in the last second may not change again yet (the per-cell limit): at 18 fps, over Life the panel is whole after 1 paint at 80x24 and 3 at 40x10, over the busiest scene (the
+  // tunnel) after 12 paints (0.67 s) at 80x24 and 11 (0.61 s) at 40x10, and after 2 and 4 paints when the clock was paused first and the picture had settled. A panel painted whole instead
   // would change 77 % of a 40x10 screen in one read (rule L3 allows 30 %), which tests/governor-app-mutation.test.js shows. tests/governor-app.test.js measures the paints.
   let gov = null, govCols = 0, govRows = 0, govPending = false;
   const govFrame = {};

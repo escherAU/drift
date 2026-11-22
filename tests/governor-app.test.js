@@ -233,6 +233,8 @@ function screenIsComposed(h, composed, label) {
   }
 }
 
+// the paints the help panel takes to be whole at --fps 18 (12 at --fps 12), cited by the README: over the busiest scene (the tunnel) the per-cell limit makes it wait, over Life it is quick
+const HELP_PAINTS = { '80x24 tunnel --fps 18': 12, '40x10 tunnel --fps 18': 11, '120x40 tunnel --fps 18': 10, '61x21 tunnel --fps 12': 8, '80x24 life --fps 18': 1, '40x10 life --fps 18': 3, '80x24 tunnel (paused first) --fps 18': 2, '40x10 tunnel (paused first) --fps 18': 4 };
 test('DRIFT-13 wired: the help panel is governed like any other change (no exemption): the loop keeps painting until the panel is whole, with the clock stopped, and closing it leaves no stale cell', async () => {
   const report = [];
   const CASES = [[80, 24, 1, 18], [40, 10, 1, 18], [120, 40, 1, 18], [61, 21, 1, 12], [80, 24, 0, 18], [40, 10, 0, 18]];
@@ -260,6 +262,8 @@ test('DRIFT-13 wired: the help panel is governed like any other change (no exemp
         const painted = devs.length;
         h.advance(1);
         assert.equal(devs.length, painted, 'help open and settled: nothing more is painted');
+        const label = `${cols}x${rows} ${scene === 0 ? 'life' : 'tunnel'}${paused ? ' (paused first)' : ''} --fps ${fps}`;
+        assert.equal(whole + 1, HELP_PAINTS[label], `${label}: the paints the help panel takes to settle (the README cites them; a fake clock makes them exact)`);
         report.push(`${cols}x${rows} ${scene === 0 ? 'life' : 'tunnel'}${paused ? ' (paused first)' : ''} --fps ${fps}: help whole after ${whole + 1} paints (${((whole + 1) / fps).toFixed(2)} s), first paint holds ${devs[0]} of ${n} cells`);
         devs = [];
         h.key('h');

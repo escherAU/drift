@@ -8,7 +8,7 @@
 //             Below 40x10 Classic shows the size card (nothing to flash): such sizes run as the card and the tool says so.
 //   --fps     integers or ranges (8-30, 9,12,18). Default 18.     --speeds  1x,1.5x,2x,3x,4x (real `+` presses: 1, 2, 3, 4 of them; SPEEDS in src/app.js). Default 1x.
 //   --clocks  grid,q156,jitter (tests/helpers-clock.js). Default grid.   --modes 256,truecolor. Default 256.   --seeds 1,2,... or 1-8 (app seed = clock seed). Default 1.
-//   --tree    after (default) is this tree as shipped; before13 is this tree with only the governor taken out (BEFORE13_EDITS); before, before11 and before12 are the DRIFT-10 to 12 controls (all without the governor, as life-matrix.mjs); a directory runs the src/ in it.
+//   --tree    after (default) is this tree as shipped; before13 is this tree with only the governor taken out (BEFORE13_EDITS); before, before11 and before12 are the DRIFT-10 to 12 controls (all without the governor, as life-matrix.mjs); oldscenes is this tree WITH the governor but the scene fixes of DRIFT-10 to 12 taken out (the old Life, wire, blocktype and tunnel, the scheduler's cross-fade at scene speed and the composer without realTimeIds): what the governor does alone, so the scene fixes' redundancy can be measured; a directory runs the src/ in it.
 //   --sample  N: not the whole cross but a SEEDED, STRATIFIED draw of N cases (--sample-seed, default 1; tests/helpers-contrast-matrix.js drawSample): with N at least sizes x fps, every
 //             (size, fps) pair is met floor(N / pairs) times or more; the other axes come off shuffled decks so each value is met about N / its length times. The coverage is printed.
 //   --jobs    K worker processes, one case at a time each. --out FILE writes one JSON line per case as it finishes; --resume continues from the cases already in FILE (same tree and axes values;
@@ -17,7 +17,7 @@
 import fs from 'node:fs';
 import { fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { runLife, makeTreeNoGov, rmTree, nums, isCardBoard, BEFORE12_EDITS } from '../tests/helpers-life-app.js';
+import { runLife, makeTree, makeTreeNoGov, rmTree, nums, isCardBoard, BEFORE12_EDITS } from '../tests/helpers-life-app.js';
 import { failedRules, X1_RULE_IDS } from '../tests/helpers-flash.js';
 import {
   parseSizes, parseInts, parseSpeeds, parseList, CLOCK_LIST, MODE_LIST, SPEED_KEYS, fullFactorial, expandAll, drawSample, coverage, summarise, caseKey, caseLabel, RULES, LIMITS,
@@ -97,8 +97,8 @@ async function main() {
   console.error(head.join('\n'));
   if (resumed) console.error(`resume: ${fmt(resumed)} lines already in ${out}, ${fmt(pending.length)} to run`);
 
-  const root = tree === 'after' ? null : tree === 'before' ? makeTreeNoGov('old') : tree === 'before11' ? makeTreeNoGov('new', {}, { wire: 'old', blocktype: 'old' }) : tree === 'before12' ? makeTreeNoGov('new', BEFORE12_EDITS, { tunnel: 'old' }) : tree === 'before13' ? makeTreeNoGov('new') : tree;
-  const owned = root && ['before', 'before11', 'before12', 'before13'].includes(tree);
+  const root = tree === 'after' ? null : tree === 'before' ? makeTreeNoGov('old') : tree === 'before11' ? makeTreeNoGov('new', {}, { wire: 'old', blocktype: 'old' }) : tree === 'before12' ? makeTreeNoGov('new', BEFORE12_EDITS, { tunnel: 'old' }) : tree === 'before13' ? makeTreeNoGov('new') : tree === 'oldscenes' ? makeTree('old', BEFORE12_EDITS, { tunnel: 'old', wire: 'old', blocktype: 'old' }) : tree;
+  const owned = root && ['before', 'before11', 'before12', 'before13', 'oldscenes'].includes(tree);
   const summaryOnly = has('summary-only'), stopOnFail = has('stop-on-fail');
   const self = fileURLToPath(import.meta.url);
   const workers = new Set();
