@@ -5,6 +5,8 @@ export const OLD_ORDERING = [
   ["if (mode === 'hard') return; // hard dominates any later request before its paint", "if (mode === 'hard') { stale = opts.other ? 'other' : 'soft'; return; } // hard dominates any later request before its paint"],
   ["      mode = 'steady'; // the paint consumes the hard state", "      mode = stale || 'steady'; stale = null; // the paint consumes the hard state"],
 ];
-export const NO_HARD_DOMINANCE = [["if (mode === 'hard') return; // hard dominates any later request before its paint", '']];
-export const NO_OTHER_DOMINANCE = [["mode = opts.other || mode === 'other' ? 'other' : 'soft';", "mode = opts.other ? 'other' : 'soft';"]];
-export const NO_CONSUME = [["      mode = 'steady'; // the paint consumes the soft or other state", '']];
+export const NO_HARD_DOMINANCE = [["if (mode === 'hard') return; // hard dominates any later request before its paint", "if (mode === 'hard') mode = 'steady';"]];
+export const NO_OTHER_DOMINANCE = [['if (RANK[want] > RANK[mode]) mode = want;', "if (RANK[want] > RANK[mode] || (want === 'soft' && mode === 'other')) mode = want;"]];
+export const NO_BACK_DOMINANCE = [['if (RANK[want] > RANK[mode]) mode = want;', "if (RANK[want] > RANK[mode] || (want === 'other' && mode === 'back')) mode = want;"]];
+export const BACK_COUNTS_ONCE = [["const twice = mode === 'back';", 'const twice = false;']];
+export const NO_CONSUME = [["      mode = 'steady'; // the paint consumes the soft, other or back state", '']];

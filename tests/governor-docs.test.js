@@ -195,7 +195,9 @@ test('DRIFT-13 README: the governor does reset on `i` and keeps its history; the
     'a window dragged to a new size does that on every resize event (an ungoverned whole repaint each) and is NOT covered',
     'fg and bg pass through the governor ungoverned', '`rgb: true`', '`governor-playlist` fails the day one does',
     '`governor-flip` (an `i` in the middle of a dissolve, 72 runs', '`governor-engage` (counted engagement per scene at three sizes and three rates', '`governor-playlist` (no high contrast scene has `rgb: true`)',
-    'the `i` key\'s own flip frame and the 0.25 s after it (the flip guard); a window dragged to a new size', 'high contrast scenes with full-colour cells (there are none)',
+    'the `i` key\'s own flip frame and the second after it (the flip guard; measured 0.37 s at the worst, bound under 1 s), the second after the way back from another mode or the console (the trip\'s own tail, measured above); a window dragged to a new size',
+    'they count TWO changes of every cell, out and back', 'with one change 59 of 64 of Desmond\'s mode-trip runs failed L2 from 0.25 s after the return, with two 27 of 64', 'The reset paint is not counted in the per-read window', 'read L3 33.85 to 49.00 % on the read after the flip in 5 of 108 of Desmond\'s runs', '`governor-reset-window`',
+    'The mechanism bound is under 1 s; 0.37 s is what the runs measured, not the bound', 'the latest over-limit read 0.70 s after the return', '6 over 25 % judged from 0.25 s, worst 30.36 %', 'high contrast scenes with full-colour cells (there are none)',
   ]) assert.ok(S.includes(need) || R.includes(need), `the README says: ${need}`);
   assert.ok(!R.includes('so the governor has no part in it'), 'the old sentence (the governor has no part in `i`) is gone');
   assert.ok(!S.includes("the `i` key's own flip (the flip guard);"), 'and the old not-covered item');

@@ -355,12 +355,18 @@ test('DRIFT-13 soft reset: reset({ other: true }) (the console was on screen) co
   g3.govern(f3.glyphs, f3.shades, 0.4);
   f3.glyphs[9] = 0x43; assert.equal(g3.govern(f3.glyphs, f3.shades, 0.5).glyphs[9], 0x43, 'hard reset: history gone');
 });
-test('DRIFT-13 soft reset: the per-read ring survives too (cells that changed in the reset paint are already inside the read window, so moving them again costs the cap nothing)', () => {
-  const n = 400, gov = createGovernor(SOFT), f = frame(n), full = frame(n, FULL);
-  gov.govern(f.glyphs, f.shades, -50);
-  gov.reset();
-  gov.govern(full.glyphs, full.shades, 0); // the whole screen changes at 0 (a repaint)
-  const back = frame(n);
-  const o = gov.govern(back.glyphs, back.shades, 0.01); // inside the same read window (1 / 18 s): the same cells, no new ones, so the cap of 100 does not bind
-  assert.equal(count(o.glyphs, FULL), 0, 'all 400 cells moved again: they were already in the read');
+test('DRIFT-13 soft reset: the reset paint does not use up the per-read cap of the paint after it (DRIFT-13 correction 3: the reset paint is not stamped in the per-read window; the per-cell history takes it)', () => {
+  for (const kind of [{}, { other: true }]) {
+    const n = 400, gov = createGovernor(SOFT), f = frame(n), full = frame(n, FULL);
+    gov.govern(f.glyphs, f.shades, -50);
+    gov.reset(kind);
+    gov.govern(full.glyphs, full.shades, 0); // the whole screen changes at 0 (a repaint, ungoverned: the flip frame is the flip guard's)
+    const back = frame(n);
+    const o = gov.govern(back.glyphs, back.shades, 0.01); // inside the same read window (1 / 18 s): the cap of 100 cells binds, the reset paint's cells are NOT already in it
+    assert.equal(count(o.glyphs, FULL), n - 100, `${JSON.stringify(kind)}: exactly the cap (100 of 400 cells) moved, not all of them`);
+  }
+  // the way back counts two changes of every cell, so the per-CELL limit holds every cell for W instead (nothing moves: the cap is not what holds it)
+  const gov = createGovernor(SOFT), f = frame(400), full = frame(400, FULL);
+  gov.govern(f.glyphs, f.shades, -50); gov.reset({ other: true, changes: 2 }); gov.govern(full.glyphs, full.shades, 0);
+  assert.equal(count(gov.govern(frame(400).glyphs, frame(400).shades, 0.01).glyphs, FULL), 400, 'back: every cell is a third change inside W, none moves');
 });

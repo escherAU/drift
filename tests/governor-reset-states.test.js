@@ -12,20 +12,21 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import * as shipped from '../src/governor.js';
-import { OLD_ORDERING, NO_HARD_DOMINANCE, NO_OTHER_DOMINANCE, NO_CONSUME } from './helpers-governor-reset.js';
+import { OLD_ORDERING, NO_HARD_DOMINANCE, NO_OTHER_DOMINANCE, NO_BACK_DOMINANCE, BACK_COUNTS_ONCE, NO_CONSUME } from './helpers-governor-reset.js';
 
 const SOFT = { cols: 40, rows: 10, fps: 18 }; // 400 cells, W = 1 s, per-read cap 100
 const N = 400;
 const frame = () => ({ glyphs: new Uint16Array(N).fill(32), shades: new Uint8Array(N) });
 
-// the dominating kind of a list of reset requests ('hard', 'soft', 'other', 'resize' is hard)
-const kindOf = (list) => (list.some((r) => r === 'hard' || r === 'resize') ? 'hard' : list.includes('other') ? 'other' : list.length ? 'soft' : 'none');
-const apply = (gov, r) => { if (r === 'hard') gov.reset({ hard: true }); else if (r === 'other') gov.reset({ other: true }); else if (r === 'soft') gov.reset(); else gov.resize(40, 10); };
+// the dominating kind of a list of reset requests ('hard', 'back' (other with two changes: the way back from another mode or the console), 'other', 'soft'; 'resize' is hard)
+const kindOf = (list) => (list.some((r) => r === 'hard' || r === 'resize') ? 'hard' : list.includes('back') ? 'back' : list.includes('other') ? 'other' : list.length ? 'soft' : 'none');
+const apply = (gov, r) => { if (r === 'hard') gov.reset({ hard: true }); else if (r === 'back') gov.reset({ other: true, changes: 2 }); else if (r === 'other') gov.reset({ other: true }); else if (r === 'soft') gov.reset(); else gov.resize(40, 10); };
 
 // what the paints after the resets must do to two probe cells. Cells 5 and 6 changed at 0 and 0.3 before the resets; the paint after them (0.4) changes cell 5 only.
 //   cell 6 changes at 0.5: allowed only when the history was thrown away (hard)
 //   cell 7 changes at 0.5 and again at 0.6: the second is allowed unless the paint at 0.4 counted a change of every cell (hard or other)
-const EXPECT = { hard: { c6: true, c7: false }, soft: { c6: false, c7: true }, other: { c6: false, c7: false } };
+//   cell 8 never changed before; it changes at 0.5: allowed unless the paint at 0.4 counted TWO changes of every cell (back: the screen was left and came back); allowed after a hard reset (history gone)
+const EXPECT = { hard: { c6: true, c7: false, c8: true }, soft: { c6: false, c7: true, c8: true }, other: { c6: false, c7: false, c8: true }, back: { c6: false, c7: false, c8: false } };
 
 // the same shape of run for any module: two changes of cells 5 and 6 (at 0 and 0.3), the resets, the whole paint at 0.4, then 0.5 and 0.6
 function scenario(mod, resets) {
@@ -38,13 +39,13 @@ function scenario(mod, resets) {
   const p1 = gov.govern(f.glyphs, f.shades, 0.4);
   const whole = p1.glyphs[5] === 0x43;
   const afterP1 = gov.stats.ungoverned;
-  f.glyphs[6] = 0x44; f.glyphs[7] = 0x45;
+  f.glyphs[6] = 0x44; f.glyphs[7] = 0x45; f.glyphs[8] = 0x47;
   const p2 = gov.govern(f.glyphs, f.shades, 0.5);
-  const c6 = p2.glyphs[6] === 0x44;
+  const c6 = p2.glyphs[6] === 0x44, c8 = p2.glyphs[8] === 0x47;
   f.glyphs[7] = 0x46;
   const p3 = gov.govern(f.glyphs, f.shades, 0.6);
   const c7 = p3.glyphs[7] === 0x46;
-  return { whole, ungovernedByP1: afterP1 - base, ungovernedAfter: gov.stats.ungoverned - afterP1, c6, c7 };
+  return { whole, ungovernedByP1: afterP1 - base, ungovernedAfter: gov.stats.ungoverned - afterP1, c6, c7, c8 };
 }
 // the assertion every ordering must meet
 function check(mod, resets, label) {
@@ -52,12 +53,13 @@ function check(mod, resets, label) {
   assert.ok(r.whole, `${why}: the paint after the resets is whole`);
   assert.equal(r.ungovernedByP1, 1, `${why}: exactly one ungoverned paint for the resets`);
   assert.equal(r.ungovernedAfter, 0, `${why}: the two paints after it are governed (no stale flag)`);
-  assert.deepEqual({ c6: r.c6, c7: r.c7 }, EXPECT[k], `${why}: history of a ${k} reset`);
+  assert.deepEqual({ c6: r.c6, c7: r.c7, c8: r.c8 }, EXPECT[k], `${why}: history of a ${k} reset`);
 }
 
 const ORDERS = [
   ['hard', 'soft'], ['soft', 'hard'], ['soft', 'soft'], ['other', 'hard'], ['hard', 'other'], ['soft', 'other'], ['other', 'soft'], ['other', 'other'], ['hard', 'hard'],
   ['hard', 'soft', 'other'], ['soft', 'other', 'hard', 'soft'], ['other', 'soft', 'soft', 'other', 'soft'], ['hard', 'other', 'soft', 'hard', 'other', 'soft'],
+  ['back'], ['back', 'soft'], ['soft', 'back'], ['other', 'back'], ['back', 'other'], ['back', 'hard'], ['hard', 'back'], ['back', 'back', 'soft', 'other'], ['resize', 'back'],
   ['soft'], ['other'], ['hard'], ['resize'], ['soft', 'resize'], ['resize', 'soft'], ['resize', 'other'], ['other', 'resize'], ['resize', 'hard', 'soft'],
 ];
 const repeated = (r, n) => Array.from({ length: n }, () => r);
@@ -68,10 +70,10 @@ for (const resets of ORDERS) {
 }
 
 function rngOf(seed) { let s = (Math.imul(seed + 1, 2654435761) >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
-const KINDS = ['soft', 'other', 'hard', 'resize'];
+const KINDS = ['soft', 'other', 'back', 'hard', 'resize'];
 function randomOrders(seed, count) {
   const rnd = rngOf(seed), out = [];
-  for (let i = 0; i < count; i++) { const len = 1 + Math.floor(rnd() * 10); out.push(Array.from({ length: len }, () => KINDS[Math.floor(rnd() * 4)])); }
+  for (let i = 0; i < count; i++) { const len = 1 + Math.floor(rnd() * 10); out.push(Array.from({ length: len }, () => KINDS[Math.floor(rnd() * KINDS.length)])); }
   return out;
 }
 test('DRIFT-13 reset states: 300 random orderings of up to 10 resets between paints (seeds 1 to 3) all give one ungoverned paint and the dominating history', () => {
@@ -79,7 +81,7 @@ test('DRIFT-13 reset states: 300 random orderings of up to 10 resets between pai
 });
 
 test('DRIFT-13 reset states: a reset before any paint (a new governor, then every kind) is still one ungoverned paint, and the paint after it is governed', () => {
-  for (const o of [['soft'], ['other'], ['hard'], ['soft', 'other', 'hard'], ['resize']]) {
+  for (const o of [['soft'], ['other'], ['back'], ['hard'], ['soft', 'other', 'hard'], ['resize'], ['back', 'soft']]) {
     const gov = shipped.createGovernor(SOFT), f = frame();
     for (const r of o) apply(gov, r);
     gov.govern(f.glyphs, f.shades, 0);
@@ -137,6 +139,8 @@ const MUTANTS = [
   { label: 'the old ordering: a soft or other request made while a hard paint is pending survives that paint', edits: OLD_ORDERING },
   { label: 'hard does not dominate: a later soft or other request turns the pending hard paint into a soft one', edits: NO_HARD_DOMINANCE },
   { label: 'other does not dominate soft: a soft request after an other one downgrades it', edits: NO_OTHER_DOMINANCE },
+  { label: 'back does not dominate other: an other request after a back one downgrades it', edits: NO_BACK_DOMINANCE },
+  { label: 'back counts one change like other: the way back from another mode or the console is not told apart', edits: BACK_COUNTS_ONCE },
   { label: 'the soft paint does not consume its state: every later paint is whole as well', edits: NO_CONSUME },
 ];
 test('DRIFT-13 reset states mutation: the unbroken copy passes every ordering (so a kill is a kill)', async () => {

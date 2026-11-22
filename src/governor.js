@@ -6,7 +6,7 @@
 //   const gov = createGovernor({ cols, rows, fps, variant });
 //   const painted = gov.govern(glyphs, shades, now);   // now: REAL time in seconds (the app's `wall`), never scene time
 //   painted.glyphs, painted.shades                      // the same two buffers every call (reused; do not keep them across paints)
-//   gov.reset(opts)                                     // the next paint is whole and not governed; the history is kept unless opts.hard (see RESET)
+//   gov.reset(opts)                                     // the next paint is whole and not governed; the history is kept unless opts.hard; opts.other, opts.changes (see RESET)
 //   gov.resize(cols, rows)                              // a new size (also a reset)
 //   gov.stats                                           // counters, see COST and OBSERVE
 //
@@ -48,33 +48,47 @@
 //    limit of 0.30, exact against the same count / n comparison, see exactCap) may be in that union; a cell that changed already inside the window costs nothing more, a new one costs one. The pixel grid cannot
 //    exceed the cell fraction (every pixel that moves is a cell that changed, and there are two pixels per cell).
 //    Below 4 cells (cap 0) the cap is held at 1 so a screen never freezes; L3 cannot be met by any change on such a screen (1 cell of 1 is 100 %), and Classic never runs there (40x10).
+//    THE RESET PAINT AND THIS LIMIT (DRIFT-13 correction 3). A reset paint (RESET below) is ONE whole paint and it is not counted in the per-read window (tw): it does not use up, and is not
+//    exempt from, the cap of any other paint. The proof, for every read after the one that caught the reset paint at t0: that read at T sees only paints in (T - 1 / fps, T]; the read that caught
+//    t0 is at some r with t0 <= r, and any later read has T - 1 / fps >= r >= t0, so t0 is not in its window and every paint it sees is a governed one. Each governed paint p in the window
+//    counts the cells changed in ITS window (p - 1 / fps, p], which contains (T - 1 / fps, p], and may add new cells only while that count is under the cap, so the union over the read's
+//    window never exceeds the cap (the argument above, unchanged). What the reset paint itself does is the flip frame: whole, ungoverned, caught by the read that sees it; no governor can hold
+//    it (every cell changes), and it is the flip guard's business (README). Correction 1 stamped the reset paint's cells in tw, so a paint within 1 / fps after it counted them as already
+//    changed and was never capped: i then h one frame later read L3 33.85 to 49.00 % on the read AFTER the flip in 5 of 108 of Desmond's runs; stamping nothing reads 25.00 at most.
 //
 // WHICH CELLS WAIT. When more cells want to change than the limits allow, the ones that wait are chosen by a per-cell priority, an integer hash of (cell index, paint number): different
 // cells lose each time, no band of the screen is starved (lowest-index-first would paint the top rows and freeze the bottom), and the same inputs always give the same output. The ones
 // that were held retry with a fresh priority on the next paint. (A counting sort on 12 bits of the hash; cells of the same bucket keep index order.)
 //
-// RESET. The first paint after construction, reset() or resize() is not governed (a fresh screen: the renderer repaints it whole, as the app already treats it). Three kinds:
+// RESET. The first paint after construction, reset() or resize() is not governed (a fresh screen: the renderer repaints it whole, as the app already treats it). Four kinds:
 //   hard   construction, resize(), reset({ hard: true }): the paint is recorded as a change of every cell for the per-cell history, which starts again there (t2 and t3 forgotten), and the
 //          per-read ring is cleared. A size change and the size card.
-//   soft   reset(): the history (t1, t2, t3) and the per-read ring are KEPT. The paint is whole and ungoverned, and counts as ONE change (shifted into the history, stamped in the ring) of each
+//   soft   reset(): the history (t1, t2, t3) and the per-read ring are KEPT. The paint is whole and ungoverned, and counts as ONE change (shifted into the history; NOT stamped in the per-read window) of each
 //          cell that differs from what was last painted, never a fresh change of every cell. Why keep it: a reset that forgot every cell's last changes let a cell change a third time inside W
 //          just after it (an `i` in the middle of a dissolve failed L2 for 0.3 to 0.45 s; DRIFT-13 correction 1).
 //   other  reset({ other: true }): soft, but every cell counts as changed: the palette was swapped (the `i` key; the meter reads colour, the governor reads indices) or the terminal showed
 //          something else in between (another mode, the console), so the meter saw every cell move. The flip FRAME itself cannot be held by any governor (every cell changes luminance at once);
 //          a cell with two changes just before it is hot at it, which is the flip guard's business, not the governor's.
+//   back   reset({ other: true, changes: 2 }): other, but every cell counts as changed TWICE (out and back): the screen was LEFT and came back (another mode, the console). Leaving the governed
+//          screen is a whole-screen change the governor never saw (it is not painting then), so the return alone counted one change and a cell that had changed just before the trip could
+//          change again inside the second (Desmond: 108 of 216 runs of the tunnel failed L2 from 0.25 s after the return; counting two, 27 of 64 of his control set against 59). The tail
+//          that remains is the trip's own (README): cells hot from a change before the trip plus the out and the back.
+//   The per-cell history (t1 t2 t3, rule L2) takes every one of these changes; the per-read window (tw, rule L3) takes none of them (see THE RESET PAINT AND THIS LIMIT).
 //
-// RESET STATES (DRIFT-13 correction 2). The reset is ONE state, `mode`, never a set of flags, so no order of calls can leave a request behind. Four states; the paint is the only thing
-// that leaves a pending one.
+// RESET STATES (DRIFT-13 correction 2, `back` added in correction 3). The reset is ONE state, `mode`, never a set of flags, so no order of calls can leave a request behind. Five states; the
+// paint is the only thing that leaves a pending one. A request moves the state to the strongest of the two (hard > back > other > soft); the columns are the request.
 //
-//   state    meaning                                   reset({ hard: true }) / resize()   reset({ other: true })   reset()   the next paint
-//   steady   paints are governed                       -> hard                            -> other                 -> soft   governed, stays steady
-//   hard     the next paint is whole, history restarts -> hard                            stays hard               stays hard whole and ungoverned -> steady
-//   other    the next paint is whole, every cell       -> hard                            stays other              stays other whole and ungoverned -> steady
-//            counts as changed, history kept
-//   soft     the next paint is whole, changed cells    -> hard                            -> other                 stays soft whole and ungoverned -> steady
-//            count, history kept
+//   state    meaning                                   hard / resize()   { other, changes: 2 }   { other: true }   reset()   the next paint
+//   steady   paints are governed                       -> hard           -> back                 -> other          -> soft   governed, stays steady
+//   hard     the next paint is whole, history restarts -> hard           stays hard              stays hard        stays hard whole and ungoverned -> steady
+//   back     whole, every cell counts as changed TWICE -> hard           stays back              stays back        stays back whole and ungoverned -> steady
+//            (out and back), history kept
+//   other    whole, every cell counts as changed once, -> hard           -> back                 stays other       stays other whole and ungoverned -> steady
+//            history kept
+//   soft     whole, changed cells count once,          -> hard           -> back                 -> other          stays soft whole and ungoverned -> steady
+//            history kept
 //
-// Construction, a new size and a change of buffer type start in hard (the governor has nothing painted). Order: hard beats other beats soft, whatever the order of the calls, and a pending
+// Construction, a new size and a change of buffer type start in hard (the governor has nothing painted). Order: hard beats back beats other beats soft, whatever the order of the calls, and a pending
 // state is consumed by exactly one paint, so at most ONE paint after any number of reset calls is ungoverned (stats.ungoverned, pinned over every ordering by
 // tests/governor-reset-states.test.js). Correction 1 kept two flags, `first` (checked first) and `soft` (not cleared by a hard paint), so a soft request made while a hard paint was pending
 // survived it and made the NEXT paint whole as well (a resize while the console was open, then one console frame, left the second art paint ungoverned).
@@ -125,7 +139,7 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
   const relaxed = variant !== 'strict';
 
   let C = 0, R = 0, n = 0, STEP_CAP = 0, FW = 1, FH = 1, BX = 1, NB = 1, K = 0, CON_CAP = 0, NCON = 0;
-  let mode = 'hard', paintNo = 0, stamp = 0; // mode: the RESET STATES of the header ('steady' | 'hard' | 'soft' | 'other')
+  let mode = 'hard', paintNo = 0, stamp = 0; // mode: the RESET STATES of the header ('steady' | 'hard' | 'soft' | 'other' | 'back')
   let Gp = null, Sp = null, gType = null, sType = null;
   let t1, t2, t3, tw, blk, bcount, conB, blockCon, candE, candT, fresh, ord, maskStamp, noSlot, hist;
   const out = { glyphs: null, shades: null };
@@ -219,15 +233,19 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
       stats.last.examined = 0; stats.last.wanted = 0; stats.last.changed = 0; stats.last.held = 0;
       return out;
     }
-    if (mode !== 'steady') { // soft or other: a reset that kept the size: the history stays, the paint is whole and ungoverned, and counts as ONE change of each cell that really changed
-      const all = mode === 'other'; // the screen (or its palette) was changed under the governor: every cell counts as changed
+    if (mode !== 'steady') { // soft, other or back: a reset that kept the size: the history stays, the paint is whole and ungoverned, and counts as ONE change of each cell that really changed
+      const all = mode !== 'soft'; // the screen (or its palette) was changed under the governor: every cell counts as changed
+      const twice = mode === 'back'; // the screen was left and came back: every cell changed out and back, two changes
       let c = 0;
+      // t1 t2 t3 are the per-CELL history (rule L2) and take the changes. tw, the per-READ window (rule L3), is NOT stamped: the reset paint is one whole paint that no cap can hold (it is the
+      // flip frame, the flip guard's), and a cell stamped there would count as "already changed in this read" and be exempt from the cap of the paints after it (RESET, correction 3).
       for (let i = 0; i < n; i++) {
         if (!all && glyphs[i] === Gp[i] && shades[i] === Sp[i]) continue;
-        t3[i] = t2[i]; t2[i] = t1[i]; t1[i] = now; tw[i] = now; c++;
+        if (twice) { t3[i] = t1[i]; t2[i] = now; t1[i] = now; } else { t3[i] = t2[i]; t2[i] = t1[i]; t1[i] = now; }
+        c++;
       }
       Gp.set(glyphs); Sp.set(shades);
-      mode = 'steady'; // the paint consumes the soft or other state
+      mode = 'steady'; // the paint consumes the soft, other or back state
       stats.ungoverned++; stats.resetChanged += c;
       stats.last.examined = 0; stats.last.wanted = 0; stats.last.changed = 0; stats.last.held = 0;
       return out;
@@ -307,11 +325,14 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
 
   // reset(): the next paint is whole and ungoverned, the per-cell history and the per-read ring are KEPT (the paint counts one change of each cell that differs from what was last painted).
   // reset({ other: true }): the same, but every cell counts as changed (the terminal showed something else, or the palette was swapped: the meter saw every cell move).
+  // reset({ other: true, changes: 2 }): the same, but every cell counts as changed twice (out and back: the way back from another mode or the console).
   // reset({ hard: true }) and resize(): a new screen, the history starts again. The transitions are the table in the header (RESET STATES).
+  const RANK = { steady: 0, soft: 1, other: 2, back: 3 };
   function reset(opts = {}) {
     if (opts.hard || !Gp) { mode = 'hard'; return; }
     if (mode === 'hard') return; // hard dominates any later request before its paint
-    mode = opts.other || mode === 'other' ? 'other' : 'soft';
+    const want = opts.other ? (opts.changes >= 2 ? 'back' : 'other') : 'soft';
+    if (RANK[want] > RANK[mode]) mode = want; // the strongest request wins: back, other, soft
   }
 
   resize(cols, rows);

@@ -3,14 +3,15 @@
 // time inside the second and L2 failed for 0.3 to 0.57 s afterwards (48 of his 240 runs, worst 33.93 %).
 //
 // HOW IT IS JUDGED. The flip FRAME itself swaps the palette under the indices the governor works on: every cell changes luminance at once (L3 reads 95 % at it, in every run), and a cell with
-// two changes just before it is hot at it. No hold can prevent that: it is the flip guard's business (README). Those pre-flip doubles stay hot until their oldest change is a second old, so
-// the reads just after the flip can be over the limit too, with no governor able to prevent it either. Measured with a per-read series (a scratch tool, not shipped) over 288 runs of the shipped
-// governor (40x10 to 80x24, fps 9 18 30, seeds 1 2 3 4 6 7, presses at 31 45 61 62 63 94 95 s): 8 runs had a read over 25 % after the flip frame, the LATEST 0.22 s after it (41x11, fps 18,
-// seed 1); the governor that forgets its history on every reset over-runs until 0.3 to 0.57 s. So the meter is told to forget its worst readings (meter.forgetWorst(): the transition history
-// stays) AFTERMATH = 0.25 s after the event, and the five X1 rules are judged on the reads after that. The bound was found on seeds 1 and 6; seeds 2, 3, 4 and 7 and sizes 41x10, 43x12, 45x12,
-// 50x16 (144 more runs) never had an over-limit read later than 0.07 s, and the matrix below uses seeds the bound was not tuned on too.
-// The same for the way back from another mode and from the console: the frame that comes back is whole by design.
-// The control is the shipped code with the reset made hard again (the history cleared: the code before this correction): the same cases FAIL.
+// two changes just before it is hot at it. No hold can prevent that: it is the flip guard's business (README). The cells that changed just before the flip stay hot until their OLDEST
+// change is one second old, so the reads after the flip can be over the limit too, with no governor able to prevent it: that is the MECHANISM BOUND on the tail, under 1 s (a hot cell needs
+// a transition no governed paint made, and every one of those is older than the flip paint). The measured tail is shorter: a per-read series (a scratch tool, not shipped) over 288 runs of the
+// shipped governor (40x10 to 80x24, fps 9 18 30, seeds 1 2 3 4 6 7, presses at 31 45 61 62 63 94 95 s) had its LATEST over-limit read 0.22 s after the flip, and 240 more runs (seeds 5 and 8
+// too) 0.37 s (README). 0.25 s is therefore NOT a bound; it is the point this test judges FROM: meter.forgetWorst() (the transition history stays) AFTERMATH = 0.25 s after the event, and the
+// five X1 rules are judged on the reads after that, on a matrix that includes seeds and sizes the 0.25 s was not tuned on. A tail longer than 0.25 s exists and is disclosed, not hidden.
+// The same for the way back from another mode and from the console: the frame that comes back is whole by design, and its tail (README) is measured below, not bounded by 0.25 s.
+// The control is the shipped code with the reset made hard again (the history cleared: the code before correction 1): the same cases FAIL. Correction 3: the way back from another mode or
+// the console counts TWO changes per cell (out and back), and the controls below put back one change and the cleared history.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runLife, nums, makeTree, rmTree } from './helpers-life-app.js';
@@ -31,14 +32,14 @@ const EVENTS = {
 const AFTERMATH = 0.25; // seconds, see above
 
 // run one case; judge the reads more than AFTERMATH after the event. Returns { rep (the worst over those reads), at (the frame of the event), line, failed }
-async function judgeAfter(o, event, root = null) {
+async function judgeAfter(o, event, root = null, after = AFTERMATH) {
   let prev = null, at = null;
   const r = await runLife({
     mode: '256', clock: 'grid', clockSeed: o.seed, feedAll: true, stopAtDissolve: false, sceneSeconds: 30, root, ...o,
     grab: (k, screen, app, f, meter) => {
       const st = app.getState();
       if (prev && at === null && EVENTS[event].seen(st, prev)) at = k;
-      if (at !== null && k === at + Math.floor(AFTERMATH * o.fps)) meter.forgetWorst();
+      if (at !== null && k === at + Math.floor(after * o.fps)) meter.forgetWorst();
       prev = st;
     },
   });
@@ -66,7 +67,10 @@ test('DRIFT-13 `i` in a dissolve: the five X1 rules hold on every read more than
 // ---- the way back from another mode and from the console, on the busiest scene
 const BACK = { cols: 40, rows: 10, fps: 18, seed: 1, scene: 'tunnel', startScene: 1, sceneSeconds: 1000, seconds: 13 };
 const MODE_TRIP = { ...BACK, keys: [{ at: 8, key: '1' }, { at: 8.4, key: '3' }] }; // calm for 0.4 s and back to high contrast (the jump keys; chaos and experimental are neither governed nor quiet)
-const CONSOLE_TRIP = { ...BACK, keys: [{ at: 8, key: 'l' }, { at: 8.6, key: '\x1b' }] }; // the library and back
+const CONSOLE_TRIP = { ...BACK, keys: [{ at: 8, key: 'l' }, { at: 8.6, key: '\x1b' }] }; // the library and back (after 0.6 s: long enough that the history before it has mostly aged out)
+const trip = (away, extra = {}) => ({ ...BACK, ...extra, keys: [{ at: 8, key: '1' }, { at: 8 + away, key: '3' }] }); // away from high contrast (calm) for `away` seconds
+const consoleTrip = (away, extra = {}) => ({ ...BACK, ...extra, keys: [{ at: 8, key: 'l' }, { at: 8 + away, key: '\x1b' }] });
+// the console case here is a PASS check only (0.6 s away: the shipped tree, the one-change tree and the cleared-history tree all pass it); the discriminating console cases are the correction 3 tests below
 test('DRIFT-13 the way back from another mode and from the console: the five X1 rules hold on the reads more than 0.25 s after it (the tunnel at 40x10)', async () => {
   for (const [label, o, ev] of [['mode round trip', MODE_TRIP, 'mode'], ['console and back', CONSOLE_TRIP, 'console']]) {
     const j = await judgeAfter(o, ev);
@@ -89,7 +93,7 @@ test('DRIFT-13 control: the governor that forgets its history on every reset fai
       assert.ok(mut.failed.includes('l2.x1'), `the cleared-history governor fails L2 at ${cols}x${rows} fps ${fps} seed ${seed}: ${mut.line}`);
       out.push(`${cols}x${rows} fps ${fps} seed ${seed}: history cleared ${mut.line} FAILS ${mut.failed.join(' ')} / shipped ${shipped.line}`);
     }
-    // the way back from another mode, on the tunnel: the history of the 0.4 s before it is what holds L2 (the console trip is not told apart: the library takes longer than a second to come back)
+    // the way back from another mode, on the tunnel: the history of the 0.4 s before it is what holds L2 (the 0.6 s console trip is not told apart by any control: the history before it has mostly aged out; the console cases that are told apart are the correction 3 tests below)
     const tripShipped = await judgeAfter(MODE_TRIP, 'mode'), tripMut = await judgeAfter(MODE_TRIP, 'mode', root);
     assert.deepEqual(tripShipped.failed, [], tripShipped.line);
     assert.ok(tripMut.failed.includes('l2.x1'), `the cleared-history governor fails L2 on the mode round trip: ${tripMut.line}`);
@@ -98,4 +102,39 @@ test('DRIFT-13 control: the governor that forgets its history on every reset fai
     // the mutation target is real: the same tree edit matching nothing throws
     assert.throws(() => makeTree('new', { 'src/governor.js': (t) => must(t, 'no such text', 'x') }), /exactly once/);
   } finally { rmTree(root); }
+});
+
+// ---- correction 3: the way back counts TWO changes per cell (the screen was left and came back). Shorter trips than the cases above, where the cells' own history just before the trip is what
+// holds L2. Cases: the mode trip away 0.3 s (seed 1), the console away 0.3 s (seed 1) and 0.2 s (seed 2): tuned points, so the claim below is only that the shipped tree passes them and the
+// controls (one change, the history cleared) do not; the sweep that is not tuned is tools/contrast-matrix.mjs and Desmond's modetrip-ctl (README).
+const BACK_CASES = [['mode trip 0.3 s', trip(0.3), 'mode'], ['console trip 0.3 s', consoleTrip(0.3), 'console'], ['console trip 0.2 s, seed 2', consoleTrip(0.2, { seed: 2 }), 'console']];
+const ONE_CHANGE = { 'src/app.js': (t) => must(t, 'repaintAll(changedMode || leavingShell ? { other: true, changes: 2 } : undefined);', 'repaintAll(changedMode || leavingShell ? { other: true } : undefined);') }; // the code before correction 3: the way back counts one change
+test('DRIFT-13 the way back counts two changes: the shipped tree passes the five X1 rules from 0.25 s after a 0.3 s mode trip and a console trip of 0.3 s and 0.2 s (the tunnel at 40x10, 18 fps)', async () => {
+  for (const [label, o, ev] of BACK_CASES) {
+    const j = await judgeAfter(o, ev);
+    assert.deepEqual(j.failed, [], `${label}: ${j.line}`);
+  }
+});
+test('DRIFT-13 the way back control: the tree that counts ONE change (the code before correction 3) and the one that clears the history both fail L2 on the same three cases the shipped tree passes', async () => {
+  const one = makeTree('new', ONE_CHANGE), hard = makeTree('new', HARD_RESET);
+  try {
+    const out = [];
+    for (const [label, o, ev] of BACK_CASES) {
+      const shipped = await judgeAfter(o, ev);
+      assert.deepEqual(shipped.failed, [], `shipped passes ${label}: ${shipped.line}`);
+      for (const [name, root] of [['one change', one], ['history cleared', hard]]) {
+        const mut = await judgeAfter(o, ev, root);
+        assert.ok(mut.failed.includes('l2.x1'), `the ${name} tree fails L2 on the ${label}: ${mut.line}`);
+        out.push(`${label}: ${name} ${mut.line} FAILS ${mut.failed.join(' ')} / shipped ${shipped.line}`);
+      }
+    }
+    console.log(`CONTROL the way back counted once, or the history cleared, judged from 0.25 s after it:\n  ${out.join('\n  ')}`);
+  } finally { rmTree(one); rmTree(hard); }
+});
+test('DRIFT-13 the way back, what remains: a 0.15 s mode trip still reads L2 over 25 % for part of the second after it (cells that changed just before the trip stay hot until their oldest change is a second old); from 1 s after it the five rules hold', async () => {
+  const o = trip(0.15);
+  const early = await judgeAfter(o, 'mode'), late = await judgeAfter(o, 'mode', null, 1.0);
+  assert.deepEqual(early.failed, ['l2.x1'], `judged from 0.25 s only L2 is over the limit (the tail, named in the README): ${early.line}`);
+  assert.deepEqual(late.failed, [], `from 1 s after the return every rule holds (the mechanism bound): ${late.line}`);
+  console.log(`DRIFT-13 the way back tail: mode trip 0.15 s, judged from 0.25 s: ${early.line}; from 1 s: ${late.line}`);
 });
