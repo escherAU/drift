@@ -553,6 +553,9 @@ test('flip guard: nothing is written while help is open, even if a flip is due; 
   const c = mk({ config: { mode: 'contrast' } });
   c.app.start();
   c.app.tick(0.05);
+  // DRIFT-13: the governor keeps its history across the flip (the first paint and the flip are each a change of every cell), so a panel opened within a second of the start is finished by
+  // catch-up paints once those changes are a second old, and the loop writes them while help is open. Let the first second pass before the flip: the test is about the deferred flip.
+  for (let i = 0; i < 24; i++) c.app.tick(0.05);
   c.key('i'); c.app.tick(0);
   c.app.tick(0.5);
   c.key('i'); // deferred
