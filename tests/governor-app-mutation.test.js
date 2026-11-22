@@ -22,7 +22,8 @@ import { startCard } from './helpers-size-card.js';
 
 const line = (rep) => { const n = nums(rep); return `L1 ${n.l1.toFixed(2)} L2 ${n.l2.toFixed(2)} L3 ${n.l3.toFixed(2)} R ${n.r.toFixed(2)} C ${n.c.toFixed(2)}`; };
 const bad = (rep) => failedRules(rep, { only: X1_RULE_IDS });
-const must = (text, from, to) => { assert.equal(text.split(from).length, 2, `the mutation target occurs exactly once: ${from}`); return text.replace(from, to); };
+// line endings normalised: a git archive export on Windows carries CRLF and some targets span lines
+const must = (text, from, to) => { const lf = text.replace(/\r\n/g, '\n'); assert.equal(lf.split(from).length, 2, `the mutation target occurs exactly once: ${from}`); return lf.replace(from, to); };
 const D = (id) => { const d = DESMOND.find((x) => x.id.startsWith(id)); assert.ok(d, id); return d; };
 
 const A1 = D('42x12 grid 1x --fps 26 seed 6'), A2 = D('42x12 grid 1x --fps 27'), A3 = D('45x12 q156 4x'), A4 = D('41x12 q156 2x');
