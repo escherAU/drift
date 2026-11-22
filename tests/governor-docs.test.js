@@ -29,7 +29,7 @@ test('DRIFT-13 README: what the governor limits, the neighbourhood arithmetic, b
     'A cell may not change a third time within one second', 'No more than 25 % of the cells may change inside one read', '`READ_CAP`, five points under L3\'s limit of 30 %',
     'The shipped variant is `nbhd`', '2 x 2 neighbourhood of blocks', '14 of the 56 cells of a field at 40x10 to 42x12', 'A hot cell is always a triple cell', 'at most 2K hot pixels',
     '**What is covered by construction and what is not.**', 'R holds because the two-tone palette has no saturated red', 'The x4 views of L1 and L2', 'are not governed and not asserted',
-    'The `i` key swaps the palette', 'the flip guard bounds how often it happens', 'governed like any other change, with no exemption',
+    'The `i` key swaps the palette', 'the guard bounds how often a flip happens', 'governed like any other change, with no exemption',
     'whole after 1 paint at 80x24 and 3 at 40x10', '12 paints (0.67 s) at 80x24, 11 (0.61 s) at 40x10 and 10 (0.56 s) at 120x40', 'after 2 and 4 paints at 80x24 and 40x10 when the clock was paused first',
     '**Why the cap is 25 % and not 30 %.**',
   ]) assert.ok(S.includes(need), `the README says: ${need}`);
@@ -182,4 +182,34 @@ test('DRIFT-13 README: the 30 % cap tree never came within 1 point of 30 % in th
     assert.ok(o.nearLimit.l2 > o.lines / 2 - 1, `${k}: more than half the lines read within 1 point of L2's limit`);
     assert.equal(FIX.sweeps[k].after.nearLimit.l2, 0);
   }
+});
+
+// ---- DRIFT-13 correction 1: what the README says about the `i` key, the resets, fg and bg, and what is not covered
+test('DRIFT-13 README: the governor does reset on `i` and keeps its history; the flip frame and the 0.25 s after it are the flip guard\'s; the resize-type reset starts the history again; a window drag and rgb scenes are named', () => {
+  for (const need of [
+    'the app does reset the governor when it flips: the reset KEEPS the governor\'s history', 'counts the flip as one change of every cell',
+    'the way back from another mode and from the console are reset the same way',
+    'L2 failed for 0.3 to 0.57 s afterwards (48 of 240 of Desmond\'s runs, worst 33.93 %; `governor-flip` has the control)',
+    'The flip FRAME itself is the flip guard\'s and is not covered', 'L3 reads about 95 % at it in every run', '`governor-flip` judges the reads more than 0.25 s after the flip',
+    'The first paint after a size change (a terminal resize, the size card) is ungoverned and starts the history again',
+    'a window dragged to a new size does that on every resize event (an ungoverned whole repaint each) and is NOT covered',
+    'fg and bg pass through the governor ungoverned', '`rgb: true`', '`governor-playlist` fails the day one does',
+    '`governor-flip` (an `i` in the middle of a dissolve, 72 runs', '`governor-engage` (counted engagement per scene at three sizes and three rates', '`governor-playlist` (no high contrast scene has `rgb: true`)',
+    'the `i` key\'s own flip frame and the 0.25 s after it (the flip guard); a window dragged to a new size', 'high contrast scenes with full-colour cells (there are none)',
+  ]) assert.ok(S.includes(need) || R.includes(need), `the README says: ${need}`);
+  assert.ok(!R.includes('so the governor has no part in it'), 'the old sentence (the governor has no part in `i`) is gone');
+  assert.ok(!S.includes("the `i` key's own flip (the flip guard);"), 'and the old not-covered item');
+});
+
+test('DRIFT-13 README: the flip aftermath numbers are the committed series\' (tools/governor-flip-series.mjs, tests/fixtures/governor-flip-series.json), and the guard files exist', () => {
+  const F = JSON.parse(read('./fixtures/governor-flip-series.json'));
+  assert.equal(F.shipped.runs, F.shipped.perRun[0].runs + F.shipped.perRun[1].runs);
+  assert.equal(F.shipped.runsWithOverLimitRead, F.shipped.perRun[0].over + F.shipped.perRun[1].over);
+  assert.equal(F.shipped.latestOverLimitReadSeconds, Math.max(F.shipped.perRun[0].latest, F.shipped.perRun[1].latest));
+  assert.ok(S.includes(`in ${F.shipped.runs} runs the latest over-limit read was ${F.shipped.latestOverLimitReadSeconds.toFixed(2)} s after the flip, and ${F.shipped.runsWithOverLimitRead} of the ${F.shipped.runs} runs had one at all`));
+  assert.ok(F.shipped.latestOverLimitReadSeconds < 0.25, 'the window the test judges from (0.25 s) is later than the latest shipped over-limit read');
+  assert.ok(F.historyCleared.latestOverLimitReadSeconds > 0.25 && F.historyCleared.runsWithOverLimitRead > 10, 'and the governor that forgets its history is over the limit after it, in many runs');
+  const E = JSON.parse(read('./fixtures/governor-engagement.json'));
+  assert.equal(Object.keys(E.configs).length, 9, 'the engagement baseline is 3 sizes x 3 rates');
+  for (const f of ['../tools/governor-flip-series.mjs', './governor-flip.test.js', './governor-engage.test.js', './governor-playlist.test.js']) assert.ok(fs.existsSync(new URL(f, import.meta.url)), `${f} exists`);
 });

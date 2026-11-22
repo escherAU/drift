@@ -65,7 +65,7 @@ export async function movingFrames(speed, o = {}) {
 // writes: an array that gets every string the app wrote (in order); beforeFrame(k, { stdout, stdin, app }) runs at the start of frame k (a test stalls the terminal there); meter: false skips the
 // terminal reader and the meter (the rep is null) for the tools and tests that only watch the spy (tests/helpers-governor-app.js).
 // feedAll: meter every frame of the run (the dissolves and the scenes after Life too); the tests never do, the README's "not covered" figures come from it.
-// `grab(k, screen, app)` is called on every frame the meter reads, for the look tests (lit counts, glyphs). `forceDead(app)` is not offered: quiet states use the scene directly.
+// `grab(k, screen, app, f, meter)` is called on every frame the meter reads (after it was pushed; meter.forgetWorst() makes the final rep the worst over the LATER frames only), for the look tests (lit counts, glyphs). `forceDead(app)` is not offered: quiet states use the scene directly.
 export async function runLife({
   cols = 80, rows = 24, mode = '256', seed = 1, seconds = 32, keys = [], clock = 'grid', clockSeed = 1, root = null, fps = LIFE_FPS,
   sceneSeconds = 30, invert = false, grab = null, startMode = 'contrast', stopAtDissolve = true, feedAll = false, scene = 'life', startScene = 0, card = false, onApp = null, meter: useMeter = true, writes = null, beforeFrame = null,
@@ -112,7 +112,7 @@ export async function runLife({
       for (let j = 0; j < n; j++) { f.glyphs[j] = screen.glyphs[j]; f.fg[j] = rgbOf(screen.fg[j], DEF_FG); f.bg[j] = rgbOf(screen.bg[j], DEF_BG); }
       meter.push(f, undefined);
       frames++;
-      if (grab) grab(k, screen, app, f);
+      if (grab) grab(k, screen, app, f, meter);
     }
     return { rep: meter ? meter.report() : null, frames, endedAt, ids, speedMax, card: tiny, state: app.getState(), exits: proc.exits.slice() };
   } finally {

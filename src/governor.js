@@ -6,7 +6,7 @@
 //   const gov = createGovernor({ cols, rows, fps, variant });
 //   const painted = gov.govern(glyphs, shades, now);   // now: REAL time in seconds (the app's `wall`), never scene time
 //   painted.glyphs, painted.shades                      // the same two buffers every call (reused; do not keep them across paints)
-//   gov.reset()                                         // a fresh screen: the next paint is not governed
+//   gov.reset(opts)                                     // the next paint is whole and not governed; the history is kept unless opts.hard (see RESET)
 //   gov.resize(cols, rows)                              // a new size (also a reset)
 //   gov.stats                                           // counters, see COST and OBSERVE
 //
@@ -53,8 +53,15 @@
 // cells lose each time, no band of the screen is starved (lowest-index-first would paint the top rows and freeze the bottom), and the same inputs always give the same output. The ones
 // that were held retry with a fresh priority on the next paint. (A counting sort on 12 bits of the hash; cells of the same bucket keep index order.)
 //
-// RESET. The first paint after construction, reset() or resize() is not governed (a fresh screen: the renderer repaints it whole, as the app already treats it). It is recorded as a
-// change of every cell at that time for the per-cell history (a cell may have changed from what the old screen showed), and not in the per-read union (it is a repaint, not a step).
+// RESET. The first paint after construction, reset() or resize() is not governed (a fresh screen: the renderer repaints it whole, as the app already treats it). Three kinds:
+//   hard   construction, resize(), reset({ hard: true }): the paint is recorded as a change of every cell for the per-cell history, which starts again there (t2 and t3 forgotten), and the
+//          per-read ring is cleared. A size change and the size card.
+//   soft   reset(): the history (t1, t2, t3) and the per-read ring are KEPT. The paint is whole and ungoverned, and counts as ONE change (shifted into the history, stamped in the ring) of each
+//          cell that differs from what was last painted, never a fresh change of every cell. Why keep it: a reset that forgot every cell's last changes let a cell change a third time inside W
+//          just after it (an `i` in the middle of a dissolve failed L2 for 0.3 to 0.45 s; DRIFT-13 correction 1).
+//   other  reset({ other: true }): soft, but every cell counts as changed: the palette was swapped (the `i` key; the meter reads colour, the governor reads indices) or the terminal showed
+//          something else in between (another mode, the console), so the meter saw every cell move. The flip FRAME itself cannot be held by any governor (every cell changes luminance at once);
+//          a cell with two changes just before it is hot at it, which is the flip guard's business, not the governor's.
 //
 // COST. One pass over the cells to find what wants to change, then work proportional to the cells that want to change (a 4096-bucket counting sort when something must be chosen);
 // no allocation after the first paint (the buffers, the history and the scratch are made once, per size). Counters: stats.examined (cells looked at), stats.wanted, stats.changed,
@@ -102,12 +109,12 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
   const relaxed = variant !== 'strict';
 
   let C = 0, R = 0, n = 0, STEP_CAP = 0, FW = 1, FH = 1, BX = 1, NB = 1, K = 0, CON_CAP = 0, NCON = 0;
-  let first = true, paintNo = 0, stamp = 0;
+  let first = true, soft = false, other = false, paintNo = 0, stamp = 0;
   let Gp = null, Sp = null, gType = null, sType = null;
   let t1, t2, t3, tw, blk, bcount, conB, blockCon, candE, candT, fresh, ord, maskStamp, noSlot, hist;
   const out = { glyphs: null, shades: null };
   const stats = {
-    paints: 0, ungoverned: 0, examined: 0, wanted: 0, changed: 0, held: 0, strictHeld: 0, blocksHeld: 0, readHeld: 0,
+    paints: 0, ungoverned: 0, resetChanged: 0, examined: 0, wanted: 0, changed: 0, held: 0, strictHeld: 0, blocksHeld: 0, readHeld: 0,
     last: { examined: 0, wanted: 0, changed: 0, held: 0 },
   };
 
@@ -148,7 +155,7 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
     maskStamp = new Int32Array(n); noSlot = new Int32Array(n); stamp = 0;
     hist = new Int32Array(BUCKETS + 1);
     Gp = Sp = gType = sType = null; out.glyphs = out.shades = null;
-    first = true; paintNo = 0;
+    first = true; soft = false; other = false; paintNo = 0;
   }
 
   // list[0..m) in priority order (lowest hash bucket first) into ord[0..m): a counting sort, stable, O(m + BUCKETS)
@@ -196,6 +203,19 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
       stats.last.examined = 0; stats.last.wanted = 0; stats.last.changed = 0; stats.last.held = 0;
       return out;
     }
+    if (soft) { // a reset that kept the size: the history stays, the paint is whole and ungoverned, and counts as ONE change of each cell that really changed
+      const all = other; // the screen (or its palette) was changed under the governor: every cell counts as changed
+      let c = 0;
+      for (let i = 0; i < n; i++) {
+        if (!all && glyphs[i] === Gp[i] && shades[i] === Sp[i]) continue;
+        t3[i] = t2[i]; t2[i] = t1[i]; t1[i] = now; tw[i] = now; c++;
+      }
+      Gp.set(glyphs); Sp.set(shades);
+      soft = false; other = false;
+      stats.ungoverned++; stats.resetChanged += c;
+      stats.last.examined = 0; stats.last.wanted = 0; stats.last.changed = 0; stats.last.held = 0;
+      return out;
+    }
     paintNo++;
     const age = now - W + EPS_T; // a change-time at or before `age` is at least W old
     const winStart = now - READ_WINDOW + EPS_T; // a change-time after `winStart` is inside one read
@@ -229,7 +249,6 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
     for (let k = 0; k < nE; k++) {
       const i = candE[k];
       if (tw[i] <= winStart && maskStamp[i] !== eStamp) { held++; stats.readHeld++; if (!observe) continue; }
-      if (relaxed && t3[i] > age) bcount[blk[i]]--; // a change drops the cell out of "triple" (its new third-to-last is t2, at least W old)
       Gp[i] = glyphs[i]; Sp[i] = shades[i];
       t3[i] = t2[i]; t2[i] = t1[i]; t1[i] = now; tw[i] = now;
       applied++;
@@ -270,7 +289,14 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
     return out;
   }
 
-  function reset() { first = true; }
+  // reset(): the next paint is whole and ungoverned, the per-cell history and the per-read ring are KEPT (the paint counts one change of each cell that differs from what was last painted).
+  // reset({ other: true }): the same, but every cell counts as changed (the terminal showed something else, or the palette was swapped: the meter saw every cell move).
+  // reset({ hard: true }) and resize(): a new screen, the history starts again.
+  function reset(opts = {}) {
+    if (opts.hard || !Gp) { first = true; soft = false; other = false; return; }
+    soft = true;
+    if (opts.other) other = true;
+  }
 
   resize(cols, rows);
   return {

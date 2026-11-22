@@ -9,7 +9,7 @@
 //   built with fps 18         the app's --fps not handed to the governor: its read window is wrong at --fps 9 (L3 over 30 %)
 //   governor before the help  the panel drawn onto the governor's output (the panel is painted whole): a Classic help panel at 40x10 changes more than 30 % of the screen in one read (L3)
 //   not reset on a repaint    repaintAll without the governor reset: coming back to high contrast from another mode, the first paint is governed against a screen from seconds ago (522 of
-//                             1920 cells held). The flip of `i` is the same either way: it swaps the palette, not the indices the governor works on, so it needs no reset (asserted both ways)
+//                             1920 cells held). The first paint after an `i` holds nothing either way (asserted both ways): it is the composed frame whole, and what the reset does for `i` is keep the history and count the flip as a change of every cell (tests/governor-flip.test.js has the control for that)
 //   not resized               a size change that does not reach the governor: the governor refuses the frame and the app exits with an error
 // Two resets of the wiring are defence in depth and are shown to be that: the reset in renderCard and the one on every console frame are covered by the repaintAll that the resize and the
 // console's own leaveToClassic already make, so taking either out changes nothing the app can show (asserted below as such, not as a mutant that fails).
@@ -40,10 +40,10 @@ const MUT = {
       "    const pal = paletteNow();\n    const gpre = shown.mode === 'contrast' ? govern(f) : f;\n    if (helpOpen) {\n      drawHelp(gpre.glyphs, gpre.shades, cols, rows, {"),
     "const painted = shown.mode === 'contrast' ? govern(f) : f;", 'const painted = gpre;'),
   },
-  noFlipReset: { 'src/app.js': (t) => must(t, 'function repaintAll() { renderer.invalidate(); govReset(); }', 'function repaintAll() { renderer.invalidate(); }') },
+  noFlipReset: { 'src/app.js': (t) => must(t, 'function repaintAll(opts = { other: true }) { renderer.invalidate(); govReset(opts); }', 'function repaintAll(opts = { other: true }) { renderer.invalidate(); }') },
   noResize: { 'src/app.js': (t) => must(t, 'else if (govCols !== cols || govRows !== rows) { gov.resize(cols, rows); govCols = cols; govRows = rows; }', '') },
-  noCardReset: { 'src/app.js': (t) => must(t, '    govReset(); // the card is something else on the terminal: the next art frame is a whole repaint\n', '') },
-  noConsoleReset: { 'src/app.js': (t) => must(t, '    shellPal = f.palette;\n    govReset();\n', '    shellPal = f.palette;\n') },
+  noCardReset: { 'src/app.js': (t) => must(t, '    govReset({ hard: true }); // the card is something else on the terminal (and a size the art does not fit): the next art frame is a whole repaint and the history starts again\n', '') },
+  noConsoleReset: { 'src/app.js': (t) => must(t, '    shellPal = f.palette;\n    govReset({ other: true });\n', '    shellPal = f.palette;\n') },
 };
 
 // ---- the rule mutants: Desmond's cases on a mutated copy
@@ -138,7 +138,7 @@ test('DRIFT-13 control: no governor reset on a repaint-all: coming back to high 
   assert.equal(await run({}, 'mode'), 0, 'shipped: the first paint back in high contrast is whole');
   const held = await run(MUT.noFlipReset, 'mode');
   assert.ok(held > 0, `without the reset the first paint back in high contrast holds ${held} cells`);
-  // the flip changes the palette, not the indices: the governor needs no reset for it, and holds nothing either way (the README says so)
+  // the flip changes the palette, not the indices: its first paint holds nothing with or without the reset (the reset only matters for the history after it: tests/governor-flip.test.js)
   assert.equal(await run({}, 'flip'), 0);
   assert.equal(await run(MUT.noFlipReset, 'flip'), 0);
   console.log(`CONTROL mutant no reset on repaintAll: the first paint back in high contrast from another mode holds ${held} cells of 1920 (shipped: 0); the first paint after i holds 0 either way`);

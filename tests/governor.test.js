@@ -296,3 +296,71 @@ test('DRIFT-13 observe: observe mode holds nothing and counts what the rules wou
   assert.ok(gov.stats.strictHeld > 0, 'the strict rule would hold third changes');
   assert.ok(gov.stats.blocksHeld > 0 && gov.stats.blocksHeld <= gov.stats.strictHeld, 'the blocks rule holds some of them (all but the block budgets)');
 });
+
+// ---- 7. DRIFT-13 correction 1: a reset that does not change the size keeps the history
+// (reset() = a soft reset: the next paint is whole and ungoverned, but it counts as ONE change of each cell that really changed against what was last painted;
+// reset({ other: true }) = the terminal showed something else, so every cell counts as changed; resize() and a new size start the history again)
+const SOFT = { cols: 40, rows: 10, fps: 18 }; // W = 1 s
+function twoChanged(gov, f, cells, t0) {
+  // changes of the given cells at t0 and t0 + 0.3: two changes inside W
+  gov.govern(f.glyphs, f.shades, -50);
+  for (const [k, v] of [[t0, 0x41], [t0 + 0.3, 0x42]]) { for (const c of cells) f.glyphs[c] = v; gov.govern(f.glyphs, f.shades, k); }
+}
+test('DRIFT-13 soft reset: the per-cell history survives it (a cell that changed twice just before the reset may not change a third time just after)', () => {
+  const n = 400, gov = createGovernor(SOFT), f = frame(n);
+  twoChanged(gov, f, [5, 6], 0);
+  gov.reset();
+  f.glyphs[5] = 0x43; // the whole repaint: cell 5 changes (its third change, ungoverned: it is a repaint)
+  assert.equal(gov.govern(f.glyphs, f.shades, 0.4).glyphs[5], 0x43, 'the reset paint is whole');
+  assert.equal(gov.stats.ungoverned, 2);
+  f.glyphs[5] = 0x44;
+  assert.equal(gov.govern(f.glyphs, f.shades, 0.5).glyphs[5], 0x43, 'a further change of cell 5 just after the reset is held: its history was kept (changes at 0, 0.3, 0.4)');
+  f.glyphs[6] = 0x45; // cell 6 did not change in the reset paint but has two changes (0 and 0.3) inside W
+  assert.equal(gov.govern(f.glyphs, f.shades, 0.6).glyphs[6], 0x42, 'cell 6 kept its two changes: a third change at 0.6 is held');
+  assert.equal(gov.govern(f.glyphs, f.shades, 1.0).glyphs[6], 0x45, 'and goes through when its first change is W old');
+});
+test('DRIFT-13 soft reset: the reset paint counts ONE change per cell that actually changed, not a fresh change of every cell', () => {
+  const n = 400, gov = createGovernor(SOFT), f = frame(n);
+  gov.govern(f.glyphs, f.shades, -50);
+  f.glyphs[7] = 0x41; gov.govern(f.glyphs, f.shades, 0.1); // one change of cell 7 and one of cell 8 at 0.1
+  gov.reset();
+  f.glyphs[8] = 0x42; // the reset paint changes cell 8 only
+  gov.govern(f.glyphs, f.shades, 0.4);
+  assert.equal(gov.stats.resetChanged, 1, 'one cell changed in the reset paint');
+  f.glyphs[7] = 0x46; assert.equal(gov.govern(f.glyphs, f.shades, 0.5).glyphs[7], 0x46, 'cell 7 was not changed by the reset paint: its second change (the first since 0.1) is allowed');
+  f.glyphs[7] = 0x47; assert.equal(gov.govern(f.glyphs, f.shades, 0.6).glyphs[7], 0x46, 'and its third inside W is held');
+  f.glyphs[8] = 0x48; assert.equal(gov.govern(f.glyphs, f.shades, 0.7).glyphs[8], 0x48, 'cell 8: the reset paint plus this one are two changes, allowed');
+});
+test('DRIFT-13 soft reset: reset({ other: true }) (the console was on screen) counts every cell as changed; resize and a new size start the history again', () => {
+  const n = 400, f = frame(n);
+  const gov = createGovernor(SOFT);
+  twoChanged(gov, f, [9], 0);
+  gov.reset({ other: true });
+  gov.govern(f.glyphs, f.shades, 0.4);
+  assert.equal(gov.stats.resetChanged, n, 'every cell counts as changed');
+  f.glyphs[3] = 0x49; assert.equal(gov.govern(f.glyphs, f.shades, 0.5).glyphs[3], 0x49, 'cell 3: the reset change plus this is two: allowed');
+  f.glyphs[3] = 0x4a; assert.equal(gov.govern(f.glyphs, f.shades, 0.6).glyphs[3], 0x49, 'and a third inside W is held');
+  // a size change starts again: the same cell index with the same history is free
+  const g2 = createGovernor(SOFT), f2 = frame(n);
+  twoChanged(g2, f2, [9], 0);
+  g2.resize(40, 10);
+  g2.govern(f2.glyphs, f2.shades, 0.4);
+  assert.equal(g2.stats.resetChanged, 0, 'a hard reset is not a counted repaint');
+  f2.glyphs[9] = 0x43; assert.equal(g2.govern(f2.glyphs, f2.shades, 0.5).glyphs[9], 0x43, 'after resize() the history is gone: change allowed');
+  f2.glyphs[9] = 0x44; assert.equal(g2.govern(f2.glyphs, f2.shades, 0.6).glyphs[9], 0x43, 'the new history is the first paint (0.4) and the change at 0.5: a third change inside W is held');
+  // reset({ hard: true }) is the same as resize: the size card
+  const g3 = createGovernor(SOFT), f3 = frame(n);
+  twoChanged(g3, f3, [9], 0);
+  g3.reset({ hard: true });
+  g3.govern(f3.glyphs, f3.shades, 0.4);
+  f3.glyphs[9] = 0x43; assert.equal(g3.govern(f3.glyphs, f3.shades, 0.5).glyphs[9], 0x43, 'hard reset: history gone');
+});
+test('DRIFT-13 soft reset: the per-read ring survives too (cells that changed in the reset paint are already inside the read window, so moving them again costs the cap nothing)', () => {
+  const n = 400, gov = createGovernor(SOFT), f = frame(n), full = frame(n, FULL);
+  gov.govern(f.glyphs, f.shades, -50);
+  gov.reset();
+  gov.govern(full.glyphs, full.shades, 0); // the whole screen changes at 0 (a repaint)
+  const back = frame(n);
+  const o = gov.govern(back.glyphs, back.shades, 0.01); // inside the same read window (1 / 18 s): the same cells, no new ones, so the cap of 100 does not bind
+  assert.equal(count(o.glyphs, FULL), 0, 'all 400 cells moved again: they were already in the read');
+});

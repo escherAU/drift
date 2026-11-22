@@ -452,6 +452,12 @@ function createGrid(w, h, fw, fh, win1, win4) {
         }
       }
     },
+    // forget the worst readings so far (the history of transitions, the swings and the hot grids stay): the next report is the worst over the frames pushed AFTER this call
+    // (DRIFT-13 correction 1: judge a key press's aftermath without its own frame)
+    forgetWorst() {
+      for (const sp of specs) sp.best = { count: 0, x: 0, y: 0, frame: -1, hotCells: 0 };
+      step.count = 0; step.frame = -1;
+    },
     report(fps, frames) {
       const fieldN = fw * fh;
       const ruleOf = (sp) => {
@@ -565,7 +571,7 @@ export function createFlashMeter(cols, rows, fps) {
   }
 
   // cellY: the Y of the whole cell (the glyph's total coverage); pixelY: the Y of the top (half 0) or bottom (half 1) pixel
-  return { push, report, field: cf, pixelField, cellY: (i) => cellGrid.Y[i], pixelY: (i, half) => pixGrid.Y[2 * Math.floor(i / cols) * cols + (i % cols) + half * cols] };
+  return { push, report, forgetWorst() { cellGrid.forgetWorst(); pixGrid.forgetWorst(); }, field: cf, pixelField, cellY: (i) => cellGrid.Y[i], pixelY: (i, half) => pixGrid.Y[2 * Math.floor(i / cols) * cols + (i % cols) + half * cols] };
 }
 
 // ---- the rule list every flash test shares (DRIFT-8 C4)

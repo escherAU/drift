@@ -121,12 +121,13 @@ test('DRIFT-12 mutant: the old flow (FLY 0.9 rings a second) reads L3 over the l
       worst.push(pc(bad.worst.l3));
       const good = await over(o, [1, 2, 3, 4, 5, 6, 7, 8], null);
       assert.deepEqual(good.ids, [], `${JSON.stringify(o)} on the shipped tunnel: ${JSON.stringify(good.worst)}`);
-      // DRIFT-13: the margin is the SCENE's own (the shipped tunnel without the governor, which is what this mutant differs from); the governor, which releases what it held up to the per-read cap of 30 %,
-      // may read higher than that margin and still passes the rule (asserted just above); the numbers are printed
+      // DRIFT-13: the margin below is the SCENE's own (the shipped tunnel without the governor, which is what this mutant differs from). The governed tunnel (the real tree) may read higher than that
+      // margin, because the governor releases what it held up to its per-read cap, READ_CAP 25 % (five points under the meter's 30 %); it is asserted at the limit it has, the cap itself: never over 25 %
       const scene = makeTree('new');
       try {
         const own = await over(o, [1, 2, 3, 4, 5, 6, 7, 8], scene);
         assert.ok(own.worst.l3 < 25, `the shipped flow leaves L3 under 25 %: ${pc(own.worst.l3)}`);
+        assert.ok(good.worst.l3 <= 25, `the governed tunnel reads L3 at most 25 % (the governor's cap): ${pc(good.worst.l3)}`);
         console.log(`DRIFT-13 L3 of the shipped tunnel, q156 --fps 10 ${o.cols}x${o.rows}${o.speed ? ' ' + o.speed : ''}: scene alone ${pc(own.worst.l3)}, with the governor ${pc(good.worst.l3)}`);
       } finally { rmTree(scene); }
     }

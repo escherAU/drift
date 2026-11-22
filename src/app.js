@@ -266,9 +266,14 @@ export function createApp(o) {
   // never construct it). It is made the first time a high contrast frame is painted and is handed what the scenes composed (the help panel included) and the app's REAL time `wall`
   // (never the scene clock t: the speed keys change t, not what the viewer's eye reads) and the app's own --fps; it returns what is PAINTED: every cell either the composed (glyph, shade)
   // or the pair it already showed, never a third picture (src/governor.js has the derivation of the limits).
-  // Reset (the next paint is whole and not governed, as the renderer repaints it whole): on every renderer.invalidate (mode change, console enter and leave, polarity flip, resize) through
-  // repaintAll, and on every console frame and every size card (which put something else on the terminal). A size change makes the governor resize (also a reset).
-  // The `i` key swaps the palette, not the indices the governor works on, so the governor has no part in it; the flip guard FLIP_WINDOW_SECONDS bounds how often it happens.
+  // RESET (the next paint is whole and ungoverned, as the renderer repaints it whole). Two kinds (src/governor.js RESET):
+  //   KEEPS THE HISTORY (reset({ other: true })): the mode change, the polarity flip `i`, the way back from the console, and every console frame. The paint is whole, but the governor keeps every
+  //   cell's last changes and the per-read ring, and counts the reset paint as ONE change of every cell (the palette swapped or the terminal showed something else, so the meter saw every cell move),
+  //   so a cell that changed twice just before an `i` may not change again for W seconds. Without the history a flip in the middle of a dissolve failed L2 over the next 0.3 to 0.45 s (DRIFT-13
+  //   correction 1). The flip FRAME itself is the flip guard's (FLIP_WINDOW_SECONDS bounds how often it happens): it swaps the palette under the indices the governor works on, which no hold can undo.
+  //   STARTS THE HISTORY AGAIN (reset({ hard: true }), and the governor's resize): a size change (a terminal resize, through repaintAll) and the size card. The first paint after one is ungoverned
+  //   and the history begins at it. A terminal window dragged to a new size does that on every resize event: NOT covered (README).
+  // fg and bg pass through ungoverned below: the governor works on (glyph, shade) only and no high contrast scene has full-colour cells (rgb: true). tests/governor-playlist.test.js fails the day one does.
   // THE HELP PANEL is governed like any other change, with NO exemption (the owner's rule is "never loosen"): the panel is composed over the scene, so it is the same picture change as a
   // scene change, and the per-read cap lets at most 25 % of the cells move per paint. The loop keeps painting while a cell is still held (govPending: see step), even with the clock
   // stopped by pause or help, so the panel finishes at the loop's own rate instead of staying half drawn. How long that takes depends on how busy the scene under it is, because a cell that
@@ -284,8 +289,8 @@ export function createApp(o) {
     govPending = gov.stats.last.held > 0;
     return Object.assign(govFrame, f, { glyphs: g.glyphs, shades: g.shades });
   }
-  function govReset() { if (gov) gov.reset(); govPending = false; }
-  function repaintAll() { renderer.invalidate(); govReset(); }
+  function govReset(opts) { if (gov) gov.reset(opts); govPending = false; }
+  function repaintAll(opts = { other: true }) { renderer.invalidate(); govReset(opts); }
 
   function renderFrame() {
     if (shown.shell && shell) return renderShellFrame();
@@ -312,7 +317,7 @@ export function createApp(o) {
     const pal = paletteNow();
     const f = newFrame(cols, rows);
     drawTooSmall(f, (pal.ui || SINGLE_HUE_UI).text, MSG_TOO_SMALL_CLASSIC);
-    govReset(); // the card is something else on the terminal: the next art frame is a whole repaint
+    govReset({ hard: true }); // the card is something else on the terminal (and a size the art does not fit): the next art frame is a whole repaint and the history starts again
     lastFrame = f;
     const out = renderer.render(renderArgs(f, pal));
     if (out) stdout.write(SYNC_BEGIN + out + SYNC_END);
@@ -326,7 +331,7 @@ export function createApp(o) {
     // would leave the old background in cells it does not redraw)
     if (shellPal && shellPal.key !== f.palette.key && (!!shellPal.bg !== !!f.palette.bg || shellPal.base !== f.palette.base)) renderer.invalidate();
     shellPal = f.palette;
-    govReset();
+    govReset({ other: true });
     lastFrame = f;
     const out = renderer.render(renderArgs(f, f.palette));
     if (out) stdout.write(SYNC_BEGIN + out + SYNC_END);
@@ -531,7 +536,7 @@ export function createApp(o) {
     try {
       cols = c; rows = r; // the composers follow in renderFrame, once there is art to draw
       if (shell) shell.resize(c, r);
-      repaintAll();
+      repaintAll({ hard: true });
       renderFrame();
     } catch (err) {
       quit(1, `drift: ${err && err.stack ? err.stack : err}\n`);
