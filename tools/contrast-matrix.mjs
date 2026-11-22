@@ -109,6 +109,8 @@ async function main() {
   const summaryOnly = has('summary-only'), stopOnFail = has('stop-on-fail');
   const self = fileURLToPath(import.meta.url);
   const workers = new Set();
+  const told = new WeakSet(); // each worker is sent `exit` once
+  const bye = (w) => { if (told.has(w)) return; told.add(w); try { w.send({ type: 'exit' }); } catch { /* gone */ } };
   let stopped = false, cleaned = false;
   const cleanup = () => { if (cleaned) return; cleaned = true; for (const w of workers) { try { w.kill(); } catch { /* gone */ } } if (owned) rmTree(root); };
   process.on('SIGINT', () => { console.error('interrupted: partial results are in --out (use --resume)'); cleanup(); process.exit(130); });
@@ -130,8 +132,10 @@ async function main() {
       const w = fork(self, ['--worker', '--root', root || ''], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
       workers.add(w);
       let current = null, nextId = 0;
+      // a worker that has already exited (or is exiting) has a closed channel: the error is ignored, since the summary does not depend on it
+      w.on('error', (e) => { if (!e || e.code !== 'ERR_IPC_CHANNEL_CLOSED') console.error(`worker channel error: ${e && e.message}`); });
       const feed = () => {
-        if (stopped || !queue.length) { if (current === null) { try { w.send({ type: 'exit' }); } catch { /* gone */ } } return; }
+        if (stopped || !queue.length) { if (current === null) bye(w); return; }
         current = queue.shift(); busy++; w.send({ type: 'run', id: nextId++, case: current });
       };
       w.on('message', (m) => {
@@ -147,7 +151,7 @@ async function main() {
     if (!queue.length) { resolve(); return; }
     for (let i = 0; i < Math.min(jobs, queue.length); i++) spawn();
   });
-  for (const w of workers) { try { w.send({ type: 'exit' }); } catch { /* gone */ } }
+  for (const w of workers) bye(w);
   cleanup();
 
   const s = summarise(results);

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseSizes, parseInts, parseSpeeds, fullFactorial, expandAll, drawSample, coverage, summarise, SPEED_KEYS } from './helpers-contrast-matrix.js';
 
 const tool = fileURLToPath(new URL('../tools/contrast-matrix.mjs', import.meta.url));
@@ -142,4 +142,22 @@ test('DRIFT-13 contrast-matrix --help prints the usage (the axes, --sample, --jo
   assert.match(r.stdout, /^usage: node tools\/contrast-matrix\.mjs \[--tree after\|before13\|oldscenes/);
   for (const flag of ['--sizes', '--fps', '--speeds', '--clocks', '--modes', '--seeds', '--sample', '--jobs', '--out', '--resume', '--summary-only', '--plan']) assert.ok(r.stdout.includes(flag), flag);
   assert.match(r.stdout, /FULL-FACTORIAL line count/);
+});
+
+test('DRIFT-13 contrast-matrix: a closed IPC channel to a worker after the summary does not change the exit status (an all-pass run exits 0; a run with a failing line, and the before13 case, still exit 1)', () => {
+  const pre = fileURLToPath(new URL('./helpers-closed-channel.mjs', import.meta.url));
+  const runWith = (mode, ...args) => spawnSync(process.execPath, ['--import', pathToFileURL(pre).href, tool, ...args], { encoding: 'utf8', env: { ...process.env, CM_CLOSED_MODE: mode } });
+  const o = ['--sizes', '42x12', '--fps', '26', '--seeds', '6', '--clocks', 'grid', '--modes', '256', '--speeds', '1x'];
+  for (const mode of ['twice', 'always']) {
+    const pass = runWith(mode, ...o);
+    assert.match(pass.stdout, /FAILING LINES: none/, `${mode}: the summary is complete`);
+    assert.doesNotMatch(pass.stderr, /ERR_IPC_CHANNEL_CLOSED/, `${mode}: no crash`);
+    assert.equal(pass.status, 0, `${mode}: ${pass.stdout}${pass.stderr}`);
+    const fail = runWith(mode, ...o, '--tree', 'before13');
+    assert.match(fail.stdout, /FAILING LINES \(1\):/);
+    assert.equal(fail.status, 1, `${mode} before13: ${fail.stdout}${fail.stderr}`);
+  }
+  // the exit message is sent once per worker (the control for the double send)
+  const src = fs.readFileSync(tool, 'utf8');
+  assert.equal(src.split("type: 'exit'").length - 1, 1, "the tool sends `exit` from one place only");
 });
