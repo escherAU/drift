@@ -198,6 +198,9 @@ export const MANIFEST = [
   ['tunnel-flash-controls', 'mutant: the contrast composer does not step the maze from the real-time clock: the maze at 4x', 'control: mutant, no realTimeIds (the maze at 4x, L3 on q156)', 'q156', C256, '41x11', '4x', '18', '1-8'],
   ['tunnel-flash-controls', 'tunnel mutant: the picture strobes', 'control: strobe mutant must fail L1, L2, L3', 'grid', C256, '80x24', '1x', '18', '1'],
   ['classic-dissolve-real-time', 'contrast: the first dissolve lasts 2 real seconds', 'Classic contrast dissolves last 2 real seconds at 1x, 2x, 4x and at --fps 8 and 30; calm and chaos unchanged', 'grid', C256, '80x24', '1x, 2x, 4x', '8, 18, 30', '1'],
+  ['classic-dissolve-real-time', 'experimental dissolves as before', 'experimental dissolves as before (36 frames at 1x, 9 at 4x) while contrast at 4x lasts 36: only contrast changed', 'grid', C256, '80x24', '1x, 4x', '18', '1'],
+  ['tunnel-cycle-edge', 'seed 7 at --fps 30, 1x', 'the whole cycle passes AT the L2 limit (exactly 25.00 %, 14 of 56 cells), wire to maze dissolve, no margin', 'grid', C256, '40x10', '1x', '30', '7'],
+  ['tunnel-cycle-edge', 'seed 8 at --fps 24, 4x', 'the whole cycle passes AT the L2 limit (exactly 25.00 %, 14 of 56 cells), Life to tunnel dissolve, no margin', 'grid', C256, '40x10', '4x', '24', '8'],
 ];
 
 const rd = (file) => fs.readFileSync(path.join(TESTS_DIR, `${file}.test.js`), 'utf8').split(/\r?\n/);
