@@ -135,3 +135,11 @@ test('DRIFT-13 contrast-matrix --tree oldscenes: the governor alone (the DRIFT-1
   assert.equal(now.status, 0);
   assert.match(worstLine(now), /L1 0\.00 {2}L2 7\.87 {2}L3 13\.44 /);
 });
+
+test('DRIFT-13 contrast-matrix --help prints the usage (the axes, --sample, --jobs, --resume) and exits 0 without running anything', () => {
+  const r = run('--help');
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^usage: node tools\/contrast-matrix\.mjs \[--tree after\|before13\|oldscenes/);
+  for (const flag of ['--sizes', '--fps', '--speeds', '--clocks', '--modes', '--seeds', '--sample', '--jobs', '--out', '--resume', '--summary-only', '--plan']) assert.ok(r.stdout.includes(flag), flag);
+  assert.match(r.stdout, /FULL-FACTORIAL line count/);
+});

@@ -27,6 +27,13 @@ const argv = process.argv.slice(2);
 const opt = (name, dflt) => { const i = argv.indexOf('--' + name); return i >= 0 ? argv[i + 1] : dflt; };
 const has = (name) => argv.includes('--' + name);
 const pct = (v) => v.toFixed(2).padStart(6);
+if (has('help') || has('h')) {
+  console.log('usage: node tools/contrast-matrix.mjs [--tree after|before13|oldscenes|before|before11|before12|<dir>] [--sizes 40-50x10-16,breakpoints,80x24] [--fps 8-30] [--speeds 1x,1.5x,2x,3x,4x]');
+  console.log('                                       [--clocks grid,q156,jitter] [--modes 256,truecolor] [--seeds 1-8] [--sample N [--sample-seed K]] [--jobs K] [--out FILE [--resume]]');
+  console.log('                                       [--summary-only] [--stop-on-fail] [--plan] [--help]');
+  console.log('the whole Classic high contrast cycle (170 s, real app, every frame metered) against the five X1 rules; prints the FULL-FACTORIAL line count of the axes next to the lines run; exit 0 all pass, 1 any fail, 2 bad argument');
+  process.exit(0);
+}
 const fmt = (n) => n.toLocaleString('en-US');
 
 // ---- one case, in this process (the worker's job)

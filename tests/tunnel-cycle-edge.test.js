@@ -6,8 +6,8 @@
 // The runs stop a few seconds after the dissolve they are about (the frames are the same ones the whole 170 s cycle plays: nothing in the run depends on what comes after).
 // On the tree before the governor (BEFORE13_EDITS: src/ with the governor's one line taken out of app.js) L2 reads EXACTLY 25.00 % (14 of 56 cells) and the rule fails only ABOVE 25 %: it passed at the
 // limit with NO MARGIN, and that is asserted still, as the control. With the governor wired in (DRIFT-13) the same runs read 10.71 % (6 cells) and 8.93 % (5 cells), under the limit with room, and
-// the other four rules are held to their own limits as everywhere. A board of 56 cells (40x10 to 42x12) is where Classic high contrast has no room: see the README, "Not covered for Classic high
-// contrast" (4) and DRIFT-13.
+// the other four rules are held to their own limits as everywhere. A board of 56 cells (40x10 to 42x12) is where Classic high contrast has no room: see the README, "Classic high contrast: the flash
+// governor (DRIFT-13)".
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runLife, PLAN, SPEED_OF, makeTree, rmTree, BEFORE13_EDITS } from './helpers-life-app.js';

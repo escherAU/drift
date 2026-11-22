@@ -138,7 +138,7 @@ test('DRIFT-12 the flash audit sees the new tunnel files (they run the meter and
 test('DRIFT-12 README: Classic high contrast tunnel and the whole cycle are asserted at 1x, 2x and 4x, the files and each file\'s clock-arm cost line are named, and the old "tunnel fails at speed" sentences are gone', () => {
   const t = flat(README);
   for (const need of [
-    '**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules at the listed sizes and rates (asserted since DRIFT-12; not at every reachable size or frame rate, see "Not covered" above and the measured failures there).**',
+    '**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules at the listed sizes and rates (asserted since DRIFT-12; not at every reachable size or frame rate, see "Not covered" above; since DRIFT-13 also held by the flash governor and measured over the wider sample set out below).**',
     'at 1x, 2x and 4x (Life since DRIFT-10, wire and blocktype since DRIFT-11, tunnel and the whole cycle at speed since DRIFT-12',
     '`tunnel-flash` 12.3 % (12 runs), `tunnel-flash-sizes` 4.1 % (16 runs), `tunnel-flash-fps` 12.7 % and `tunnel-flash-fps-256` 12.5 % (112 runs each), `tunnel-cycle` 7.4 % (18 runs)',
     '`tunnel-look`', '`classic-dissolve-real-time`', '`tunnel-flash-controls`', '`--tree before12`',
@@ -155,27 +155,25 @@ test('DRIFT-12 README: Classic high contrast tunnel and the whole cycle are asse
     assert.ok(text.includes('clock' + 'Arm(() =>') || text.includes('clock' + 'Arm(async'), `${file} runs clock arms`);
   }
   // control: the check notices a README without the section
-  assert.ok(!flat(README.replace('**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules at the listed sizes and rates (asserted since DRIFT-12; not at every reachable size or frame rate, see "Not covered" above and the measured failures there).**', 'x')).includes('**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules at the listed sizes and rates (asserted since DRIFT-12; not at every reachable size or frame rate, see "Not covered" above and the measured failures there).**'));
+  assert.ok(!flat(README.replace('**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules at the listed sizes and rates (asserted since DRIFT-12; not at every reachable size or frame rate, see "Not covered" above; since DRIFT-13 also held by the flash governor and measured over the wider sample set out below).**', 'x')).includes('**Classic high contrast at 1x, 2x and 4x: tunnel and the whole cycle pass the five rules at the listed sizes and rates (asserted since DRIFT-12; not at every reachable size or frame rate, see "Not covered" above; since DRIFT-13 also held by the flash governor and measured over the wider sample set out below).**'));
 });
 
-// ---- DRIFT-12 correction round 1: the conclusion is narrowed to the listed sizes and rates, Desmond's measured failures are written down as not asserted, and the size card's pause is "the same picture"
+// ---- DRIFT-12 correction round 1 narrowed the claim to the listed sizes and rates and wrote Desmond's measured failures down as not asserted; DRIFT-13 fixed them with the flash governor and
+// replaced item (4) of "Not covered" (the governor section and tests/governor-docs.test.js pin what is asserted and measured now)
 
-test('DRIFT-12 README: the claim is "at the listed sizes and rates", the measured failures (Desmond Hale, by hand, not asserted) and DRIFT-13 are written down, and no sentence says every size', () => {
+test('DRIFT-13 README: the claim is still "at the listed sizes and rates" with the governor measured over a wider, stated sample; item (4) of "Not covered" (the failures Desmond Hale found by hand) is replaced by a pointer, and no sentence says every size', () => {
   const t = flat(README);
   for (const need of [
     'pass the five rules at the listed sizes and rates (asserted since DRIFT-12; not at every reachable size or frame rate',
-    'at 1x, 2x and 4x at the listed sizes and rates only',
-    '**measured by hand, not asserted**',
-    '42x12 at `--fps` 26 reads L2 26.79 % and at `--fps` 27 reads 28.57 % (26.79 % in truecolor at 26)',
-    '45x12 at `--fps` 21 reads L2 26.67 %',
-    '41x12 at `--fps` 9 reads L3 30.28 % (seed 5, the Life to tunnel dissolve)',
-    '1.5x, which is not an asserted speed, 42x12 reads L2 26.79 % at `--fps` 21 (q156), 23 and 25 (grid)',
-    '**pre-dates DRIFT-12**', 'the wire to maze dissolve at about 95 s (seed 6)', 'reads exactly 25.00 %', 'share a 56-cell field', 'The follow-up is DRIFT-13',
+    'held to them since DRIFT-13 by the flash governor',
+    '(4) is gone: the failures of the whole cycle at the small sizes that Desmond Hale (the contrarian) found by hand after DRIFT-12',
+    'and 42x12 at 1.5x) were measured, not asserted, and the follow-up, DRIFT-13, fixed them with the flash governor and asserts them',
+    'Classic high contrast: the flash governor (DRIFT-13)',
     '`tunnel-cycle-edge`',
   ]) assert.ok(t.includes(need), `the README says: ${need}`);
-  for (const gone of ['every reachable size pass', 'at every size and every frame rate', 'Nothing fails after.']) assert.ok(!t.includes(gone), `the README no longer says: ${gone}`);
-  // control: the check notices a README without the failures
-  assert.ok(!flat(README.replace('**measured by hand, not asserted**', 'x')).includes('**measured by hand, not asserted**'));
+  for (const gone of ['every reachable size pass', 'at every size and every frame rate', 'Nothing fails after.', '**measured by hand, not asserted**', 'The follow-up is DRIFT-13', 'at 1x, 2x and 4x at the listed sizes and rates only', 'so there is no margin on that board at those rates.']) assert.ok(!t.includes(gone), `the README no longer says: ${gone}`);
+  // control: the check notices a README without the pointer
+  assert.ok(!flat(README.replace('(4) is gone:', 'x')).includes('(4) is gone:'));
 });
 
 test('DRIFT-12 README: after growing back the size card shows "the very same picture" (glyphs), not "the very frame" or bytes; the tests compare glyphs (screen.text()), and the console card keeps its byte-for-byte claim', () => {
