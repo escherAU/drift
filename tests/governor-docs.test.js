@@ -218,11 +218,19 @@ test('DRIFT-13 README: the flip aftermath numbers are the committed series\' (to
   for (const f of ['../tools/governor-flip-series.mjs', './governor-flip.test.js', './governor-engage.test.js', './governor-playlist.test.js']) assert.ok(fs.existsSync(new URL(f, import.meta.url)), `${f} exists`);
 });
 
-test('DRIFT-13 README: the hold after a return is disclosed (27 to 29 % of the screen on average and up to 57 % in the first second, up to 6.4 % at 1.5 to 3 s, not a whole-screen freeze; a scratch script outside the repo, no test runs it; the leaving change is a follow-up)', () => {
+test('DRIFT-14 README: the hold after a return is the measured one (7 to 14 % on average and up to 38 % in the first second after a trip of 1 s or more, up to 2.9 % at 1.5 to 3 s; the table per trip length; ceilings pinned in governor-leave-app; the scratch script is outside the repo)', () => {
   for (const need of [
-    '**The hold after a return:**', 'for the first second after any return to high contrast, from another mode or from the console', 'holds back 27 to 29 % of the screen on average and up to 57 % at the most',
-    'from 1.5 to 3 s after the return up to 6.4 % is still held', 'it is not a whole-screen freeze', 'a trip of 0.3 s and one of 3 s read alike', '`freeze2.mjs`, a scratch script outside the repo that no test runs',
-    'a follow-up ticket will record the leaving change at the moment of leaving, to reduce it',
+    '**The hold after a return (DRIFT-14):**', 'the moment high contrast was left (the first paint of anything else, in real time', '`leave()` in `src/governor.js`', 'not at the return',
+    'After a trip of 1 s or more the leave has aged out and the return counts ONE change', 'holds back 7 to 14 % of the screen on average and up to 38 % at the most',
+    'DRIFT-13 held 28 to 30 % on average and up to 59 %', 'from 1.5 to 3 s after it up to 2.9 % is still held (6.8 % at DRIFT-13)', 'it is not a whole-screen freeze', 'a run with no trip holds nothing',
+    'a 0.3 s trip 15 to 19 % on average and up to 42 %', 'a 0.15 s trip 19 to 21 % and up to 45 %',
+    '0.15 s 19 to 21 and 45 and 2.8 %; 0.3 s 15 to 19 and 42 and 1.8 %; 1 s 7 to 14 and 36 and 2.4 %; 3 s 7 to 14 and 38 and 2.9 %; 10 s 7 to 14 and 36 and 2.6 %',
+    '`hold.mjs`, a scratch script outside the repo that no test runs', '`governor-leave-app` pins ceilings above those numbers', 'a trip of 1 s or more: mean 18 %, max 45 %, 4.0 % at 1.5 to 3 s; a shorter one: 23 %, 47 %, 3.2 %',
+    '`governor-leave` pins the stamp in the governor', 'a return with no recorded leave behaves as DRIFT-13 did', 'a hard reset or a resize forgets the leave',
   ]) assert.ok(S.includes(need), `the README says: ${need}`);
-  assert.ok(S.indexOf('**The hold after a return:**') > S.indexOf('and a 0.6 s trip passes.'), 'it sits next to the trip tail');
+  assert.ok(S.indexOf('**The hold after a return (DRIFT-14):**') > S.indexOf('and a 0.6 s trip passes.'), 'it sits next to the trip tail');
+  for (const gone of ['holds back 27 to 29 % of the screen', 'a follow-up ticket will record the leaving change', 'by `freeze2.mjs`']) assert.ok(!S.includes(gone), `the DRIFT-13 sentence is gone: ${gone}`);
+  // the ceilings the README quotes are the ones the test enforces
+  const T = read('./governor-leave-app.test.js');
+  assert.ok(T.includes('const LONG = { mean: 18, max: 45, max23: 4.0 }, SHORT = { mean: 23, max: 47, max23: 3.2 };'), 'the ceilings in governor-leave-app are the ones the README quotes');
 });
