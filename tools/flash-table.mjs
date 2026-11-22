@@ -199,8 +199,14 @@ export const MANIFEST = [
   ['tunnel-flash-controls', 'tunnel mutant: the picture strobes', 'control: strobe mutant must fail L1, L2, L3', 'grid', C256, '80x24', '1x', '18', '1'],
   ['classic-dissolve-real-time', 'contrast: the first dissolve lasts 2 real seconds', 'Classic contrast dissolves last 2 real seconds at 1x, 2x, 4x and at --fps 8 and 30; calm and chaos unchanged', 'grid', C256, '80x24', '1x, 2x, 4x', '8, 18, 30', '1'],
   ['classic-dissolve-real-time', 'experimental dissolves as before', 'experimental dissolves as before (36 frames at 1x, 9 at 4x) while contrast at 4x lasts 36: only contrast changed', 'grid', C256, '80x24', '1x, 4x', '18', '1'],
-  ['tunnel-cycle-edge', 'seed 7 at --fps 30, 1x', 'the whole cycle passes AT the L2 limit (exactly 25.00 %, 14 of 56 cells), wire to maze dissolve, no margin', 'grid', C256, '40x10', '1x', '30', '7'],
-  ['tunnel-cycle-edge', 'seed 8 at --fps 24, 4x', 'the whole cycle passes AT the L2 limit (exactly 25.00 %, 14 of 56 cells), Life to tunnel dissolve, no margin', 'grid', C256, '40x10', '4x', '24', '8'],
+  ['tunnel-cycle-edge', 'seed 7 at --fps 30, 1x', 'the whole cycle: exactly 25.00 % (14 of 56 cells) on the tree before the governor (no margin), 10.71 % (6 cells) with it; wire to maze dissolve', 'grid', C256, '40x10', '1x', '30', '7'],
+  ['tunnel-cycle-edge', 'seed 8 at --fps 24, 4x', 'the whole cycle: exactly 25.00 % (14 of 56 cells) on the tree before the governor (no margin), 8.93 % (5 cells) with it; Life to tunnel dissolve', 'grid', C256, '40x10', '4x', '24', '8'],
+  // DRIFT-13 phase 2: the flash governor wired into the app (Classic high contrast), the whole 170 s cycle
+  ['governor-app', 'DRIFT-13 Desmond: ', 'the cases Desmond found and the 25.00 % edges: each fails (or passes at the limit) on the tree before the governor, passes with it', 'grid, q156', 'truecolor, 256', '42x12, 45x12, 41x12, 40x10', '1x, 1.5x, 2x, 4x', '9, 21, 23, 24, 25, 26, 27, 30', '5-8'],
+  ['governor-app', 'a terminal that stops reading', 'a stalled terminal (writableNeedDrain, runs of dropped frames and one stall of about 1.5 s); the tree before the governor fails L3', 'grid, q156, jitter', 'truecolor, 256', '42x12, 80x24, 40x10, 61x21', '1x, 2x, 4x', '9, 18, 26, 30', '2, 5, 6, 7'],
+  ['governor-sweep', 'grid clock, ${cols}x${rows}', 'the sample across the sweep (17 sizes, 11 rates, 5 speeds, both colour modes, 8 seeds), whole cycle, governor wired', 'grid', BOTH, '40x10, 41x10, 42x10, 40x11, 41x11, 42x11, 40x12, 41x12, 42x12, 43x12, 45x12, 46x12, 50x16, 80x24, 120x40, 78x24, 88x39', '1x, 1.5x, 2x, 3x, 4x', '8, 9, 12, 18, 21, 23, 24, 25, 26, 27, 30', '1-8'],
+  ['governor-sweep', '${clock} clock arm', 'clock arm: the q156 and jitter cases of the sample (four of Desmond and seven more), whole cycle', QJ, BOTH, '41x11, 42x10, 42x12, 45x12, 50x16, 78x24, 80x24, 88x39, 120x40', '1x, 1.5x, 2x, 3x, 4x', '8, 9, 12, 18, 21, 24, 27, 30', '2-8 (clock seed = app seed)'],
+  ['governor-app-mutation', 'the help panel drawn after the governor', 'control: the help panel painted whole fails L3 at 40x10 (the app before the governor fails too)', 'grid', C256, '40x10', '1x', '18', '1'],
 ];
 
 const rd = (file) => fs.readFileSync(path.join(TESTS_DIR, `${file}.test.js`), 'utf8').split(/\r?\n/);

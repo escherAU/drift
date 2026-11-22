@@ -11,7 +11,7 @@
 // DRIFT-12: the three controls that needed boards below 40x10 (both share limits out, the first fix, no per-frame cap) now find the size card there; see mutantOnCard.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runLife, movingFrames, makeTree, rmTree, nums, PLAN, SPEED_OF, isCardBoard, cardRun } from './helpers-life-app.js';
+import { runLife, movingFrames, makeTreeNoGov as makeTree, rmTree, nums, PLAN, SPEED_OF, isCardBoard, cardRun } from './helpers-life-app.js';
 import { failedRules, X1_RULE_IDS } from './helpers-flash.js';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];

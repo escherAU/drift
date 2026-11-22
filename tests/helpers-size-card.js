@@ -79,7 +79,7 @@ export function colourPairs(screen) {
 //   root: a copy of the tree to run instead of this one (the mutants); playlists: injected scene lists (the cost and held pins)
 export async function startCard({
   cols = 80, rows = 24, startMode = 'calm', cmode = '256', seed = 1, invert = false, clock = 'tick', clockSeed = 1, fps = 18,
-  sceneSeconds = 180, root = null, playlists = null, startScene = 0, reported = null, fadeSeconds = undefined,
+  sceneSeconds = 180, root = null, playlists = null, startScene = 0, reported = null, fadeSeconds = undefined, dirs = [],
 } = {}) {
   const createApp = root ? (await import(pathToFileURL(path.join(root, 'src', 'app.js')).href)).createApp : realCreateApp;
   const useClock = clock && clock !== 'tick';
@@ -91,7 +91,7 @@ export async function startCard({
   if (invert) fs.writeFileSync(cfg, JSON.stringify({ invert: true }));
   const env = cmode === 'truecolor' ? { COLORTERM: 'truecolor' } : {};
   const app = createApp({
-    stdin, stdout, stderr, proc, env, configPath: cfg, dirs: [], startMode, startScene, sceneSeconds, seed, fps, ...(fadeSeconds !== undefined ? { fadeSeconds } : {}),
+    stdin, stdout, stderr, proc, env, configPath: cfg, dirs, startMode, startScene, sceneSeconds, seed, fps, ...(fadeSeconds !== undefined ? { fadeSeconds } : {}),
     ...(playlists ? { playlists, scenes: playlists.calm } : {}),
     autoLoop: useClock, now: c ? c.now : undefined, timer: c ? c.timer : undefined,
   });

@@ -2,7 +2,7 @@
 // DRIFT-10: reviewer tool, NOT part of `npm test`. Classic high contrast (the Life scene) on the REAL app, metered on the viewer's 18 Hz grid against the five rules
 // (L1, L2, L3, R, C at their 1x views). One line per case with the five worst values in per cent and the rules that fail, then one summary line per clock / colour mode / speed
 // with the worst of every rule over the seeds. The runs are the ones tests/life-flash*.test.js assert (tests/helpers-life-app.js runLife).
-//   node tools/life-matrix.mjs [--tree after|before|before11|before12|<dir>] [--seeds 1,2,...,8] [--clocks grid,q156,jitter] [--modes 256,truecolor] [--speeds 1x,4x] [--sizes 80x24,...]
+//   node tools/life-matrix.mjs [--tree after|before|before11|before12|before13|<dir>] [--seeds 1,2,...,8] [--clocks grid,q156,jitter] [--modes 256,truecolor] [--speeds 1x,4x] [--sizes 80x24,...]
 //                              [--seconds 32] [--fps 18] [--scene life|tunnel|wire|maze|blocktype] [--whole-cycle] [--invert] [--summary-only] [--x4]
 // --x4 adds the x4 views of L1 and L2 (the same frames played four times as fast, tests/helpers-flash.js), which the tests do NOT assert for Life.
 // --scene reads another scene of the contrast playlist (default life, the one the tests assert; the others are measured here and not asserted by any life-flash test).
@@ -13,9 +13,11 @@
 // the control for --scene wire, --scene blocktype and --whole-cycle. --fps takes a list (8,10,12,...): one line per fps.
 // --tree before12 (DRIFT-12) runs a copy of src/ as Classic high contrast was at 1cb2b62: the tunnel scene (tests/fixtures/tunnel-before-drift12.js, pure in t: its flow follows the speed keys), the
 // scheduler's cross-fade at scene speed and the composer without realTimeIds (BEFORE12_EDITS in tests/helpers-life-app.js): the control for --scene tunnel and --whole-cycle at 2x and 4x.
+// DRIFT-13: every before tree (before, before11, before12) is made WITHOUT the flash governor, the world those controls were written in (makeTreeNoGov in tests/helpers-life-app.js); --tree before13 is this tree with
+// only the governor taken out (BEFORE13_EDITS): the control for Desmond's cases and the whole cycle. after is this tree as shipped, governor wired.
 // DRIFT-12: sizes below 40x10 are the size card (Classic's minimum window): the tool runs them as such and says so on stderr; the old small-board readings are not reachable.
 // A speed's runs hold the Life scene for 30 REAL seconds (the scheduler's scene length is 30 s of scene time, which runs `speed` times faster: sceneSeconds = 30 * speed).
-import { runLife, makeTree, rmTree, nums, PLAN, SPEED_OF, isCardBoard, BEFORE12_EDITS } from '../tests/helpers-life-app.js';
+import { runLife, makeTree, makeTreeNoGov, rmTree, nums, PLAN, SPEED_OF, isCardBoard, BEFORE12_EDITS } from '../tests/helpers-life-app.js';
 import { failedRules, X1_RULE_IDS } from '../tests/helpers-flash.js';
 
 const argv = process.argv.slice(2);
@@ -31,7 +33,7 @@ const seconds = Number(opt('seconds', whole ? 170 : 32));
 const SCENE_INDEX = { life: 0, tunnel: 1, wire: 2, maze: 3, blocktype: 4 }; // the contrast playlist in src/scenes/index.js
 if (!(scene in SCENE_INDEX)) { console.error(`unknown scene ${scene}`); process.exit(2); }
 
-const root = tree === 'after' ? null : tree === 'before' ? makeTree('old') : tree === 'before11' ? makeTree('new', {}, { wire: 'old', blocktype: 'old' }) : tree === 'before12' ? makeTree('new', BEFORE12_EDITS, { tunnel: 'old' }) : tree;
+const root = tree === 'after' ? null : tree === 'before' ? makeTreeNoGov('old') : tree === 'before11' ? makeTreeNoGov('new', {}, { wire: 'old', blocktype: 'old' }) : tree === 'before12' ? makeTreeNoGov('new', BEFORE12_EDITS, { tunnel: 'old' }) : tree === 'before13' ? makeTreeNoGov('new') : tree;
 const pct = (v) => v.toFixed(2).padStart(6);
 let anyFail = false;
 try {
@@ -52,6 +54,6 @@ try {
     console.log(`${tree.padEnd(6)} ${(whole ? 'cycle' : scene).padEnd(5)} ${clock.padEnd(6)} ${mode.padEnd(9)} ${speed} ${size.padEnd(7)} fps ${String(fps).padStart(2)} WORST of seeds ${seeds.join(',')} | L1 ${pct(worst.l1)} L2 ${pct(worst.l2)} L3 ${pct(worst.l3)} R ${pct(worst.r)} C ${pct(worst.c)}${withX4 ? ` | x4 views L1 ${pct(worst.l1x4)} L2 ${pct(worst.l2x4)}` : ''} | ${fails.size ? 'FAIL ' + [...fails].join(' ') : 'pass'}`);
   }
 } finally {
-  if (root && (tree === 'before' || tree === 'before11' || tree === 'before12')) rmTree(root);
+  if (root && (tree === 'before' || tree === 'before11' || tree === 'before12' || tree === 'before13')) rmTree(root);
 }
 process.exitCode = anyFail ? 1 : 0;

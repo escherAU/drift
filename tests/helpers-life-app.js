@@ -62,11 +62,13 @@ export async function movingFrames(speed, o = {}) {
 }
 
 // Runs Life in the real app and returns { rep, frames, endedAt, ids, app-less facts }. `root`: a copy of the tree (src/) to run instead of this one (the controls).
+// writes: an array that gets every string the app wrote (in order); beforeFrame(k, { stdout, stdin, app }) runs at the start of frame k (a test stalls the terminal there); meter: false skips the
+// terminal reader and the meter (the rep is null) for the tools and tests that only watch the spy (tests/helpers-governor-app.js).
 // feedAll: meter every frame of the run (the dissolves and the scenes after Life too); the tests never do, the README's "not covered" figures come from it.
 // `grab(k, screen, app)` is called on every frame the meter reads, for the look tests (lit counts, glyphs). `forceDead(app)` is not offered: quiet states use the scene directly.
 export async function runLife({
   cols = 80, rows = 24, mode = '256', seed = 1, seconds = 32, keys = [], clock = 'grid', clockSeed = 1, root = null, fps = LIFE_FPS,
-  sceneSeconds = 30, invert = false, grab = null, startMode = 'contrast', stopAtDissolve = true, feedAll = false, scene = 'life', startScene = 0, card = false,
+  sceneSeconds = 30, invert = false, grab = null, startMode = 'contrast', stopAtDissolve = true, feedAll = false, scene = 'life', startScene = 0, card = false, onApp = null, meter: useMeter = true, writes = null, beforeFrame = null,
 } = {}) {
   const tiny = isCardBoard(cols, rows);
   if (tiny && !card) throw new Error(`runLife: ${cols}x${rows} is below Classic's 40x10 minimum, where Classic shows the size card and no scene (DRIFT-12); pass card: true to run the card knowingly`);
@@ -85,31 +87,34 @@ export async function runLife({
   });
   const ids = [];
   const n = cols * rows;
+  if (onApp) onApp(app);
   try {
     app.start();
     const screen = createScreen(cols, rows);
-    const meter = createFlashMeter(cols, rows, fps);
+    const meter = useMeter ? createFlashMeter(cols, rows, fps) : null;
     const total = Math.round(seconds * fps);
     const keyAt = new Map();
     for (const kk of keys) { const f = Math.round(kk.at * fps); keyAt.set(f, (keyAt.get(f) || []).concat(kk.key)); }
     let frames = 0, endedAt = null, speedMax = 0;
     for (let k = 0; k < total && !proc.exits.length; k++) {
       for (const key of keyAt.get(k) || []) stdin.emit('data', key);
+      if (beforeFrame) beforeFrame(k, { stdout, stdin, app });
       if (c) c.advanceTo(((k + 1) * 1000) / fps); else app.tick(1 / fps);
-      for (const w of stdout.writes.splice(0)) screen.feed(w);
+      for (const w of stdout.writes.splice(0)) { if (writes) writes.push(w); if (useMeter || tiny) screen.feed(w); }
       if (k % 8 === 0) await new Promise((r) => setImmediate(r));
       if (tiny && screen.text() !== expectedCardText(cols, rows)) throw new Error(`runLife ${cols}x${rows} frame ${k}: the screen is not the size card`);
       const st = app.getState();
       speedMax = Math.max(speedMax, st.speed);
       ids.push(st.fading ? 'fading' : st.sceneId);
       if (!feedAll && (st.fading || st.sceneId !== scene)) { if (stopAtDissolve) { endedAt = k / fps; break; } continue; }
+      if (!useMeter) { frames++; continue; } // onApp / the spy only: no terminal reader, no meter (tools/governor-wired.mjs)
       const f = { cols, rows, glyphs: new Uint32Array(n), fg: new Uint32Array(n), bg: new Uint32Array(n) };
       for (let j = 0; j < n; j++) { f.glyphs[j] = screen.glyphs[j]; f.fg[j] = rgbOf(screen.fg[j], DEF_FG); f.bg[j] = rgbOf(screen.bg[j], DEF_BG); }
       meter.push(f, undefined);
       frames++;
       if (grab) grab(k, screen, app, f);
     }
-    return { rep: meter.report(), frames, endedAt, ids, speedMax, card: tiny, state: app.getState(), exits: proc.exits.slice() };
+    return { rep: meter ? meter.report() : null, frames, endedAt, ids, speedMax, card: tiny, state: app.getState(), exits: proc.exits.slice() };
   } finally {
     try { proc.emit('exit'); } catch { /* ignore */ }
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -160,10 +165,27 @@ export const rmTree = (root) => fs.rmSync(root, { recursive: true, force: true }
 
 // DRIFT-12: the app as it was at 1cb2b62 where DRIFT-12 changed it: the scheduler's cross-fade at scene speed (no fadeScale) and the contrast composer without realTimeIds. With the old tunnel
 // (makeTree('new', BEFORE12_EDITS, { tunnel: 'old' })) this is the whole Classic high contrast mode as it was; tools/life-matrix.mjs --tree before12 runs it. Strict: an edit that matches nothing throws.
-const must = (text, from, to) => { if (!text.includes(from)) throw new Error('BEFORE12_EDITS: no match for ' + from); return text.replace(from, to); };
+const must = (text, from, to) => { if (!text.includes(from)) throw new Error('tree edit (BEFORE12_EDITS, BEFORE13_EDITS): no match for ' + from); return text.replace(from, to); };
 export const BEFORE12_EDITS = {
   'src/app.js': (t) => must(must(t, "advance(d, shown.mode === 'contrast' ? Math.min(SPEEDS[speedIdx], 1) / SPEEDS[speedIdx] : 1);", 'advance(d);'), ", realTimeIds: mode === 'contrast' ? ['maze'] : [] })", ' })'),
 };
+
+// DRIFT-13: the app as it was before the flash governor was wired in (src/app.js hands the renderer the composed frame itself): the control that shows Desmond's cases are real failures.
+// makeTree('new', BEFORE13_EDITS) is Classic high contrast at 153cc21 (the scenes' own fixes of DRIFT-10 to 12 stay). Strict: an edit that matches nothing throws.
+export const GOVERN_LINE = "const painted = shown.mode === 'contrast' ? govern(f) : f;";
+export const BEFORE13_EDITS = {
+  'src/app.js': (t) => must(t, GOVERN_LINE, 'const painted = f;'),
+};
+
+// DRIFT-13: a tree for the controls of DRIFT-10 to 12 (the old Life, the old wire, blocktype and tunnel, the one-line mutants of the scene fixes): the same tree makeTree makes, with the governor taken out of app.js.
+// Those controls show what each SCENE fix does on its own, so they run in the world they were written in; the governor would otherwise cover the old scenes and every must-fail control would pass.
+// (Applied after makeTree's own edits, so a mutation that matches nothing still throws there.)
+export function makeTreeNoGov(life = 'new', edits = {}, scenes = {}) {
+  const root = makeTree(life, edits, scenes);
+  const f = path.join(root, 'src', 'app.js');
+  fs.writeFileSync(f, BEFORE13_EDITS['src/app.js'](fs.readFileSync(f, 'utf8')));
+  return root;
+}
 
 // the five rules' worst readings in per cent (X1 views: the viewer's own second), and the rules that fail
 export function nums(rep) {

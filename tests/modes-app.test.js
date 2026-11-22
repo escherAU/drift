@@ -417,6 +417,9 @@ function helpAt(mode, cols, rows) {
   c.app.tick(0.05);
   c.key('h');
   c.app.tick(0);
+  // DRIFT-13: Classic high contrast paints the panel through the flash governor, which lets a busy scene's cells wait their turn (at most about a second of real time, the clock stopped by the
+  // open panel): a few more steps with the panel open and the panel is whole. The other modes draw it at once and are unchanged by the extra steps.
+  for (let k = 0; k < 60; k++) c.app.tick(1 / 18);
   const shot = c.app.screenshot();
   c.done();
   return shot;

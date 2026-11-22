@@ -10,7 +10,7 @@
 // limit on a cell is its picture: two changes at most in a transition, which the mutants take away (a wave and a scroll that move smoothly, as the old ones did).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeTree, rmTree, nums } from './helpers-life-app.js';
+import { makeTreeNoGov as makeTree, rmTree, nums } from './helpers-life-app.js';
 import { go, whole, line, SEEDS } from './helpers-wb-flash.js';
 import { failedRules, X1_RULE_IDS } from './helpers-flash.js';
 

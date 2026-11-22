@@ -19,6 +19,7 @@ import { KEY_TO_ENTRY, activeIn, HELP_OPEN_ACTIONS, cliKeysText, shellTokens } f
 import { drawHelp } from './overlay.js';
 import { isMode, nextMode, MODE_LABELS } from './modes.js';
 import { discoverCartridges, INSTALL_DIR, userDir } from './cartridge/loader.js';
+import { createGovernor } from './governor.js';
 import { createShell } from './shell/shell.js';
 import { newFrame, drawTooSmall, MSG_TOO_SMALL_CLASSIC } from './shell/ui.js';
 
@@ -261,6 +262,31 @@ export function createApp(o) {
     return a;
   }
 
+  // DRIFT-13: the flash governor, Classic high contrast ONLY (shown.mode === 'contrast' on the art: never the console, never the size card, never calm, chaos or experimental, which
+  // never construct it). It is made the first time a high contrast frame is painted and is handed what the scenes composed (the help panel included) and the app's REAL time `wall`
+  // (never the scene clock t: the speed keys change t, not what the viewer's eye reads) and the app's own --fps; it returns what is PAINTED: every cell either the composed (glyph, shade)
+  // or the pair it already showed, never a third picture (src/governor.js has the derivation of the limits).
+  // Reset (the next paint is whole and not governed, as the renderer repaints it whole): on every renderer.invalidate (mode change, console enter and leave, polarity flip, resize) through
+  // repaintAll, and on every console frame and every size card (which put something else on the terminal). A size change makes the governor resize (also a reset).
+  // The `i` key swaps the palette, not the indices the governor works on, so the governor has no part in it; the flip guard FLIP_WINDOW_SECONDS bounds how often it happens.
+  // THE HELP PANEL is governed like any other change, with NO exemption (the owner's rule is "never loosen"): the panel is composed over the scene, so it is the same picture change as a
+  // scene change, and the per-read cap lets at most 30 % of the cells move per paint. The loop keeps painting while a cell is still held (govPending: see step), even with the clock
+  // stopped by pause or help, so the panel finishes at the loop's own rate instead of staying half drawn. How long that takes depends on how busy the scene under it is, because a cell that
+  // changed in the last second may not change again yet (the per-cell limit): at 18 fps, over Life the panel is whole after 1 paint at 80x24 and 2 at 40x10, over the busiest scene (the
+  // tunnel) after 12 paints (0.67 s) at 80x24 and 11 (0.61 s) at 40x10, and after 2 and 3 paints when the clock was paused first and the picture had settled. A panel painted whole instead
+  // would change 77 % of a 40x10 screen in one read (rule L3 allows 30 %), which tests/governor-app-mutation.test.js shows. tests/governor-app.test.js measures the paints.
+  let gov = null, govCols = 0, govRows = 0, govPending = false;
+  const govFrame = {};
+  function govern(f) {
+    if (!gov) { gov = createGovernor({ cols, rows, fps, variant: 'nbhd' }); govCols = cols; govRows = rows; }
+    else if (govCols !== cols || govRows !== rows) { gov.resize(cols, rows); govCols = cols; govRows = rows; }
+    const g = gov.govern(f.glyphs, f.shades, wall);
+    govPending = gov.stats.last.held > 0;
+    return Object.assign(govFrame, f, { glyphs: g.glyphs, shades: g.shades });
+  }
+  function govReset() { if (gov) gov.reset(); govPending = false; }
+  function repaintAll() { renderer.invalidate(); govReset(); }
+
   function renderFrame() {
     if (shown.shell && shell) return renderShellFrame();
     if (cardUp()) return renderCard();
@@ -273,8 +299,9 @@ export function createApp(o) {
         mode: shown.mode, modeName: MODE_LABELS[shown.mode], sceneName: sceneName(), ui: pal.ui || SINGLE_HUE_UI,
       });
     }
-    lastFrame = f;
-    const out = renderer.render(renderArgs(f, pal));
+    const painted = shown.mode === 'contrast' ? govern(f) : f;
+    lastFrame = painted;
+    const out = renderer.render(renderArgs(painted, pal));
     // one write per frame; synchronized output (DEC 2026) so the terminal paints it atomically
     if (out) stdout.write(SYNC_BEGIN + out + SYNC_END);
     dirty = false;
@@ -285,6 +312,7 @@ export function createApp(o) {
     const pal = paletteNow();
     const f = newFrame(cols, rows);
     drawTooSmall(f, (pal.ui || SINGLE_HUE_UI).text, MSG_TOO_SMALL_CLASSIC);
+    govReset(); // the card is something else on the terminal: the next art frame is a whole repaint
     lastFrame = f;
     const out = renderer.render(renderArgs(f, pal));
     if (out) stdout.write(SYNC_BEGIN + out + SYNC_END);
@@ -298,6 +326,7 @@ export function createApp(o) {
     // would leave the old background in cells it does not redraw)
     if (shellPal && shellPal.key !== f.palette.key && (!!shellPal.bg !== !!f.palette.bg || shellPal.base !== f.palette.base)) renderer.invalidate();
     shellPal = f.palette;
+    govReset();
     lastFrame = f;
     const out = renderer.render(renderArgs(f, f.palette));
     if (out) stdout.write(SYNC_BEGIN + out + SYNC_END);
@@ -339,7 +368,7 @@ export function createApp(o) {
     shown.shell = wantShell;
     shellPal = null;
     sched(shown.mode);
-    renderer.invalidate();
+    repaintAll();
     if (changedMode || leavingShell) { // back from the console: fresh band memory / sim state, same mode and scene
       if (!cardUp()) fitArt();
       if (shown.mode === 'calm') composer.resize(artCols, artRows); // fresh band memory
@@ -419,8 +448,8 @@ export function createApp(o) {
         // DRIFT-12: Classic high contrast dissolves in real time at every speed from 1x up (2 real seconds, as at 1x): at 4x a 0.5 s dissolve put a cell's last change in the outgoing scene, its
         // flip and its first change in the incoming scene inside one second (rule L2). The Driftman 9000's dissolve does the same (src/shell/runtime.js). Calm, chaos and experimental are unchanged.
         sched(shown.mode).advance(d, shown.mode === 'contrast' ? Math.min(SPEEDS[speedIdx], 1) / SPEEDS[speedIdx] : 1);
-      } else if (!dirty) {
-        return; // frozen or no time passed: nothing to draw
+      } else if (!dirty && !govPending) {
+        return; // frozen or no time passed: nothing to draw (unless the governor still holds cells: it finishes the picture, see govern)
       }
       if (stdout.writableNeedDrain) return; // terminal is behind: drop this frame, keep the diff state honest
       renderFrame();
@@ -502,7 +531,7 @@ export function createApp(o) {
     try {
       cols = c; rows = r; // the composers follow in renderFrame, once there is art to draw
       if (shell) shell.resize(c, r);
-      renderer.invalidate();
+      repaintAll();
       renderFrame();
     } catch (err) {
       quit(1, `drift: ${err && err.stack ? err.stack : err}\n`);
