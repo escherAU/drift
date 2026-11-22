@@ -19,8 +19,9 @@ const N = 400;
 const frame = () => ({ glyphs: new Uint16Array(N).fill(32), shades: new Uint8Array(N) });
 
 // the dominating kind of a list of reset requests ('hard', 'back' (other with two changes: the way back from another mode or the console), 'other', 'soft'; 'resize' is hard)
-const kindOf = (list) => (list.some((r) => r === 'hard' || r === 'resize') ? 'hard' : list.includes('back') ? 'back' : list.includes('other') ? 'other' : list.length ? 'soft' : 'none');
-const apply = (gov, r) => { if (r === 'hard') gov.reset({ hard: true }); else if (r === 'back') gov.reset({ other: true, changes: 2 }); else if (r === 'other') gov.reset({ other: true }); else if (r === 'soft') gov.reset(); else gov.resize(40, 10); };
+const kindOf = (all) => { const list = all.filter((r) => r !== 'leave'); return kindOfList(list); }; // DRIFT-14: 'leave' (gov.leave(0.2)) records when the screen was left; it never changes the kind
+const kindOfList = (list) => (list.some((r) => r === 'hard' || r === 'resize') ? 'hard' : list.includes('back') ? 'back' : list.includes('other') ? 'other' : list.length ? 'soft' : 'none');
+const apply = (gov, r) => { if (r === 'hard') gov.reset({ hard: true }); else if (r === 'back') gov.reset({ other: true, changes: 2 }); else if (r === 'other') gov.reset({ other: true }); else if (r === 'soft') gov.reset(); else if (r === 'leave') gov.leave(0.2); else gov.resize(40, 10); };
 
 // what the paints after the resets must do to two probe cells. Cells 5 and 6 changed at 0 and 0.3 before the resets; the paint after them (0.4) changes cell 5 only.
 //   cell 6 changes at 0.5: allowed only when the history was thrown away (hard)
@@ -62,6 +63,8 @@ const ORDERS = [
   ['back'], ['back', 'soft'], ['soft', 'back'], ['other', 'back'], ['back', 'other'], ['back', 'hard'], ['hard', 'back'], ['back', 'back', 'soft', 'other'], ['resize', 'back'],
   ['soft'], ['other'], ['hard'], ['resize'], ['soft', 'resize'], ['resize', 'soft'], ['resize', 'other'], ['other', 'resize'], ['resize', 'hard', 'soft'],
 ];
+// DRIFT-14: a recorded leave (0.2, a trip of 0.2 s to the paint at 0.4: inside W) in every position; hard and resize must clear it, and the history after the paint is still the dominating kind's
+ORDERS.push(['leave', 'back'], ['back', 'leave'], ['leave', 'leave', 'back'], ['leave', 'soft', 'back'], ['leave', 'other'], ['leave', 'soft'], ['leave', 'hard'], ['hard', 'leave'], ['leave', 'resize'], ['resize', 'leave'], ['leave', 'back', 'hard'], ['hard', 'leave', 'back'], ['back', 'leave', 'hard', 'back'], ['leave', 'hard', 'back', 'leave']);
 const repeated = (r, n) => Array.from({ length: n }, () => r);
 ORDERS.push(repeated('soft', 25), repeated('other', 25), [...repeated('soft', 10), 'hard', ...repeated('other', 10)], ['hard', ...repeated('soft', 30)], ['hard', ...repeated('other', 30)]);
 
@@ -70,10 +73,10 @@ for (const resets of ORDERS) {
 }
 
 function rngOf(seed) { let s = (Math.imul(seed + 1, 2654435761) >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
-const KINDS = ['soft', 'other', 'back', 'hard', 'resize'];
+const KINDS = ['soft', 'other', 'back', 'hard', 'resize', 'leave'];
 function randomOrders(seed, count) {
   const rnd = rngOf(seed), out = [];
-  for (let i = 0; i < count; i++) { const len = 1 + Math.floor(rnd() * 10); out.push(Array.from({ length: len }, () => KINDS[Math.floor(rnd() * KINDS.length)])); }
+  for (let i = 0; i < count; i++) { const len = 1 + Math.floor(rnd() * 10); const o = Array.from({ length: len }, () => KINDS[Math.floor(rnd() * KINDS.length)]); if (o.every((r) => r === 'leave')) o.push('soft'); out.push(o); }
   return out;
 }
 test('DRIFT-13 reset states: 300 random orderings of up to 10 resets between paints (seeds 1 to 3) all give one ungoverned paint and the dominating history', () => {

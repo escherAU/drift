@@ -268,7 +268,8 @@ export function createApp(o) {
   // or the pair it already showed, never a third picture (src/governor.js has the derivation of the limits).
   // RESET (the next paint is whole and ungoverned, as the renderer repaints it whole). Two kinds (src/governor.js RESET):
   //   KEEPS THE HISTORY (reset({ other: true })): the polarity flip `i` and every console frame; and reset({ other: true, changes: 2 }), the way BACK from another mode or from the console (the screen
-  //   was left and came back: two changes of every cell, DRIFT-13 correction 3). The paint is whole, but the governor keeps every cell's last changes, and counts the reset paint as ONE change of
+  //   was left and came back: two changes of every cell, DRIFT-13 correction 3; since DRIFT-14 the out change is counted at the real moment high contrast was left, which noteLeft() below hands
+  //   the governor (gov.leave(wall), the first paint of anything else), and a trip of one second or more counts the return as ONE change: src/governor.js RESET). The paint is whole, but the governor keeps every cell's last changes, and counts the reset paint as ONE change of
   //   every cell for `i` (the palette swapped, so the meter saw every cell move; the reset paint is not stamped in the per-read window: it does not exempt cells from the cap of the paint after it),
   //   so a cell that changed twice just before an `i` may not change again for W seconds. Without the history a flip in the middle of a dissolve failed L2 over the next 0.3 to 0.45 s (DRIFT-13
   //   correction 1). The flip FRAME itself is the flip guard's (FLIP_WINDOW_SECONDS bounds how often it happens): it swaps the palette under the indices the governor works on, which no hold can undo.
@@ -291,11 +292,17 @@ export function createApp(o) {
     return Object.assign(govFrame, f, { glyphs: g.glyphs, shades: g.shades });
   }
   function govReset(opts) { if (gov) gov.reset(opts); govPending = false; }
+  // DRIFT-14: called by every paint that is NOT the governed art (calm, chaos, experimental, the console, the size card): the first one after high contrast was left stamps the leave with the real
+  // time of that paint (`wall`, the same clock gov.govern gets). The governor keeps the FIRST leave until the return paint, so a chain (contrast -> calm -> chaos -> contrast, contrast ->
+  // console -> contrast) counts the moment contrast was left; a return with no record (the governor did not exist, a hard reset in between) is DRIFT-13's: both changes at the return.
+  let govLeft = false;
+  function noteLeft() { if (govLeft) { govLeft = false; if (gov) gov.leave(wall); } }
   function repaintAll(opts = { other: true }) { renderer.invalidate(); govReset(opts); }
 
   function renderFrame() {
     if (shown.shell && shell) return renderShellFrame();
     if (cardUp()) return renderCard();
+    if (shown.mode !== 'contrast') noteLeft();
     fitArt();
     const sc = sched(shown.mode);
     const f = shown.mode === 'calm' ? composer.frame(sc.state(), t) : cells(shown.mode).frame(sc.state(), t, rt);
@@ -318,6 +325,7 @@ export function createApp(o) {
     const pal = paletteNow();
     const f = newFrame(cols, rows);
     drawTooSmall(f, (pal.ui || SINGLE_HUE_UI).text, MSG_TOO_SMALL_CLASSIC);
+    noteLeft();
     govReset({ hard: true }); // the card is something else on the terminal (and a size the art does not fit): the next art frame is a whole repaint and the history starts again
     lastFrame = f;
     const out = renderer.render(renderArgs(f, pal));
@@ -327,6 +335,7 @@ export function createApp(o) {
 
   // One console frame through the same renderer and the same synchronized write.
   function renderShellFrame() {
+    noteLeft(); // DRIFT-14: the console over high contrast is something else painted: the moment it was left
     const f = shell.frame();
     // a new palette with a different background needs a clean slate (the renderer's key change alone
     // would leave the old background in cells it does not redraw)
@@ -369,9 +378,14 @@ export function createApp(o) {
     }
     const changedMode = shown.mode !== want.mode;
     const leavingShell = shown.shell && !wantShell;
+    const wasGoverned = shown.mode === 'contrast' && !shown.shell; // the governed screen is on show now
     shown.mode = want.mode;
     shown.light = wantLight;
     shown.shell = wantShell;
+    // DRIFT-14: high contrast was LEFT (another mode, or the console over it). The moment is stamped by the first paint of something else (noteLeft), in real time, so the way back can count that
+    // change at its own time instead of at the return. Not here: a key press settles between steps, when `wall` is still the time of the last governed paint, a frame before the viewer saw the change.
+    if (wasGoverned && !(shown.mode === 'contrast' && !shown.shell)) govLeft = true;
+    else if (shown.mode === 'contrast' && !shown.shell) govLeft = false; // back on the governed screen before anything else was painted: nothing was left
     shellPal = null;
     sched(shown.mode);
     repaintAll(changedMode || leavingShell ? { other: true, changes: 2 } : undefined); // away from the governed screen and back: every cell changed twice (DRIFT-13 correction 3); the flip `i` alone is one

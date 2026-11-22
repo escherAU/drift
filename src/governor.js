@@ -7,6 +7,7 @@
 //   const painted = gov.govern(glyphs, shades, now);   // now: REAL time in seconds (the app's `wall`), never scene time
 //   painted.glyphs, painted.shades                      // the same two buffers every call (reused; do not keep them across paints)
 //   gov.reset(opts)                                     // the next paint is whole and not governed; the history is kept unless opts.hard; opts.other, opts.changes (see RESET)
+//   gov.leave(now)                                      // the governed screen stopped being shown at `now` (real time): the way back counts that change at that time (see RESET, back)
 //   gov.resize(cols, rows)                              // a new size (also a reset)
 //   gov.stats                                           // counters, see COST and OBSERVE
 //
@@ -73,6 +74,18 @@
 //          screen is a whole-screen change the governor never saw (it is not painting then), so the return alone counted one change and a cell that had changed just before the trip could
 //          change again inside the second (Desmond: 108 of 216 runs of the tunnel failed L2 from 0.25 s after the return; counting two, 27 of 64 of his control set against 59). The tail
 //          that remains is the trip's own (README): cells hot from a change before the trip plus the out and the back.
+//          WHEN the out change happened (DRIFT-14). DRIFT-13 stamped both changes at the RETURN (t3 = t1, t2 = t1 = now), so for the second after it every cell had two changes inside W
+//          whatever the length of the trip: 27 to 29 % of the screen held on average (up to 57 %) after a 0.3 s trip and a 3 s one alike. The out change really happened when the viewer
+//          stopped seeing the governed screen, so the app calls leave(now) with the real time of the first paint of anything else (the app's `wall`, never the scene clock), and the back
+//          paint counts it there: the FIRST leave wins until the paint that consumes it (contrast -> calm -> chaos -> contrast keeps the moment contrast was left), a hard request or hard
+//          paint clears it, and nothing is recorded while a hard paint is pending (no painted screen was left). Two arms on the length of the trip, leave L and return paint `now`:
+//            trip < W   (L > now - W): the leave is still inside W and protects. Two changes: t3 = t1, t2 = L, t1 = now. A cell that changed at the leave cannot change again before L + W;
+//                       the derivation above holds because L is a real paint time (the meter sees the leave as the transition of the first read after it).
+//            trip >= W  (L <= now - W + EPS_T): the leave has aged out and protects nothing (any three changes with L among them are at least W apart from the next one). The return counts
+//                       ONE change, as `other` does: t3 = t2, t2 = t1, t1 = now.
+//            no recorded leave (the governor did not exist, a hard reset or resize came between): both changes at the return, as DRIFT-13 did (t3 = t1, t2 = t1 = now). Safe, and held longer.
+//          A paint that consumes the state, whatever its kind, forgets the leave: it is used by the back paint or by none. The `i` flip is not a trip and is unchanged (one change, at now).
+//          What stays held after the return is the return itself: it is a whole-screen change the viewer sees, so it uses one of each cell's three changes of the next second.
 //   The per-cell history (t1 t2 t3, rule L2) takes every one of these changes; the per-read window (tw, rule L3) takes none of them (see THE RESET PAINT AND THIS LIMIT).
 //
 // RESET STATES (DRIFT-13 correction 2, `back` added in correction 3). The reset is ONE state, `mode`, never a set of flags, so no order of calls can leave a request behind. Five states; the
@@ -87,6 +100,10 @@
 //            history kept
 //   soft     whole, changed cells count once,          -> hard           -> back                 -> other          stays soft whole and ungoverned -> steady
 //            history kept
+//
+// The leave record (DRIFT-14, leave(now)) is NOT a state of the machine: it is one number beside it, `leftAt`, read by the paint that leaves `back` and cleared by every paint that leaves any
+// pending state and by every hard request (the hard column: hard, resize(), reset({ hard: true })). It is only recorded while a painted screen exists (not in `hard`), and it never changes which
+// state is pending or how many paints are ungoverned (tests/governor-reset-states.test.js puts `leave` in every position of every ordering; tests/governor-leave.test.js pins the stamp).
 //
 // Construction, a new size and a change of buffer type start in hard (the governor has nothing painted). Order: hard beats back beats other beats soft, whatever the order of the calls, and a pending
 // state is consumed by exactly one paint, so at most ONE paint after any number of reset calls is ungoverned (stats.ungoverned, pinned over every ordering by
@@ -139,12 +156,12 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
   const relaxed = variant !== 'strict';
 
   let C = 0, R = 0, n = 0, STEP_CAP = 0, FW = 1, FH = 1, BX = 1, NB = 1, K = 0, CON_CAP = 0, NCON = 0;
-  let mode = 'hard', paintNo = 0, stamp = 0; // mode: the RESET STATES of the header ('steady' | 'hard' | 'soft' | 'other' | 'back')
+  let mode = 'hard', paintNo = 0, stamp = 0, leftAt = null; // leftAt: when the governed screen was left (leave(), null: not recorded). mode: the RESET STATES of the header ('steady' | 'hard' | 'soft' | 'other' | 'back')
   let Gp = null, Sp = null, gType = null, sType = null;
   let t1, t2, t3, tw, blk, bcount, conB, blockCon, candE, candT, fresh, ord, maskStamp, noSlot, hist;
   const out = { glyphs: null, shades: null };
   const stats = {
-    paints: 0, ungoverned: 0, resetChanged: 0, examined: 0, wanted: 0, changed: 0, held: 0, strictHeld: 0, blocksHeld: 0, readHeld: 0,
+    paints: 0, ungoverned: 0, returns: 0, returnsWithLeave: 0, lastTrip: -1, resetChanged: 0, examined: 0, wanted: 0, changed: 0, held: 0, strictHeld: 0, blocksHeld: 0, readHeld: 0,
     last: { examined: 0, wanted: 0, changed: 0, held: 0 },
   };
 
@@ -185,7 +202,7 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
     maskStamp = new Int32Array(n); noSlot = new Int32Array(n); stamp = 0;
     hist = new Int32Array(BUCKETS + 1);
     Gp = Sp = gType = sType = null; out.glyphs = out.shades = null;
-    mode = 'hard'; paintNo = 0;
+    mode = 'hard'; paintNo = 0; leftAt = null;
   }
 
   // list[0..m) in priority order (lowest hash bucket first) into ord[0..m): a counting sort, stable, O(m + BUCKETS)
@@ -228,7 +245,7 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
     if (mode === 'hard') {
       Gp.set(glyphs); Sp.set(shades);
       t1.fill(now); t2.fill(-Infinity); t3.fill(-Infinity); tw.fill(-Infinity);
-      mode = 'steady'; // the paint consumes the hard state
+      mode = 'steady'; leftAt = null; // the paint consumes the hard state
       stats.ungoverned++;
       stats.last.examined = 0; stats.last.wanted = 0; stats.last.changed = 0; stats.last.held = 0;
       return out;
@@ -236,16 +253,23 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
     if (mode !== 'steady') { // soft, other or back: a reset that kept the size: the history stays, the paint is whole and ungoverned, and counts as ONE change of each cell that really changed
       const all = mode !== 'soft'; // the screen (or its palette) was changed under the governor: every cell counts as changed
       const twice = mode === 'back'; // the screen was left and came back: every cell changed out and back, two changes
+      // DRIFT-14: the out change is stamped at the moment the screen was LEFT (leave()), not at the return. A trip of W or more: that change is at least W old, it protects nothing, and the
+      // return counts ONE change (the same as `other`). A shorter trip: the leave (at its real time) and the return (now) are two changes. No recorded leave: both at the return (DRIFT-13).
+      const had = twice && leftAt !== null;
+      const leave = had ? Math.min(leftAt, now) : now;
+      const aged = leave <= now - W + EPS_T;
+      const one = !twice || (had && aged);
+      if (twice) { stats.returns++; if (had) stats.returnsWithLeave++; stats.lastTrip = had ? now - leave : -1; }
       let c = 0;
       // t1 t2 t3 are the per-CELL history (rule L2) and take the changes. tw, the per-READ window (rule L3), is NOT stamped: the reset paint is one whole paint that no cap can hold (it is the
       // flip frame, the flip guard's), and a cell stamped there would count as "already changed in this read" and be exempt from the cap of the paints after it (RESET, correction 3).
       for (let i = 0; i < n; i++) {
         if (!all && glyphs[i] === Gp[i] && shades[i] === Sp[i]) continue;
-        if (twice) { t3[i] = t1[i]; t2[i] = now; t1[i] = now; } else { t3[i] = t2[i]; t2[i] = t1[i]; t1[i] = now; }
+        if (one) { t3[i] = t2[i]; t2[i] = t1[i]; t1[i] = now; } else { t3[i] = t1[i]; t2[i] = leave; t1[i] = now; }
         c++;
       }
       Gp.set(glyphs); Sp.set(shades);
-      mode = 'steady'; // the paint consumes the soft, other or back state
+      mode = 'steady'; leftAt = null; // the paint consumes the soft, other or back state (and the leave: it is used by this paint or by none)
       stats.ungoverned++; stats.resetChanged += c;
       stats.last.examined = 0; stats.last.wanted = 0; stats.last.changed = 0; stats.last.held = 0;
       return out;
@@ -329,15 +353,23 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
   // reset({ hard: true }) and resize(): a new screen, the history starts again. The transitions are the table in the header (RESET STATES).
   const RANK = { steady: 0, soft: 1, other: 2, back: 3 };
   function reset(opts = {}) {
-    if (opts.hard || !Gp) { mode = 'hard'; return; }
+    if (opts.hard || !Gp) { mode = 'hard'; leftAt = null; return; }
     if (mode === 'hard') return; // hard dominates any later request before its paint
     const want = opts.other ? (opts.changes >= 2 ? 'back' : 'other') : 'soft';
     if (RANK[want] > RANK[mode]) mode = want; // the strongest request wins: back, other, soft
   }
 
+  // leave(now): the governed screen stopped being shown at `now` (REAL time, the app's wall). The FIRST call wins until the paint that consumes it (a chain of modes or the console on the way keeps the
+  // moment high contrast was left); the `back` paint counts it at this time (RESET). Nothing is recorded while a hard paint is pending (there is no painted screen that was left); a hard request
+  // or its paint clears it. One assignment: no cost per paint.
+  function leave(now) {
+    if (mode === 'hard' || !Gp) return;
+    if (leftAt === null) leftAt = now;
+  }
+
   resize(cols, rows);
   return {
-    govern, reset, resize, stats, observe, variant,
+    govern, reset, resize, leave, stats, observe, variant,
     limits: { get W() { return W; }, get readWindow() { return READ_WINDOW; }, get stepCap() { return STEP_CAP; }, get blockCap() { return Math.floor(K / 4); }, get fieldCap() { return K; }, get conCap() { return CON_CAP; }, get field() { return { w: FW, h: FH }; }, get blocks() { return NB; }, get constraints() { return NCON; }, win1 },
   };
 }
