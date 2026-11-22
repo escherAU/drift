@@ -10,6 +10,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runLife, makeTree, rmTree } from './helpers-life-app.js';
+import { failedRules } from './helpers-flash.js';
 
 const must = (text, from, to) => { const lf = text.replace(/\r\n/g, '\n'); assert.equal(lf.split(from).length, 2, `the mutation target occurs exactly once: ${from}`); return lf.replace(from, to); };
 const STAMP_BACK = { 'src/governor.js': (t) => must(t, '        c++;', '        tw[i] = now; c++;') };
@@ -31,7 +32,8 @@ async function iThenHelp({ cols, rows, fps, seed, press, root = null }) {
     },
   });
   assert.notEqual(at, null, `the flip read was found (${cols}x${rows} fps ${fps} seed ${seed} i at ${press})`);
-  return { l3: r.rep.l3.worstFraction, at, after: r.rep.l3.details.timeS - at / fps };
+  // `failed`: the shared rule list's verdict on L3 (the meter's own 30 % limit); the tests below also hold the reads to the governor's 25 % cap
+  return { l3: r.rep.l3.worstFraction, at, after: r.rep.l3.details.timeS - at / fps, failed: failedRules(r.rep, { only: ['l3'] }) };
 }
 
 // 3 sizes at 9 fps (where the defect shows: one frame is 0.111 s) x seeds 1 and 2 x presses at 31 s (a dissolve) and 45 s, and 18 and 30 fps at the two small sizes
@@ -46,6 +48,7 @@ test(`DRIFT-13 reset window: \`i\` then \`h\` one frame later (jitter clock): L3
   for (const c of CASES) {
     const r = await iThenHelp(c);
     worst = Math.max(worst, r.l3);
+    assert.deepEqual(r.failed, [], `${c.cols}x${c.rows} fps ${c.fps} seed ${c.seed} i at ${c.press}: the shared rule list (L3 at the meter's 30 %)`);
     assert.ok(r.l3 <= CAP + 1e-9, `${c.cols}x${c.rows} fps ${c.fps} seed ${c.seed} i at ${c.press}: L3 ${(r.l3 * 100).toFixed(2)} % at +${r.after.toFixed(3)} s after the flip read`);
   }
   console.log(`DRIFT-13 reset window: ${CASES.length} runs of i then h one frame later, judged after the flip read: worst L3 ${(worst * 100).toFixed(2)} %`);
@@ -58,6 +61,7 @@ test('DRIFT-13 reset window control: with the reset paint stamping the per-read 
     for (const c of DEFECT) {
       const shipped = await iThenHelp(c), mut = await iThenHelp({ ...c, root });
       assert.ok(shipped.l3 <= CAP + 1e-9, `shipped ${c.cols}x${c.rows} seed ${c.seed}: ${(shipped.l3 * 100).toFixed(2)} %`);
+      assert.deepEqual(mut.failed, ['l3'], `the stamped tree fails the meter's own L3 limit (30 %) at ${c.cols}x${c.rows} seed ${c.seed}: ${(mut.l3 * 100).toFixed(2)} %`);
       assert.ok(mut.l3 > CAP + 1e-9, `the stamped tree fails L3 at ${c.cols}x${c.rows} fps ${c.fps} seed ${c.seed} i at ${c.press}: ${(mut.l3 * 100).toFixed(2)} %`);
       out.push(`${c.cols}x${c.rows} fps ${c.fps} seed ${c.seed} i@${c.press}: stamped ${(mut.l3 * 100).toFixed(2)} % at +${mut.after.toFixed(3)} s / shipped ${(shipped.l3 * 100).toFixed(2)} %`);
     }
