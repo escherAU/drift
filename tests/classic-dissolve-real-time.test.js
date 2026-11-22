@@ -5,7 +5,7 @@
 // runtime does the same, src/shell/runtime.js) and the contrast composer steps the maze, the one sim of the mode that does not ask for realClock, from the real-time clock (realTimeIds, src/cells.js, set in src/app.js).
 // What this file pins (the real app on the exact clock, frames counted by the scene id the app reports):
 //   contrast    the first dissolve lasts 2 s (36 frames at 18 fps, one frame either way; 2 x fps at 8 and 30) at 1x, 2x and 4x (real `+` presses); at 0.5x (real `-` presses) it lasts 4 s as before
-//   unchanged   calm (15 s cross-fade, 3.75 s at 4x) and chaos (2 s, 0.5 s at 4x) dissolve as before: the change is Classic high contrast's alone
+//   unchanged   calm (15 s cross-fade, 3.75 s at 4x), chaos and experimental (2 s, 0.5 s at 4x) dissolve as before: the change is Classic high contrast's alone
 //   turn        the speed keys still shorten a scene's turn: a scene length of 30 scene seconds ends at about 30, 15 and 7.5 real seconds at 1x, 2x and 4x
 //   composer    counted steps, no app: a scene named in realTimeIds (or with realClock) steps at the real-time count, in and out of a dissolve; any other at the scene clock's
 import test from 'node:test';
@@ -46,6 +46,15 @@ test('DRIFT-12 calm and chaos dissolve as before at 4x: calm 15 scene seconds (3
   assert.ok(calm.frames >= 66 && calm.frames <= 69, `calm: ${calm.frames} frames`);
   const chaos = await firstFade({ startMode: 'chaos', speed: '4x', seconds: 60 });
   assert.ok(chaos.frames >= 8 && chaos.frames <= 10, `chaos: ${chaos.frames} frames`);
+});
+
+test('DRIFT-12 experimental dissolves as before, at 1x and 4x (real + presses): 2 scene seconds, 36 frames at 1x and 9 at 4x (0.5 s real), while contrast at 4x lasts 36 (the control: only contrast changed)', async () => {
+  const exp1 = await firstFade({ startMode: 'experimental', speed: '1x', seconds: 60 });
+  assert.ok(exp1.frames >= 35 && exp1.frames <= 37, `experimental 1x: ${exp1.frames} frames`);
+  const exp4 = await firstFade({ startMode: 'experimental', speed: '4x', seconds: 60 });
+  assert.ok(exp4.frames >= 8 && exp4.frames <= 10, `experimental 4x: ${exp4.frames} frames (not scaled to real time: that is contrast's alone)`);
+  const con4 = await firstFade({ startMode: 'contrast', speed: '4x', seconds: 60 });
+  assert.ok(con4.frames >= 35 && con4.frames <= 37 && con4.frames > exp4.frames * 3, `control: contrast 4x ${con4.frames} frames against experimental ${exp4.frames}`);
 });
 
 test('DRIFT-12 contrast: the speed keys still shorten the scene\'s turn: with a scene length of 30 scene seconds the first dissolve starts at about 30, 15 and 7.5 real seconds at 1x, 2x and 4x (the keys are pressed in the second second)', async () => {
