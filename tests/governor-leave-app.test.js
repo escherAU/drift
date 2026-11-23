@@ -45,6 +45,8 @@ const PATHS = {
   flip: () => ({ keys: [{ at: KEY_AT, key: 'i' }], ret: (st, p) => st.light !== p.light }), // the polarity flip: not a trip, one change at now
   // the library, the Delza cartridge inserted and booted and run, ejected, the library again, then Esc back to Classic: the console shows a cartridge for most of the trip (the real library: a non-empty list)
   cartridge: (a) => ({ dirs: [{ dir: INSTALL_DIR, trusted: true }], keys: [{ at: KEY_AT, key: 'l' }, { at: KEY_AT + 0.1, key: '\x1b[C' }, { at: KEY_AT + 0.2, key: '\x1b[C' }, { at: KEY_AT + 1.5, key: '\r' }, { at: KEY_AT + a - 2.5, key: 'e' }, { at: KEY_AT + a, key: '\x1b' }], ret: (st, p) => st.shell === null && p.shell !== null }),
+  // the quickest way back from a running cartridge: `e` ejects, an Esc during the eject skips to the library, a second Esc leaves it (the eject picture is on screen up to 0.3 s before the return)
+  'cartridge quick': (a) => ({ dirs: [{ dir: INSTALL_DIR, trusted: true }], keys: [{ at: KEY_AT, key: 'l' }, { at: KEY_AT + 0.1, key: '\x1b[C' }, { at: KEY_AT + 0.2, key: '\x1b[C' }, { at: KEY_AT + 1.5, key: '\r' }, { at: KEY_AT + a - 0.3, key: 'e' }, { at: KEY_AT + a - 0.15, key: '\x1b' }, { at: KEY_AT + a, key: '\x1b' }], ret: (st, p) => st.shell === null && p.shell !== null }),
 };
 
 // one run of the tunnel at `cols`x`rows`: the way out and back of `path` (a key plan), then metered. Returns what the governor said about the return (stats.returns, stats.lastTrip), the held share
@@ -225,6 +227,22 @@ test('DRIFT-14 the console with a running cartridge (Delza, 14 s trip, 40x10 and
   console.log(`DRIFT-14 console with a cartridge:\n  ${lines.join('\n  ')}`);
   const none = await go({ cols: 40, rows: 10, fps: 18, clock: 'grid', path: 'cartridge', away: 14, edits: NO_AWAY_SHELL });
   assert.equal(none.awayPaints, 0, 'control: with the console call of away() dropped nothing is kept (the test above would fail)');
+});
+
+// The eject takes 1.9 s (0.3 s fade to blank, 1.6 s of the insert animation backwards, then the library: measured, `e` at 0, the library state at 1.89 s at 80x24 and 18 fps), but a key press during it skips
+// to the library, so the picture of a running cartridge can be on screen 0.3 s before a return: `e`, Esc (skip), Esc (leave). That quickest way back is judged here as well.
+test('DRIFT-14 the quickest way back from a running cartridge (`e`, Esc to skip the eject, Esc again 0.3 s after the `e`; Delza, 40x10 and 80x24, 18 fps, 3 clocks): the return has its leave and the five rules hold from 0.25 s', async () => {
+  const lines = [];
+  for (const [cols, rows] of [[40, 10], [80, 24]]) for (const clock of ['grid', 'q156', 'jitter']) {
+    const c = { cols, rows, fps: 18, clock, path: 'cartridge quick', away: 14 };
+    const r = await go(c);
+    const why = `quick eject ${label(c)}`;
+    assert.equal(r.returns, 1, `${why}: one return`); assert.equal(r.withLeave, 1, `${why}: with a recorded leave`);
+    assert.deepEqual(r.failedMid, [], `${why}: from 0.25 s after the return: ${r.failedMid} L2 ${r.l2Mid}`);
+    assert.deepEqual(r.failedFin, [], `${why}: from 1 s after the return: ${r.failedFin}`);
+    lines.push(`${why}: busy ${r.busy} cells, crowded ${r.crowded}, L2 from 0.25 s ${r.l2Mid} %`);
+  }
+  console.log(`DRIFT-14 quickest way back from a cartridge:\n  ${lines.join('\n  ')}`);
 });
 
 // ---- mutations: the way the stamp can break, each killed by a test above

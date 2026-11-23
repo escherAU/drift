@@ -87,14 +87,17 @@
 //          WHAT THE OTHER SCREEN CHANGED (DRIFT-14, correction 1: away(frame, key, now)). The one-change arm above assumed the other screen made no changes between the leave and the return. Chaos changes
 //          cells every frame and the meter counts them, so a chaos change, the return and a governed change got through where DRIFT-13 held it (a 3 s chaos trip read L2 26.8 % against 19.6 %). So the app
 //          hands every frame the OTHER screens paint while the leave is recorded (calm, chaos, experimental, the console and its cartridge; the size card is a hard reset) to away(), which keeps, per cell,
-//          the real time of the last two changes (glyph, shade, fg or bg; a palette change is a change of every cell). The first away frame is the leave itself and is only the baseline. At the return:
+//          the real time of the last two changes (glyph, shade, fg or bg; a palette change is a change of every cell, and so is a frame of another KIND: with fg and bg or without, as chaos and experimental carry them and calm and the console do not;
+//          the record is never restarted by it, the switch is the newest change of every cell). The first away frame is the leave itself and is only the baseline. At the return:
 //            a cell that changed while away inside W of the return (after the leave): both changes at the return, t3 = t1, t2 = t1 = now, as DRIFT-13 did, whatever the length of the trip;
 //            a crowded screen: when more than FIELD_LIMIT of the cells changed TWICE inside W while away (with the return, three changes: hot already, the viewer's own allowance of hot cells in a
 //                       field spent), EVERY cell counts both changes at the return, even one nobody touched;
 //            every other cell: the arms above (a leave inside W protects, an aged leave counts one change).
-//          What this approximates, on purpose, towards the safe side: it keeps the LAST TWO changes of a cell, so a cell that changed three times or more while away counts as two (an undercount of the
-//          meter's view, but such a cell is held for W after the return anyway because its last change is inside W); the crowd test is a share of the whole screen, not of each field; a cell that
-//          changed once is held like the DRIFT-13 count (more than the meter needs), which is why a calm screen keeps the gain only where it really was quiet. Cost: one pass over the cells per frame
+//          What this approximates, and which way: it keeps the LAST TWO changes of a cell, so a cell that changed three times or more while away counts as two (an undercount against the meter, which
+//          counts them all; such a cell is held for W after the return all the same because its last change is inside W); the crowd test is a share of the whole screen, not of each field (a dense field on
+//          a sparse screen is not read as crowded: an undercount against the meter's per-field limit, judged only by the measured runs); a cell that changed once is held like the DRIFT-13 count, and in a
+//          crowded screen every cell counts both changes, even one nobody touched (an overcount: more than the meter needs, which is why a calm screen keeps the gain only where it really was quiet).
+//          It errs both ways, so what holds it to the rule is the measured runs in the README, not the direction of the approximation. Cost: one pass over the cells per frame
 //          painted while away (stats.awayExamined), one more over them at the return, nothing on a governed paint; no allocation after the first trip at a size.
 //          A paint that consumes the state, whatever its kind, forgets the leave: it is used by the back paint or by none. The `i` flip is not a trip and is unchanged (one change, at now).
 //          What stays held after the return is the return itself: it is a whole-screen change the viewer sees, so it uses one of each cell's three changes of the next second.
@@ -405,7 +408,8 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
   }
   // away(frame, key, now): what another screen (calm, chaos, experimental, the console and its cartridge) just PAINTED while the governed screen is left. Only while a leave is recorded; otherwise
   // it returns at once. The first call after the leave keeps the frame (it IS the leave, already stamped, so it is only the baseline); every later call moves awayT[i] to awayU[i] and stamps
-  // awayT[i] = now for each cell whose glyph, shade, fg or bg differs from the last away frame, or for every cell when `key` (the palette key) changed: the last TWO changes of a cell. ONE pass over
+  // awayT[i] = now for each cell whose glyph, shade, fg or bg differs from the last away frame, or for every cell when `key` (the palette key) changed or the frame is of another kind (array types, fg and bg present
+  // or not: the baseline is then taken again in the new kind and the record goes on, never cleared): the last TWO changes of a cell. ONE pass over
   // the cells per painted frame while away, no allocation after the first trip (the copies are made once per size), nothing at all on a governed paint. The return reads them (RESET, WHAT THE OTHER
   // SCREEN CHANGED); a cell that changed three or more times while away is counted as two, which holds it for W after the return all the same (its last change is inside W).
   function away(f, key, now) {
