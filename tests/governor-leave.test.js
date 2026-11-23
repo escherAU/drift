@@ -160,6 +160,46 @@ const CHECKS = {
     };
     assert.equal(run('fg'), false, 'an fg change alone: held'); assert.equal(run('bg'), false, 'a bg change alone: held');
   },
+  // ---- correction 2: a frame of another KIND while away (full colour or not: chaos and experimental carry fg and bg, calm and the console do not) is a whole-screen change at `now`; the record goes on
+  'a frame of another kind while away (with fg and bg, then without) counts every cell as changed, at that moment: a cell nobody touched is held until W after the return'(mod) {
+    const mkc = () => ({ glyphs: new Uint16Array(N).fill(32), shades: new Uint8Array(N), fg: new Uint32Array(N).fill(0x112233), bg: new Uint32Array(N).fill(0) });
+    const s = fresh(mod);
+    s.gov.leave(1.0); s.gov.away(mkc(), 'k', 1.0); s.gov.away(frame(), 'k', 2.2); // the switch to a frame with no colour, at 2.2: inside W of the return at 2.5
+    s.gov.reset(BACK); s.gov.govern(s.f.glyphs, s.f.shades, 2.5);
+    assert.equal(moves(s, 3.0, CELL + 5), false, 'held: the whole screen changed at 2.2 (the cell itself never did)');
+    const q = fresh(mod); q.gov.leave(1.0); q.gov.away(mkc(), 'k', 1.0); q.gov.away(mkc(), 'k', 2.2); // control: the same frames of ONE kind
+    q.gov.reset(BACK); q.gov.govern(q.f.glyphs, q.f.shades, 2.5);
+    assert.equal(moves(q, 2.6, CELL + 5), true, 'control: no switch, no change: the aged leave protects nothing');
+  },
+  'the reverse order (no fg and bg, then with) counts every cell as changed as well, and a repeated kind switch does too'(mod) {
+    const mkc = () => ({ glyphs: new Uint16Array(N).fill(32), shades: new Uint8Array(N), fg: new Uint32Array(N).fill(0x112233), bg: new Uint32Array(N).fill(0) });
+    const s = fresh(mod);
+    s.gov.leave(1.0); s.gov.away(frame(), 'k', 1.0); s.gov.away(mkc(), 'k', 2.2);
+    s.gov.reset(BACK); s.gov.govern(s.f.glyphs, s.f.shades, 2.5);
+    assert.equal(moves(s, 3.0, CELL + 5), false, 'plain then colour: held');
+    const r = fresh(mod); // a switch early (1.2) and again late (2.2): the second one is the one inside W
+    r.gov.leave(1.0); r.gov.away(mkc(), 'k', 1.0); r.gov.away(frame(), 'k', 1.2); r.gov.away(mkc(), 'k', 2.2);
+    r.gov.reset(BACK); r.gov.govern(r.f.glyphs, r.f.shades, 2.5);
+    assert.equal(moves(r, 3.0, CELL + 5), false, 'a repeated switch: held until W after the return (3.5)');
+    const t = fresh(mod); // an early switch only (1.2, the return 2.5): outside W of the return, the cell is not held
+    t.gov.leave(1.0); t.gov.away(mkc(), 'k', 1.0); t.gov.away(frame(), 'k', 1.2);
+    t.gov.reset(BACK); t.gov.govern(t.f.glyphs, t.f.shades, 2.5);
+    assert.equal(moves(t, 2.6, CELL + 5), true, 'a single early switch: older than W at the return, free');
+  },
+  'a kind switch does not clear the record: 101 of 400 cells changed at 2.0, the whole screen changed again at 2.1 (a switch): the return sees 101 cells hot twice inside W, and a crowded screen; 100: not crowded'(mod) {
+    const mkc = () => ({ glyphs: new Uint16Array(N).fill(32), shades: new Uint8Array(N), fg: new Uint32Array(N).fill(0x112233), bg: new Uint32Array(N).fill(0) });
+    const edge = (k) => {
+      const s = fresh(mod), af = mkc();
+      s.gov.leave(1.0); s.gov.away(af, 'k', 1.0);
+      for (let i = 0; i < k; i++) af.glyphs[i] = 70;
+      s.gov.away(af, 'k', 2.0); // k cells changed at 2.0, inside W of the return
+      s.gov.away(frame(), 'k', 2.1); // the switch: every cell changes again at 2.1, so the k cells have two changes inside W
+      s.gov.reset(BACK); s.gov.govern(s.f.glyphs, s.f.shades, 2.5);
+      return [s.gov.stats.lastBusy, s.gov.stats.returnsCrowded];
+    };
+    assert.deepEqual(edge(101), [101, 1], 'the record before the switch is kept: 101 busy cells, crowded');
+    assert.deepEqual(edge(100), [100, 0], 'at the limit: 100 busy cells, not crowded');
+  },
   'a frame that is not the size of the governed screen is read as every cell changed (never a silent skip)'(mod) {
     const s = fresh(mod), af = frame();
     s.gov.leave(1.0); s.gov.away(af, 'k', 1.0); s.gov.away({ glyphs: new Uint16Array(10), shades: new Uint8Array(10) }, 'k', 2.2);
@@ -267,12 +307,15 @@ export const LEAVE_MUTANTS = [
   { label: 'a hard reset and a hard paint keep the leave', edits: [["if (opts.hard || !Gp) { mode = 'hard'; leftAt = null; return; }", "if (opts.hard || !Gp) { mode = 'hard'; return; }"], ["mode = 'steady'; leftAt = null; // the paint consumes the hard state", "mode = 'steady'; // the paint consumes the hard state"]] },
   { label: 'away() does nothing (the other screens changes are never kept)', edits: [['if (leftAt === null || n === 0) return;', 'return;']] },
   { label: 'the first away frame is not a baseline: its differences count as changes while away', edits: [['awayT.fill(-Infinity); awayU.fill(-Infinity); awayHave = true; awayKey = key;', 'awayT.fill(now); awayU.fill(-Infinity); awayHave = true; awayKey = key;']] },
-  { label: 'a palette change while away is ignored', edits: [['const all = key !== awayKey;', 'const all = false;']] },
+  { label: 'a palette change while away is ignored', edits: [['const all = kind || key !== awayKey;', 'const all = kind;']] },
   { label: 'colour is ignored: only glyph and shade changes count', edits: [[' || fg[i] !== pFg[i] || bg[i] !== pBg[i]) { awayU[i]', ') { awayU[i]']] },
   { label: 'a cell changed while away is not counted at the return (only the aged leave is)', edits: [['if (crowd || (a > leave && a > edge)) {', 'if (crowd) {']] },
   { label: 'no crowd rule: a screen full of hot cells still frees the cells nobody changed', edits: [['const crowd = busy > FIELD_LIMIT * n;', 'const crowd = false;']] },
   { label: 'the crowd counts cells changed once (a calm screen is crowded)', edits: [['if (awayU[i] > leave && awayU[i] > edge) busy++;', 'if (awayT[i] > leave && awayT[i] > edge) busy++;']] },
   { label: 'a back paint does not consume the leave (a later return reuses it)', edits: [["mode = 'steady'; leftAt = null; // the paint consumes the soft, other or back state", "mode = 'steady'; // the paint consumes the soft, other or back state"]] },
+  { label: 'a frame of another kind while away (fg and bg or not) restarts the record, the old reset: every cell forgotten and the switch not counted', edits: [['if (kind) awayBase(g, s, fg, bg, colour);', 'if (kind) { awayBase(g, s, fg, bg, colour); awayT.fill(-Infinity); awayU.fill(-Infinity); return; }']] },
+  { label: 'a frame of another kind while away is not counted as a change of every cell (the record goes on)', edits: [['const all = kind || key !== awayKey;', 'const all = key !== awayKey;']] },
+  { label: 'a frame of another kind while away counts the switch but forgets what the cells did before it', edits: [['if (kind) awayBase(g, s, fg, bg, colour);', 'if (kind) { awayBase(g, s, fg, bg, colour); awayT.fill(-Infinity); }']] },
 ];
 test('DRIFT-14 leave mutation: the unbroken copy passes every check (so a kill is a kill)', async () => {
   const mod = await load('clean', []);

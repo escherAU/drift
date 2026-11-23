@@ -396,6 +396,13 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
     if (leftAt === null) leftAt = now;
   }
 
+  // the baseline of away(): copies of the frame in ITS kind (array types, with fg and bg or without), made once per size and type and reused by every later trip (no allocation after the first)
+  function awayBase(g, s, fg, bg, colour) {
+    if (!pG || pG.constructor !== g.constructor) pG = new g.constructor(n);
+    if (!pS || pS.constructor !== s.constructor) pS = new s.constructor(n);
+    pG.set(g); pS.set(s);
+    if (!colour) { pFg = pBg = null; } else { if (!pFg || pFg.constructor !== fg.constructor) pFg = new fg.constructor(n); if (!pBg || pBg.constructor !== bg.constructor) pBg = new bg.constructor(n); pFg.set(fg); pBg.set(bg); }
+  }
   // away(frame, key, now): what another screen (calm, chaos, experimental, the console and its cartridge) just PAINTED while the governed screen is left. Only while a leave is recorded; otherwise
   // it returns at once. The first call after the leave keeps the frame (it IS the leave, already stamped, so it is only the baseline); every later call moves awayT[i] to awayU[i] and stamps
   // awayT[i] = now for each cell whose glyph, shade, fg or bg differs from the last away frame, or for every cell when `key` (the palette key) changed: the last TWO changes of a cell. ONE pass over
@@ -407,17 +414,12 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
     if (g.length !== n || s.length !== n) { if (awayHave) awayU.set(awayT); awayT.fill(now); return; } // not the size of the governed screen: every cell counts as changed (and the next frame is compared with the last of the right size)
     stats.awayPaints++; stats.awayExamined += n;
     const colour = fg !== null && bg !== null && fg.length === n && bg.length === n;
-    if (awayHave && (pG.constructor !== g.constructor || pS.constructor !== s.constructor || colour !== (pFg !== null))) awayHave = false;
-    if (!awayHave) {
-      if (!pG || pG.constructor !== g.constructor) pG = new g.constructor(n); // made once per size and type, reused by every later trip
-      if (!pS || pS.constructor !== s.constructor) pS = new s.constructor(n);
-      pG.set(g); pS.set(s);
-      if (!colour) { pFg = pBg = null; } else { if (!pFg || pFg.constructor !== fg.constructor) pFg = new fg.constructor(n); if (!pBg || pBg.constructor !== bg.constructor) pBg = new bg.constructor(n); }
-      if (colour) { pFg.set(fg); pBg.set(bg); }
-      awayT.fill(-Infinity); awayU.fill(-Infinity); awayHave = true; awayKey = key;
-      return;
-    }
-    const all = key !== awayKey; awayKey = key;
+    if (!awayHave) { awayBase(g, s, fg, bg, colour); awayT.fill(-Infinity); awayU.fill(-Infinity); awayHave = true; awayKey = key; return; }
+    // a frame of another KIND (chaos and experimental carry fg and bg, calm and the console do not) is not comparable cell by cell, and the viewer saw the whole screen change: every cell counts as changed
+    // at `now`, the record goes on (never cleared: the two last changes of each cell stay, the switch is the newest), and the baseline is taken again in the new kind
+    const kind = pG.constructor !== g.constructor || pS.constructor !== s.constructor || colour !== (pFg !== null);
+    if (kind) awayBase(g, s, fg, bg, colour);
+    const all = kind || key !== awayKey; awayKey = key;
     if (all) { awayU.set(awayT); awayT.fill(now); }
     else if (colour) { for (let i = 0; i < n; i++) if (g[i] !== pG[i] || s[i] !== pS[i] || fg[i] !== pFg[i] || bg[i] !== pBg[i]) { awayU[i] = awayT[i]; awayT[i] = now; } }
     else { for (let i = 0; i < n; i++) if (g[i] !== pG[i] || s[i] !== pS[i]) { awayU[i] = awayT[i]; awayT[i] = now; } }

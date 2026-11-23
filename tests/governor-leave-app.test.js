@@ -38,6 +38,8 @@ const PATHS = {
   chain: (a) => ({ keys: [{ at: KEY_AT, key: '1' }, { at: KEY_AT + a / 2, key: '2' }, { at: KEY_AT + a, key: '3' }], ret: (st, p) => st.mode === 'contrast' && p.mode !== 'contrast' }), // calm, chaos, back
   experimental: (a) => ({ keys: [{ at: KEY_AT, key: '4' }, { at: KEY_AT + a, key: '3' }], ret: (st, p) => st.mode === 'contrast' && p.mode !== 'contrast' }),
   chaos: (a) => ({ keys: [{ at: KEY_AT, key: '2' }, { at: KEY_AT + a, key: '3' }], ret: (st, p) => st.mode === 'contrast' && p.mode !== 'contrast' }), // chaos straight away: it changes cells every frame
+  'chaos then calm 0.1': (a) => ({ keys: [{ at: KEY_AT, key: '2' }, { at: KEY_AT + a - 0.1, key: '1' }, { at: KEY_AT + a, key: '3' }], ret: (st, p) => st.mode === 'contrast' && p.mode !== 'contrast' }), // chaos carries fg and bg, calm does not: a kind switch while away
+  'chaos then calm 0.2': (a) => ({ keys: [{ at: KEY_AT, key: '2' }, { at: KEY_AT + a - 0.2, key: '1' }, { at: KEY_AT + a, key: '3' }], ret: (st, p) => st.mode === 'contrast' && p.mode !== 'contrast' }),
   console: (a) => ({ keys: [{ at: KEY_AT, key: 'l' }, { at: KEY_AT + a, key: '\x1b' }], ret: (st, p) => st.shell === null && p.shell !== null }), // the library over high contrast, and back
   'calm then console': (a) => ({ keys: [{ at: KEY_AT, key: '1' }, { at: KEY_AT + a / 3, key: 'l' }, { at: KEY_AT + 2 * a / 3, key: '\x1b' }, { at: KEY_AT + a, key: '3' }], ret: (st, p) => st.mode === 'contrast' && p.mode !== 'contrast' }), // left to calm, the console opened from calm and closed, then high contrast
   flip: () => ({ keys: [{ at: KEY_AT, key: 'i' }], ret: (st, p) => st.light !== p.light }), // the polarity flip: not a trip, one change at now
@@ -183,6 +185,25 @@ test('DRIFT-14 a chaos trip (key 2, 1 s and 3 s, 41x11, 30 fps, 3 clocks, seeds 
   }
   assert.ok(seen, 'the 3 s jitter seed 1 run (26.8 % in DRIFT-14 4039fdc) is among them');
   console.log(`DRIFT-14 chaos trips, L2 from 0.25 s (percent):\n  ${lines.join('\n  ')}`);
+});
+
+// ---- correction 2: chaos (it carries fg and bg), then calm (it does not) a moment before the return. The first version of away() restarted its record at a change of frame KIND, so the whole
+// record of the chaos was thrown away and the switch itself was never counted: busy 0 of 400 against 194 for a plain chaos trip, and L2 from 0.25 s above the DRIFT-13 control in 140 of 144 of
+// Desmond's runs (18 fps grid, 1 s trip: 25.9 % against 19.6 %; 3 s: 28.6 % against 25.0 %; 30 fps jitter, 1 s: 28.6 % against 23.2 %). A kind switch is now a change of every cell at that moment.
+test('DRIFT-14 chaos, then calm 0.1 s and 0.2 s before the return (40x10, 18 and 30 fps, trips 1 s and 3 s, 3 clocks, seed 1): L2 from 0.25 s is never higher than the DRIFT-13 control (stamped at the return)', async () => {
+  const lines = []; const seen = new Set();
+  for (const path of ['chaos then calm 0.1', 'chaos then calm 0.2']) for (const fps of [18, 30]) for (const away of [1, 3]) for (const clock of ['grid', 'q156', 'jitter']) {
+    const c = { cols: 40, rows: 10, fps, clock, path, away, seed: 1 };
+    const a = await go(c), b = await go({ ...c, edits: AT_RETURN });
+    const la = Math.max(a.l2Mid, a.l2Fin), lb = Math.max(b.l2Mid, b.l2Fin);
+    const why = `${path}, ${fps} fps, trip ${away}, ${clock}`;
+    assert.ok(la <= lb, `${why}: L2 from 0.25 s ${la} % <= the control's ${lb} %`);
+    assert.ok(a.busy > 0, `${why}: the return saw the chaos (busy ${a.busy} cells)`);
+    seen.add(`${path} ${fps} ${away} ${clock}`);
+    lines.push(`${why}: L2 ${la} vs control ${lb}, busy ${a.busy}, crowded ${a.crowded}`);
+  }
+  for (const k of ['chaos then calm 0.1 18 1 grid', 'chaos then calm 0.1 18 3 grid', 'chaos then calm 0.1 30 1 jitter']) assert.ok(seen.has(k), `the run that read over 25 % (${k}) is among them`);
+  console.log(`DRIFT-14 chaos then calm, L2 from 0.25 s (percent):\n  ${lines.join('\n  ')}`);
 });
 
 // ---- the console with a running cartridge (correction 1). A cartridge animates the console, so its changes while away count like any other screen's: away() is called by every console frame, with the
