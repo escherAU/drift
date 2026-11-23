@@ -29,6 +29,8 @@ function moves(s, at, cell = CELL) {
   s.f.glyphs[cell] = ++s.v;
   return s.gov.govern(s.f.glyphs, s.f.shades, at).glyphs[cell] === s.v;
 }
+// what the other screens painted while away (correction 1): a frame the test edits, handed to away() with a palette key and a real time
+const frame = () => ({ glyphs: new Uint16Array(N).fill(32), shades: new Uint8Array(N) });
 // the way back: leave at leaveAt (null: never recorded), the whole return paint at retAt
 function trip(s, leaveAt, retAt) {
   if (leaveAt !== null) s.gov.leave(leaveAt);
@@ -110,6 +112,92 @@ const CHECKS = {
     b.gov.reset(BACK); b.gov.govern(b.f.glyphs, b.f.shades, 1.5);
     assert.equal(moves(b, 2.0), false, 'a leave after a hard reset and before its paint is ignored');
   },
+  // ---- correction 1: the way back counts what the OTHER screens changed (away()). The trip of W or more assumed they changed nothing; chaos changes cells every frame.
+  'a cell the other screen changed inside W of the return counts both changes AT the return, as DRIFT-13 did: held 0.99 s after a 1.5 s trip; a cell it left alone is free at once'(mod) {
+    const run = () => {
+      const s = fresh(mod), af = frame();
+      s.gov.leave(1.0); s.gov.away(af, 'k', 1.0); af.glyphs[CELL] = 70; s.gov.away(af, 'k', 2.2); // changed at 2.2: inside W of the return at 2.5
+      s.gov.reset(BACK); s.gov.govern(s.f.glyphs, s.f.shades, 2.5);
+      return s;
+    };
+    const a = run(), b = run(), c = run();
+    assert.equal(moves(a, 3.49), false, 'the cell changed while away: held until W after the return (3.5)');
+    assert.equal(moves(b, 3.5), true, 'and free at exactly W after it');
+    assert.equal(moves(c, 2.6, CELL + 1), true, 'a neighbour nobody changed: the aged leave protects nothing, free 0.1 s after the return');
+    const q = fresh(mod); q.gov.leave(1.0); q.gov.reset(BACK); q.gov.govern(q.f.glyphs, q.f.shades, 2.5);
+    assert.equal(moves(q, 2.6), true, 'control: the same trip with no away() call frees the cell at once (what the unfixed code did for every cell)');
+  },
+  'both arms of the pair: a cell changed while away inside a trip SHORTER than W is held until W after the return (2.4), not W after the leave (2.0)'(mod) {
+    const mk = (changed) => {
+      const s = fresh(mod), af = frame();
+      s.gov.leave(1.0); s.gov.away(af, 'k', 1.0); if (changed) { af.glyphs[CELL] = 70; s.gov.away(af, 'k', 1.2); }
+      s.gov.reset(BACK); s.gov.govern(s.f.glyphs, s.f.shades, 1.4);
+      return s;
+    };
+    assert.equal(moves(mk(true), 2.0), false, 'changed at 1.2: still held at 2.0');
+    assert.equal(moves(mk(true), 2.4), true, 'and free at 2.4, W after the return');
+    assert.equal(moves(mk(false), 2.0), true, 'nobody changed it: free W after the leave (the DRIFT-14 arm)');
+  },
+  'the first away frame is the baseline: a cell that differs in it is the LEAVE (already stamped), not a change while away'(mod) {
+    const s = fresh(mod), af = frame();
+    af.glyphs[CELL] = 70; s.gov.leave(1.0); s.gov.away(af, 'k', 1.1); // the first frame after the leave, a moment later
+    s.gov.reset(BACK); s.gov.govern(s.f.glyphs, s.f.shades, 1.4); // a trip shorter than W: a change at 1.1 would hold the cell until 2.4
+    assert.equal(moves(s, 2.0), true, 'free W after the LEAVE: the baseline frame stamped nothing');
+  },
+  'a palette change while away is a change of every cell (the meter sees every cell move): every cell counts both changes at the return'(mod) {
+    const s = fresh(mod), af = frame();
+    s.gov.leave(1.0); s.gov.away(af, 'a', 1.0); s.gov.away(af, 'b', 2.2);
+    s.gov.reset(BACK); s.gov.govern(s.f.glyphs, s.f.shades, 2.5);
+    assert.equal(moves(s, 3.0, CELL + 5), false, 'a cell whose glyph never changed is held: the palette under it did');
+  },
+  'colour counts: a change of one cell fg or bg alone (a console frame with full colour) is a change while away'(mod) {
+    const mkc = () => ({ glyphs: new Uint16Array(N).fill(32), shades: new Uint8Array(N), fg: new Uint32Array(N).fill(0x112233), bg: new Uint32Array(N).fill(0x000000) });
+    const run = (which) => {
+      const s = fresh(mod), af = mkc();
+      s.gov.leave(1.0); s.gov.away(af, 'k', 1.0); af[which][CELL] = 0x445566; s.gov.away(af, 'k', 2.2);
+      s.gov.reset(BACK); s.gov.govern(s.f.glyphs, s.f.shades, 2.5);
+      return moves(s, 3.0);
+    };
+    assert.equal(run('fg'), false, 'an fg change alone: held'); assert.equal(run('bg'), false, 'a bg change alone: held');
+  },
+  'a frame that is not the size of the governed screen is read as every cell changed (never a silent skip)'(mod) {
+    const s = fresh(mod), af = frame();
+    s.gov.leave(1.0); s.gov.away(af, 'k', 1.0); s.gov.away({ glyphs: new Uint16Array(10), shades: new Uint8Array(10) }, 'k', 2.2);
+    s.gov.reset(BACK); s.gov.govern(s.f.glyphs, s.f.shades, 2.5);
+    assert.equal(moves(s, 3.0), false, 'held');
+  },
+  'a crowded screen (more than FIELD_LIMIT of the cells changed TWICE inside W while away, so hot with the return) counts every cell both changes at the return, even one nobody changed; at the limit it does not'(mod) {
+    const edge = (k) => { // k cells change twice inside W of a return at 2.5 (trip 1.5)
+      const s = fresh(mod), af = frame();
+      s.gov.leave(1.0); s.gov.away(af, 'k', 1.0);
+      for (let i = 0; i < k; i++) af.glyphs[i] = 70;
+      s.gov.away(af, 'k', 2.1);
+      for (let i = 0; i < k; i++) af.glyphs[i] = 71;
+      s.gov.away(af, 'k', 2.3);
+      s.gov.reset(BACK); s.gov.govern(s.f.glyphs, s.f.shades, 2.5);
+      return moves(s, 2.6, 300);
+    };
+    assert.equal(edge(100), true, '100 of 400 cells (25 %, the limit): not crowded, the quiet cell is free');
+    assert.equal(edge(101), false, '101 of 400 (above the limit): crowded, the quiet cell is held until 3.5');
+  },
+  'cells changed ONCE do not make a crowd however many (a calm screen): 300 of 400 changed once, a quiet cell is still free'(mod) {
+    const s = fresh(mod), af = frame();
+    s.gov.leave(1.0); s.gov.away(af, 'k', 1.0); for (let i = 0; i < 300; i++) af.glyphs[i] = 70;
+    s.gov.away(af, 'k', 2.2);
+    s.gov.reset(BACK); s.gov.govern(s.f.glyphs, s.f.shades, 2.5);
+    assert.equal(moves(s, 2.6, 350), true, 'free');
+    assert.equal(moves(s, 3.0, 5), false, 'while a cell that changed once is held');
+  },
+  'away() does nothing without a recorded leave, and what it kept does not outlive the return: the next trip starts afresh'(mod) {
+    const s = fresh(mod), af = frame();
+    s.gov.away(af, 'k', 0.5); af.glyphs[CELL] = 70; s.gov.away(af, 'k', 0.6);
+    assert.equal(s.gov.stats.awayPaints, 0, 'no leave, no bookkeeping');
+    s.gov.leave(1.0); s.gov.away(af, 'k', 1.0); af.glyphs[CELL] = 71; s.gov.away(af, 'k', 2.2);
+    s.gov.reset(BACK); s.gov.govern(s.f.glyphs, s.f.shades, 2.5); // trip one: the cell changed at 2.2
+    s.gov.leave(10.0); s.gov.away(af, 'k', 10.0); // trip two: nothing changes
+    s.gov.reset(BACK); s.gov.govern(s.f.glyphs, s.f.shades, 12.5);
+    assert.equal(moves(s, 12.6), true, 'the change of trip one is not counted in trip two');
+  },
   'one ungoverned paint, whatever the order of leave and reset calls'(mod) {
     for (const calls of [['leave', 'back'], ['back', 'leave'], ['leave', 'leave', 'back'], ['leave', 'soft', 'back'], ['back', 'leave', 'hard'], ['hard', 'leave', 'back'], ['leave', 'back', 'leave', 'other']]) {
       const s = fresh(mod), base = s.gov.stats.ungoverned;
@@ -128,6 +216,21 @@ test('DRIFT-14 leave: the stats say what the return did (stats.returns, stats.re
   assert.ok(Math.abs(a.gov.stats.lastTrip - 0.4) < 1e-9, `lastTrip ${a.gov.stats.lastTrip}`);
   trip(a, null, 3.0);
   assert.deepEqual([a.gov.stats.returns, a.gov.stats.returnsWithLeave, a.gov.stats.lastTrip], [2, 1, -1], 'a return with no leave counts as a return and reads -1');
+});
+
+test('DRIFT-14 leave: away() costs one pass over the cells per painted frame while away, nothing without a leave, and adds nothing to a governed paint', () => {
+  const big = { cols: 200, rows: 60, fps: 18 }, n = 200 * 60;
+  const g = shipped.createGovernor(big), f = { glyphs: new Uint16Array(n).fill(32), shades: new Uint8Array(n) };
+  g.govern(f.glyphs, f.shades, -50);
+  const af = { glyphs: new Uint16Array(n).fill(32), shades: new Uint8Array(n) };
+  g.away(af, 'k', 0); assert.equal(g.stats.awayPaints, 0, 'no leave: no pass');
+  g.leave(0.1);
+  for (let k = 0; k < 20; k++) { af.glyphs[k * 3] = 40 + k; g.away(af, 'k', 0.1 + k * 0.05); }
+  assert.equal(g.stats.awayPaints, 20); assert.equal(g.stats.awayExamined, 20 * n, 'one pass of n cells per painted frame');
+  const before = g.stats.examined;
+  g.reset({ other: true, changes: 2 }); g.govern(f.glyphs, f.shades, 1.5);
+  g.govern(f.glyphs, f.shades, 1.6); assert.equal(g.stats.examined - before, n, 'the return paint examines nothing more (it is the ungoverned one) and a governed paint still examines n cells once');
+  g.away(af, 'k', 2.0); assert.equal(g.stats.awayPaints, 20, 'after the return the bookkeeping is off again');
 });
 
 test('DRIFT-14 leave: the cost is O(n) once per return paint and nothing per governed paint (a 200x60 screen: the steady paint does the same work with or without a recorded leave)', () => {
@@ -162,6 +265,13 @@ export const LEAVE_MUTANTS = [
   { label: 'the leave is stamped at the return (leave time = return time): the DRIFT-13 hold for a trip of any length', edits: [['const leave = had ? Math.min(leftAt, now) : now;', 'const leave = now;']] },
   { label: 'the last leave wins instead of the first', edits: [['if (leftAt === null) leftAt = now;', 'leftAt = now;']] },
   { label: 'a hard reset and a hard paint keep the leave', edits: [["if (opts.hard || !Gp) { mode = 'hard'; leftAt = null; return; }", "if (opts.hard || !Gp) { mode = 'hard'; return; }"], ["mode = 'steady'; leftAt = null; // the paint consumes the hard state", "mode = 'steady'; // the paint consumes the hard state"]] },
+  { label: 'away() does nothing (the other screens changes are never kept)', edits: [['if (leftAt === null || n === 0) return;', 'return;']] },
+  { label: 'the first away frame is not a baseline: its differences count as changes while away', edits: [['awayT.fill(-Infinity); awayU.fill(-Infinity); awayHave = true; awayKey = key;', 'awayT.fill(now); awayU.fill(-Infinity); awayHave = true; awayKey = key;']] },
+  { label: 'a palette change while away is ignored', edits: [['const all = key !== awayKey;', 'const all = false;']] },
+  { label: 'colour is ignored: only glyph and shade changes count', edits: [[' || fg[i] !== pFg[i] || bg[i] !== pBg[i]) { awayU[i]', ') { awayU[i]']] },
+  { label: 'a cell changed while away is not counted at the return (only the aged leave is)', edits: [['if (crowd || (a > leave && a > edge)) {', 'if (crowd) {']] },
+  { label: 'no crowd rule: a screen full of hot cells still frees the cells nobody changed', edits: [['const crowd = busy > FIELD_LIMIT * n;', 'const crowd = false;']] },
+  { label: 'the crowd counts cells changed once (a calm screen is crowded)', edits: [['if (awayU[i] > leave && awayU[i] > edge) busy++;', 'if (awayT[i] > leave && awayT[i] > edge) busy++;']] },
   { label: 'a back paint does not consume the leave (a later return reuses it)', edits: [["mode = 'steady'; leftAt = null; // the paint consumes the soft, other or back state", "mode = 'steady'; // the paint consumes the soft, other or back state"]] },
 ];
 test('DRIFT-14 leave mutation: the unbroken copy passes every check (so a kill is a kill)', async () => {

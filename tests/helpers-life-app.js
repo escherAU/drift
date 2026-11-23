@@ -68,7 +68,7 @@ export async function movingFrames(speed, o = {}) {
 // `grab(k, screen, app, f, meter)` is called on every frame the meter reads (after it was pushed; meter.forgetWorst() makes the final rep the worst over the LATER frames only), for the look tests (lit counts, glyphs). `forceDead(app)` is not offered: quiet states use the scene directly.
 export async function runLife({
   cols = 80, rows = 24, mode = '256', seed = 1, seconds = 32, keys = [], clock = 'grid', clockSeed = 1, root = null, fps = LIFE_FPS,
-  sceneSeconds = 30, invert = false, grab = null, startMode = 'contrast', stopAtDissolve = true, feedAll = false, scene = 'life', startScene = 0, card = false, onApp = null, meter: useMeter = true, writes = null, beforeFrame = null,
+  sceneSeconds = 30, invert = false, dirs = [], grab = null, startMode = 'contrast', stopAtDissolve = true, feedAll = false, scene = 'life', startScene = 0, card = false, onApp = null, meter: useMeter = true, writes = null, beforeFrame = null,
 } = {}) {
   const tiny = isCardBoard(cols, rows);
   if (tiny && !card) throw new Error(`runLife: ${cols}x${rows} is below Classic's 40x10 minimum, where Classic shows the size card and no scene (DRIFT-12); pass card: true to run the card knowingly`);
@@ -82,7 +82,7 @@ export async function runLife({
   if (invert) fs.writeFileSync(cfg, JSON.stringify({ invert: true }));
   const env = mode === 'truecolor' ? { COLORTERM: 'truecolor' } : {};
   const app = createApp({
-    stdin, stdout, stderr, proc, env, configPath: cfg, dirs: [], startMode, startScene, sceneSeconds, seed, fps,
+    stdin, stdout, stderr, proc, env, configPath: cfg, dirs, startMode, startScene, sceneSeconds, seed, fps,
     autoLoop: useClock, now: c ? c.now : undefined, timer: c ? c.timer : undefined,
   });
   const ids = [];

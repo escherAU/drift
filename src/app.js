@@ -269,7 +269,7 @@ export function createApp(o) {
   // RESET (the next paint is whole and ungoverned, as the renderer repaints it whole). Two kinds (src/governor.js RESET):
   //   KEEPS THE HISTORY (reset({ other: true })): the polarity flip `i` and every console frame; and reset({ other: true, changes: 2 }), the way BACK from another mode or from the console (the screen
   //   was left and came back: two changes of every cell, DRIFT-13 correction 3; since DRIFT-14 the out change is counted at the real moment high contrast was left, which noteLeft() below hands
-  //   the governor (gov.leave(wall), the first paint of anything else), and a trip of one second or more counts the return as ONE change: src/governor.js RESET). The paint is whole, but the governor keeps every cell's last changes, and counts the reset paint as ONE change of
+  //   the governor (gov.leave(wall), the first paint of anything else), and a trip of one second or more counts the return as ONE change for a cell the other screen left alone: gov.away() below hands the governor what the other screens paint meanwhile, src/governor.js RESET). The paint is whole, but the governor keeps every cell's last changes, and counts the reset paint as ONE change of
   //   every cell for `i` (the palette swapped, so the meter saw every cell move; the reset paint is not stamped in the per-read window: it does not exempt cells from the cap of the paint after it),
   //   so a cell that changed twice just before an `i` may not change again for W seconds. Without the history a flip in the middle of a dissolve failed L2 over the next 0.3 to 0.45 s (DRIFT-13
   //   correction 1). The flip FRAME itself is the flip guard's (FLIP_WINDOW_SECONDS bounds how often it happens): it swaps the palette under the indices the governor works on, which no hold can undo.
@@ -312,6 +312,7 @@ export function createApp(o) {
         mode: shown.mode, modeName: MODE_LABELS[shown.mode], sceneName: sceneName(), ui: pal.ui || SINGLE_HUE_UI,
       });
     }
+    if (shown.mode !== 'contrast' && gov) gov.away(f, pal.key, wall); // DRIFT-14: what this other screen changes while high contrast is left counts at the return (a no-op unless a leave is recorded)
     const painted = shown.mode === 'contrast' ? govern(f) : f;
     lastFrame = painted;
     const out = renderer.render(renderArgs(painted, pal));
@@ -337,6 +338,7 @@ export function createApp(o) {
   function renderShellFrame() {
     noteLeft(); // DRIFT-14: the console over high contrast is something else painted: the moment it was left
     const f = shell.frame();
+    if (gov) gov.away(f, f.palette.key, wall); // DRIFT-14: the console's own changes (a running cartridge animates) count at the return
     // a new palette with a different background needs a clean slate (the renderer's key change alone
     // would leave the old background in cells it does not redraw)
     if (shellPal && shellPal.key !== f.palette.key && (!!shellPal.bg !== !!f.palette.bg || shellPal.base !== f.palette.base)) renderer.invalidate();

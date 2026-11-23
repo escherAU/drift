@@ -17,12 +17,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runSpied } from './helpers-governor-app.js';
 import { failedRules, X1_RULE_IDS } from './helpers-flash.js';
+import { INSTALL_DIR } from '../src/cartridge/loader.js';
 
 const must = (text, from, to) => { const lf = text.replace(/\r\n/g, '\n'); assert.equal(lf.split(from).length, 2, `the mutation target occurs exactly once: ${from}`); return lf.replace(from, to); };
 // the control: what DRIFT-13 did (the leave is stamped at the return)
 const AT_RETURN = { 'src/governor.js': (t) => must(t, 'const leave = had ? Math.min(leftAt, now) : now;', 'const leave = now;') };
 // the leave is never recorded (the call dropped): every return falls back to both changes at the return
 const NO_RECORD = { 'src/app.js': (t) => must(t, 'if (gov) gov.leave(wall);', 'if (gov) void wall;') };
+// the other screens' changes are never kept: the two away() calls of the app dropped (art screens and the console)
+const AWAY_ART = "if (shown.mode !== 'contrast' && gov) gov.away(f, pal.key, wall);";
+const AWAY_SHELL = 'if (gov) gov.away(f, f.palette.key, wall);';
+const NO_AWAY = { 'src/app.js': (t) => must(must(t, AWAY_ART, 'void pal;'), AWAY_SHELL, 'void f;') };
+const NO_AWAY_SHELL = { 'src/app.js': (t) => must(t, AWAY_SHELL, 'void f;') };
 // the leave is stamped where the key press settles (between steps: `wall` is still the time of the last governed paint, a frame before the viewer saw anything else)
 const AT_SETTLE = { 'src/app.js': (t) => must(must(t, "if (wasGoverned && !(shown.mode === 'contrast' && !shown.shell)) govLeft = true;", "if (wasGoverned && !(shown.mode === 'contrast' && !shown.shell)) { govLeft = false; if (gov) gov.leave(wall); }"), 'function noteLeft() { if (govLeft) {', 'function noteLeft() { if (false) {') };
 
@@ -31,9 +37,12 @@ const PATHS = {
   mode: (a) => ({ keys: [{ at: KEY_AT, key: '1' }, { at: KEY_AT + a, key: '3' }], ret: (st, p) => st.mode === 'contrast' && p.mode !== 'contrast' }), // calm and back
   chain: (a) => ({ keys: [{ at: KEY_AT, key: '1' }, { at: KEY_AT + a / 2, key: '2' }, { at: KEY_AT + a, key: '3' }], ret: (st, p) => st.mode === 'contrast' && p.mode !== 'contrast' }), // calm, chaos, back
   experimental: (a) => ({ keys: [{ at: KEY_AT, key: '4' }, { at: KEY_AT + a, key: '3' }], ret: (st, p) => st.mode === 'contrast' && p.mode !== 'contrast' }),
+  chaos: (a) => ({ keys: [{ at: KEY_AT, key: '2' }, { at: KEY_AT + a, key: '3' }], ret: (st, p) => st.mode === 'contrast' && p.mode !== 'contrast' }), // chaos straight away: it changes cells every frame
   console: (a) => ({ keys: [{ at: KEY_AT, key: 'l' }, { at: KEY_AT + a, key: '\x1b' }], ret: (st, p) => st.shell === null && p.shell !== null }), // the library over high contrast, and back
   'calm then console': (a) => ({ keys: [{ at: KEY_AT, key: '1' }, { at: KEY_AT + a / 3, key: 'l' }, { at: KEY_AT + 2 * a / 3, key: '\x1b' }, { at: KEY_AT + a, key: '3' }], ret: (st, p) => st.mode === 'contrast' && p.mode !== 'contrast' }), // left to calm, the console opened from calm and closed, then high contrast
   flip: () => ({ keys: [{ at: KEY_AT, key: 'i' }], ret: (st, p) => st.light !== p.light }), // the polarity flip: not a trip, one change at now
+  // the library, the Delza cartridge inserted and booted and run, ejected, the library again, then Esc back to Classic: the console shows a cartridge for most of the trip (the real library: a non-empty list)
+  cartridge: (a) => ({ dirs: [{ dir: INSTALL_DIR, trusted: true }], keys: [{ at: KEY_AT, key: 'l' }, { at: KEY_AT + 0.1, key: '\x1b[C' }, { at: KEY_AT + 0.2, key: '\x1b[C' }, { at: KEY_AT + 1.5, key: '\r' }, { at: KEY_AT + a - 2.5, key: 'e' }, { at: KEY_AT + a, key: '\x1b' }], ret: (st, p) => st.shell === null && p.shell !== null }),
 };
 
 // one run of the tunnel at `cols`x`rows`: the way out and back of `path` (a key plan), then metered. Returns what the governor said about the return (stats.returns, stats.lastTrip), the held share
@@ -42,7 +51,7 @@ async function go({ cols, rows, fps, clock, path, away, seed = 1, edits = {} }) 
   const p = PATHS[path](away);
   let prev = null, at = null, mid = null, ret = null, last = null; const dev = [];
   const r = await runSpied({
-    cols, rows, fps, seed, clock, clockSeed: seed, scene: 'tunnel', startScene: 1, sceneSeconds: 1000, seconds: KEY_AT + away + 3, mode: '256', feedAll: true, stopAtDissolve: false, keys: p.keys,
+    cols, rows, fps, seed, clock, clockSeed: seed, scene: 'tunnel', startScene: 1, sceneSeconds: 1000, seconds: KEY_AT + away + 3, mode: '256', feedAll: true, stopAtDissolve: false, keys: p.keys, ...(p.dirs ? { dirs: p.dirs } : {}),
     grab: (k, s, app, f, meter) => {
       const st = app.getState();
       if (prev && at === null && p.ret(st, prev)) at = k;
@@ -53,7 +62,7 @@ async function go({ cols, rows, fps, clock, path, away, seed = 1, edits = {} }) 
   }, {
     edits,
     onPaint: (f, g, gov, wall) => {
-      const returns = gov.stats.returns; last = { returns, trip: gov.stats.lastTrip, withLeave: gov.stats.returnsWithLeave };
+      const returns = gov.stats.returns; last = { returns, trip: gov.stats.lastTrip, withLeave: gov.stats.returnsWithLeave, awayPaints: gov.stats.awayPaints, crowded: gov.stats.returnsCrowded, busy: gov.stats.lastBusy };
       if (path !== 'flip' && ret === null && returns > 0) ret = wall;
       if (path === 'flip' && ret === null && wall > KEY_AT + 0.05 && gov.stats.ungoverned > 1) ret = wall;
       if (ret !== null) { let d = 0; for (let i = 0; i < f.glyphs.length; i++) if (f.glyphs[i] !== g.glyphs[i] || f.shades[i] !== g.shades[i]) d++; dev.push([wall - ret, d / f.glyphs.length]); }
@@ -66,7 +75,7 @@ async function go({ cols, rows, fps, clock, path, away, seed = 1, edits = {} }) 
   const pc = (x) => +(x * 100).toFixed(1);
   return {
     ...last, at, mean01: pc(mean(win(0, 1))), max01: pc(max(win(0, 1))), max23: pc(max(win(1.5, 3))), mid, fin: r.rep, failedMid: mid ? failedRules(mid, { only: X1_RULE_IDS }) : null, failedFin: failedRules(r.rep, { only: X1_RULE_IDS }),
-    l2Mid: mid ? pc(mid.l2.x1.worstFraction) : null,
+    l2Mid: mid ? pc(mid.l2.x1.worstFraction) : null, l2Fin: pc(r.rep.l2.x1.worstFraction),
   };
 }
 
@@ -156,8 +165,57 @@ test('DRIFT-14 the short-trip L2 after the return is never worse than the contro
   }
 });
 
+// ---- the trip's own changes (correction 1). A trip of W or more used to count ONE change, which assumed the other screen changed nothing. Chaos changes cells every frame and the meter counts
+// them, so a chaos change, the return and a governed change got through where the DRIFT-13 stamp (at the return) held it: 129 of 138 of Desmond's runs read a higher L2, 41x11 at 30 fps on
+// the jitter clock, seed 1, a 3 s trip of chaos: 26.8 % against 19.6 %. The return now counts each cell's last change painted while away (src/governor.js away()).
+test('DRIFT-14 a chaos trip (key 2, 1 s and 3 s, 41x11, 30 fps, 3 clocks, seeds 1 and 2): L2 from 0.25 s after the return is within 25 % and never higher than the DRIFT-13 control (stamped at the return)', async () => {
+  const lines = []; let seen = false;
+  for (const away of [1, 3]) for (const clock of ['grid', 'q156', 'jitter']) for (const seed of [1, 2]) {
+    const c = { cols: 41, rows: 11, fps: 30, clock, path: 'chaos', away, seed };
+    const a = await go(c), b = await go({ ...c, edits: AT_RETURN });
+    const la = Math.max(a.l2Mid, a.l2Fin), lb = Math.max(b.l2Mid, b.l2Fin);
+    const why = `chaos trip ${away} ${clock} seed ${seed}`;
+    assert.ok(la <= lb, `${why}: L2 from 0.25 s ${la} % <= the control's ${lb} %`);
+    assert.ok(la <= 25, `${why}: L2 from 0.25 s ${la} % is within the 25 % rule`);
+    assert.deepEqual([a.failedMid.includes('l2.x1'), a.failedFin.includes('l2.x1')], [false, false], `${why}: rule L2 passes`);
+    if (away === 3 && clock === 'jitter' && seed === 1) seen = true;
+    lines.push(`${why}: L2 ${la} vs control ${lb}`);
+  }
+  assert.ok(seen, 'the 3 s jitter seed 1 run (26.8 % in DRIFT-14 4039fdc) is among them');
+  console.log(`DRIFT-14 chaos trips, L2 from 0.25 s (percent):\n  ${lines.join('\n  ')}`);
+});
+
+// ---- the console with a running cartridge (correction 1). A cartridge animates the console, so its changes while away count like any other screen's: away() is called by every console frame, with the
+// colours (a cartridge frame has fg and bg). The way back from a cartridge is the eject (1.9 s) and the library, so the cartridge's own picture is always older than W at the return and what the
+// last second holds is the eject and the library; the bookkeeping saw ALL of it (stats.awayPaints counts the console frames) and the rules hold from 0.25 s. (DRIFT-15, the empty-library crash at
+// 80x24 and up, is a separate ticket: a non-empty library, as here, does not meet it.)
+test('DRIFT-14 the console with a running cartridge (Delza, 14 s trip, 40x10 and 80x24, 3 clocks): every console frame is kept by away(), the return has its leave, and the five rules hold from 0.25 s', async () => {
+  const lines = [];
+  for (const [cols, rows] of [[40, 10], [80, 24]]) for (const clock of ['grid', 'q156', 'jitter']) {
+    const c = { cols, rows, fps: 18, clock, path: 'cartridge', away: 14 };
+    const r = await go(c);
+    const why = `cartridge ${label(c)}`;
+    assert.equal(r.returns, 1, `${why}: one return`); assert.equal(r.withLeave, 1, `${why}: with a recorded leave`);
+    assert.ok(r.awayPaints >= 200, `${why}: the console frames were kept by away(): ${r.awayPaints} (14 s at 18 fps is up to 252)`);
+    assert.deepEqual(r.failedMid, [], `${why}: from 0.25 s after the return: ${r.failedMid} L2 ${r.l2Mid}`);
+    assert.deepEqual(r.failedFin, [], `${why}: from 1 s after the return: ${r.failedFin}`);
+    lines.push(`${why}: away paints ${r.awayPaints}, busy ${r.busy} cells, crowded ${r.crowded}, L2 from 0.25 s ${r.l2Mid} %`);
+  }
+  console.log(`DRIFT-14 console with a cartridge:\n  ${lines.join('\n  ')}`);
+  const none = await go({ cols: 40, rows: 10, fps: 18, clock: 'grid', path: 'cartridge', away: 14, edits: NO_AWAY_SHELL });
+  assert.equal(none.awayPaints, 0, 'control: with the console call of away() dropped nothing is kept (the test above would fail)');
+});
+
 // ---- mutations: the way the stamp can break, each killed by a test above
-test('DRIFT-14 mutation: dropping the leave (never recorded) fails the ceilings; stamping it at the return fails them; stamping it where the key settles (a frame early) fails the 0.3 s trip rules from 0.25 s', async () => {
+test('DRIFT-14 mutation: the other screens changes never kept (both away() calls dropped) fails the chaos trip: the 3 s jitter seed 1 run reads over 25 % again, as at 4039fdc', async () => {
+  const c = { cols: 41, rows: 11, fps: 30, clock: 'jitter', path: 'chaos', away: 3, seed: 1 };
+  const ok = await go(c), bad = await go({ ...c, edits: NO_AWAY });
+  assert.ok(Math.max(ok.l2Mid, ok.l2Fin) <= 25, `shipped: ${Math.max(ok.l2Mid, ok.l2Fin)} %`);
+  assert.ok(Math.max(bad.l2Mid, bad.l2Fin) > 25, `the other screens changes never kept: L2 from 0.25 s ${Math.max(bad.l2Mid, bad.l2Fin)} % is over the 25 % limit`);
+  assert.equal(bad.awayPaints, 0);
+});
+
+test('DRIFT-14 mutation: dropping the leave (never recorded) fails the ceilings; stamping it at the return fails them; stamping it where the key settles (a frame early) is read as a trip a frame too long and is no better on L2 from 0.25 s', async () => {
   const c = { cols: 40, rows: 10, fps: 18, clock: 'grid', path: 'mode', away: 3 };
   const shipped = await go(c);
   holds(shipped, LONG, 'shipped');
@@ -168,7 +226,9 @@ test('DRIFT-14 mutation: dropping the leave (never recorded) fails the ceilings;
   const short = { ...c, away: 0.3 };
   const ok = await go(short), early = await go({ ...short, edits: AT_SETTLE });
   assert.deepEqual(ok.failedMid, [], `shipped: the 0.3 s mode trip passes from 0.25 s: L2 ${ok.l2Mid}`);
-  assert.ok(early.failedMid.includes('l2.x1'), `stamped at settle (the stale wall): L2 fails from 0.25 s, ${early.l2Mid} %`);
+  // (before DRIFT-14 correction 1 this stale stamp also failed L2 from 0.25 s, 26.8 %; the cells the other screen changed after the leave now count at the return whatever the stamp, so only a cell that changed AT the
+  // first paint of the other screen still relies on it, and the stamp is judged by what it IS: the trip the governor reads)
+  assert.ok(early.l2Mid >= ok.l2Mid, `stamped at settle (the stale wall): L2 from 0.25 s ${early.l2Mid} % is no better than shipped ${ok.l2Mid} %`);
   assert.ok(early.trip > ok.trip + 0.04, `the stale stamp is a frame early: trip ${early.trip} against ${ok.trip}`);
   console.log(`DRIFT-14 mutants (40x10 fps 18 grid): shipped ${shipped.mean01}/${shipped.max01}; leave dropped ${noRecord.mean01}/${noRecord.max01}; stamped at the return ${atReturn.mean01}/${atReturn.max01}; 0.3 s trip from 0.25 s L2 ${ok.l2Mid} shipped vs ${early.l2Mid} stamped at settle`);
 });

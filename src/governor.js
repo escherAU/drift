@@ -81,9 +81,21 @@
 //          paint clears it, and nothing is recorded while a hard paint is pending (no painted screen was left). Two arms on the length of the trip, leave L and return paint `now`:
 //            trip < W   (L > now - W): the leave is still inside W and protects. Two changes: t3 = t1, t2 = L, t1 = now. A cell that changed at the leave cannot change again before L + W;
 //                       the derivation above holds because L is a real paint time (the meter sees the leave as the transition of the first read after it).
-//            trip >= W  (L <= now - W + EPS_T): the leave has aged out and protects nothing (any three changes with L among them are at least W apart from the next one). The return counts
-//                       ONE change, as `other` does: t3 = t2, t2 = t1, t1 = now.
+//            trip >= W  (L <= now - W + EPS_T): a leave older than W protects only if the other screen changed nothing since: three changes with L among them are at least W apart from the next one
+//                       only when L is the last of them. If nothing changed after it, the return counts ONE change, as `other` does: t3 = t2, t2 = t1, t1 = now.
 //            no recorded leave (the governor did not exist, a hard reset or resize came between): both changes at the return, as DRIFT-13 did (t3 = t1, t2 = t1 = now). Safe, and held longer.
+//          WHAT THE OTHER SCREEN CHANGED (DRIFT-14, correction 1: away(frame, key, now)). The one-change arm above assumed the other screen made no changes between the leave and the return. Chaos changes
+//          cells every frame and the meter counts them, so a chaos change, the return and a governed change got through where DRIFT-13 held it (a 3 s chaos trip read L2 26.8 % against 19.6 %). So the app
+//          hands every frame the OTHER screens paint while the leave is recorded (calm, chaos, experimental, the console and its cartridge; the size card is a hard reset) to away(), which keeps, per cell,
+//          the real time of the last two changes (glyph, shade, fg or bg; a palette change is a change of every cell). The first away frame is the leave itself and is only the baseline. At the return:
+//            a cell that changed while away inside W of the return (after the leave): both changes at the return, t3 = t1, t2 = t1 = now, as DRIFT-13 did, whatever the length of the trip;
+//            a crowded screen: when more than FIELD_LIMIT of the cells changed TWICE inside W while away (with the return, three changes: hot already, the viewer's own allowance of hot cells in a
+//                       field spent), EVERY cell counts both changes at the return, even one nobody touched;
+//            every other cell: the arms above (a leave inside W protects, an aged leave counts one change).
+//          What this approximates, on purpose, towards the safe side: it keeps the LAST TWO changes of a cell, so a cell that changed three times or more while away counts as two (an undercount of the
+//          meter's view, but such a cell is held for W after the return anyway because its last change is inside W); the crowd test is a share of the whole screen, not of each field; a cell that
+//          changed once is held like the DRIFT-13 count (more than the meter needs), which is why a calm screen keeps the gain only where it really was quiet. Cost: one pass over the cells per frame
+//          painted while away (stats.awayExamined), one more over them at the return, nothing on a governed paint; no allocation after the first trip at a size.
 //          A paint that consumes the state, whatever its kind, forgets the leave: it is used by the back paint or by none. The `i` flip is not a trip and is unchanged (one change, at now).
 //          What stays held after the return is the return itself: it is a whole-screen change the viewer sees, so it uses one of each cell's three changes of the next second.
 //   The per-cell history (t1 t2 t3, rule L2) takes every one of these changes; the per-read window (tw, rule L3) takes none of them (see THE RESET PAINT AND THIS LIMIT).
@@ -101,6 +113,7 @@
 //   soft     whole, changed cells count once,          -> hard           -> back                 -> other          stays soft whole and ungoverned -> steady
 //            history kept
 //
+// (The record of what the other screens painted, away(), is not a state of the machine either: it only runs while a leave is recorded and is read by the back paint.)
 // The leave record (DRIFT-14, leave(now)) is NOT a state of the machine: it is one number beside it, `leftAt`, read by the paint that leaves `back` and cleared by every paint that leaves any
 // pending state and by every hard request (the hard column: hard, resize(), reset({ hard: true })). It is only recorded while a painted screen exists (not in `hard`), and it never changes which
 // state is pending or how many paints are ungoverned (tests/governor-reset-states.test.js puts `leave` in every position of every ordering; tests/governor-leave.test.js pins the stamp).
@@ -158,10 +171,12 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
   let C = 0, R = 0, n = 0, STEP_CAP = 0, FW = 1, FH = 1, BX = 1, NB = 1, K = 0, CON_CAP = 0, NCON = 0;
   let mode = 'hard', paintNo = 0, stamp = 0, leftAt = null; // leftAt: when the governed screen was left (leave(), null: not recorded). mode: the RESET STATES of the header ('steady' | 'hard' | 'soft' | 'other' | 'back')
   let Gp = null, Sp = null, gType = null, sType = null;
+  // away(): what the OTHER screens painted since the leave (DRIFT-14 correction 1). awayT: per cell, the real time of the LAST change painted while away (-Infinity: none); pG pS pFg pBg: the last away frame.
+  let awayT = null, awayU = null, pG = null, pS = null, pFg = null, pBg = null, awayHave = false, awayKey;
   let t1, t2, t3, tw, blk, bcount, conB, blockCon, candE, candT, fresh, ord, maskStamp, noSlot, hist;
   const out = { glyphs: null, shades: null };
   const stats = {
-    paints: 0, ungoverned: 0, returns: 0, returnsWithLeave: 0, lastTrip: -1, resetChanged: 0, examined: 0, wanted: 0, changed: 0, held: 0, strictHeld: 0, blocksHeld: 0, readHeld: 0,
+    paints: 0, ungoverned: 0, returns: 0, returnsWithLeave: 0, lastTrip: -1, awayPaints: 0, awayExamined: 0, awayCells: 0, lastBusy: 0, returnsCrowded: 0, resetChanged: 0, examined: 0, wanted: 0, changed: 0, held: 0, strictHeld: 0, blocksHeld: 0, readHeld: 0,
     last: { examined: 0, wanted: 0, changed: 0, held: 0 },
   };
 
@@ -195,6 +210,7 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
       }
     }
     t1 = new Float64Array(n); t2 = new Float64Array(n); t3 = new Float64Array(n); tw = new Float64Array(n);
+    awayT = new Float64Array(n).fill(-Infinity); awayU = new Float64Array(n).fill(-Infinity); pG = pS = pFg = pBg = null; awayHave = false;
     blk = new Uint8Array(n);
     for (let y = 0; y < R; y++) for (let x = 0; x < C; x++) blk[y * C + x] = Math.floor(y / FH) * BX + Math.floor(x / FW);
     bcount = new Int32Array(NB);
@@ -260,16 +276,28 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
       const aged = leave <= now - W + EPS_T;
       const one = !twice || (had && aged);
       if (twice) { stats.returns++; if (had) stats.returnsWithLeave++; stats.lastTrip = had ? now - leave : -1; }
+      const seen = had && awayHave; // the other screens' own changes were kept for this trip (away())
+      const edge = now - W + EPS_T; // a change at or before this is at least W old
+      // the share of cells the other screens changed inside the last W (once per return, never per governed paint): when it is above the field limit (the viewer's own allowance of hot cells
+      // in a field) the other screen was busy and every cell counts both changes at the return, as DRIFT-13 did; below it, only the cells that changed count so, the rest keep the aged leave
+      let busy = 0;
+      if (seen) for (let i = 0; i < n; i++) if (awayU[i] > leave && awayU[i] > edge) busy++; // two changes while away inside W: with the return, three: hot already
+      const crowd = busy > FIELD_LIMIT * n;
+      stats.lastBusy = busy; if (crowd) stats.returnsCrowded++;
       let c = 0;
       // t1 t2 t3 are the per-CELL history (rule L2) and take the changes. tw, the per-READ window (rule L3), is NOT stamped: the reset paint is one whole paint that no cap can hold (it is the
       // flip frame, the flip guard's), and a cell stamped there would count as "already changed in this read" and be exempt from the cap of the paints after it (RESET, correction 3).
       for (let i = 0; i < n; i++) {
         if (!all && glyphs[i] === Gp[i] && shades[i] === Sp[i]) continue;
-        if (one) { t3[i] = t2[i]; t2[i] = t1[i]; t1[i] = now; } else { t3[i] = t1[i]; t2[i] = leave; t1[i] = now; }
+        // a cell that CHANGED WHILE AWAY (after the leave, by another screen: chaos changes cells every frame) counts that last change too: the changes are the leave, it, and the return
+        const a = seen ? awayT[i] : -Infinity;
+        if (crowd || (a > leave && a > edge)) { t3[i] = t1[i]; t2[i] = now; t1[i] = now; stats.awayCells++; }
+        else if (one) { t3[i] = t2[i]; t2[i] = t1[i]; t1[i] = now; }
+        else { t3[i] = t1[i]; t2[i] = leave; t1[i] = now; }
         c++;
       }
       Gp.set(glyphs); Sp.set(shades);
-      mode = 'steady'; leftAt = null; // the paint consumes the soft, other or back state (and the leave: it is used by this paint or by none)
+      mode = 'steady'; leftAt = null; // the paint consumes the soft, other or back state (and the leave: it is used by this paint or by none; away() stops with it and starts afresh at the next leave)
       stats.ungoverned++; stats.resetChanged += c;
       stats.last.examined = 0; stats.last.wanted = 0; stats.last.changed = 0; stats.last.held = 0;
       return out;
@@ -364,12 +392,42 @@ export function createGovernor({ cols, rows, fps, variant = 'strict', observe = 
   // or its paint clears it. One assignment: no cost per paint.
   function leave(now) {
     if (mode === 'hard' || !Gp) return;
+    if (leftAt === null) awayHave = false; // what the other screens paint is kept from this leave on
     if (leftAt === null) leftAt = now;
+  }
+
+  // away(frame, key, now): what another screen (calm, chaos, experimental, the console and its cartridge) just PAINTED while the governed screen is left. Only while a leave is recorded; otherwise
+  // it returns at once. The first call after the leave keeps the frame (it IS the leave, already stamped, so it is only the baseline); every later call moves awayT[i] to awayU[i] and stamps
+  // awayT[i] = now for each cell whose glyph, shade, fg or bg differs from the last away frame, or for every cell when `key` (the palette key) changed: the last TWO changes of a cell. ONE pass over
+  // the cells per painted frame while away, no allocation after the first trip (the copies are made once per size), nothing at all on a governed paint. The return reads them (RESET, WHAT THE OTHER
+  // SCREEN CHANGED); a cell that changed three or more times while away is counted as two, which holds it for W after the return all the same (its last change is inside W).
+  function away(f, key, now) {
+    if (leftAt === null || n === 0) return;
+    const g = f.glyphs, s = f.shades, fg = f.fg || null, bg = f.bg || null;
+    if (g.length !== n || s.length !== n) { if (awayHave) awayU.set(awayT); awayT.fill(now); return; } // not the size of the governed screen: every cell counts as changed (and the next frame is compared with the last of the right size)
+    stats.awayPaints++; stats.awayExamined += n;
+    const colour = fg !== null && bg !== null && fg.length === n && bg.length === n;
+    if (awayHave && (pG.constructor !== g.constructor || pS.constructor !== s.constructor || colour !== (pFg !== null))) awayHave = false;
+    if (!awayHave) {
+      if (!pG || pG.constructor !== g.constructor) pG = new g.constructor(n); // made once per size and type, reused by every later trip
+      if (!pS || pS.constructor !== s.constructor) pS = new s.constructor(n);
+      pG.set(g); pS.set(s);
+      if (!colour) { pFg = pBg = null; } else { if (!pFg || pFg.constructor !== fg.constructor) pFg = new fg.constructor(n); if (!pBg || pBg.constructor !== bg.constructor) pBg = new bg.constructor(n); }
+      if (colour) { pFg.set(fg); pBg.set(bg); }
+      awayT.fill(-Infinity); awayU.fill(-Infinity); awayHave = true; awayKey = key;
+      return;
+    }
+    const all = key !== awayKey; awayKey = key;
+    if (all) { awayU.set(awayT); awayT.fill(now); }
+    else if (colour) { for (let i = 0; i < n; i++) if (g[i] !== pG[i] || s[i] !== pS[i] || fg[i] !== pFg[i] || bg[i] !== pBg[i]) { awayU[i] = awayT[i]; awayT[i] = now; } }
+    else { for (let i = 0; i < n; i++) if (g[i] !== pG[i] || s[i] !== pS[i]) { awayU[i] = awayT[i]; awayT[i] = now; } }
+    pG.set(g); pS.set(s);
+    if (colour) { pFg.set(fg); pBg.set(bg); }
   }
 
   resize(cols, rows);
   return {
-    govern, reset, resize, leave, stats, observe, variant,
+    govern, reset, resize, leave, away, stats, observe, variant,
     limits: { get W() { return W; }, get readWindow() { return READ_WINDOW; }, get stepCap() { return STEP_CAP; }, get blockCap() { return Math.floor(K / 4); }, get fieldCap() { return K; }, get conCap() { return CON_CAP; }, get field() { return { w: FW, h: FH }; }, get blocks() { return NB; }, get constraints() { return NCON; }, win1 },
   };
 }
